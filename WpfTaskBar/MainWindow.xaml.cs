@@ -21,6 +21,9 @@ public partial class MainWindow : Window
 {
 	private WindowManager windowManager = new WindowManager();
 
+	private Point _startPoint;
+	private IconListBoxItem _draggedItem;
+
 	public MainWindow()
 	{
 		Console.OutputEncoding = Encoding.UTF8;
@@ -86,6 +89,53 @@ public partial class MainWindow : Window
 				return null;
 			}
 			throw;
+		}
+	}
+
+	private void ListBox_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
+		_startPoint = e.GetPosition(null);
+		_draggedItem = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+	}
+
+	private void ListBox_OnPreviewMouseMove(object sender, MouseEventArgs e)
+	{
+		if (e.LeftButton == MouseButtonState.Pressed)
+		{
+			Point position = e.GetPosition(null);
+			if (Math.Abs(position.X - _startPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
+			    Math.Abs(position.Y - _startPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
+			{
+				DataObject data = new DataObject(typeof(IconListBoxItem), _draggedItem);
+				DragDrop.DoDragDrop(listBox, data, DragDropEffects.Move);
+			}
+		}
+	}
+
+	private void ListBox_OnDrop(object sender, DragEventArgs e)
+	{
+		if (e.Data.GetDataPresent(typeof(IconListBoxItem)))
+		{
+			IconListBoxItem droppedData = e.Data.GetData(typeof(IconListBoxItem)) as IconListBoxItem;
+			IconListBoxItem target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+
+			int removedIdx = listBox.Items.IndexOf(droppedData);
+			int targetIdx = listBox.Items.IndexOf(target);
+
+			if (removedIdx < targetIdx)
+			{
+				listBox.Items.Insert(targetIdx + 1, droppedData);
+				listBox.Items.RemoveAt(removedIdx);
+			}
+			else
+			{
+				int remIdx = removedIdx + 1;
+				if (listBox.Items.Count + 1 > remIdx)
+				{
+					listBox.Items.Insert(targetIdx, droppedData);
+					listBox.Items.RemoveAt(remIdx);
+				}
+			}
 		}
 	}
 }

@@ -8,7 +8,7 @@
         Closed="MainWindow_OnClosed"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <ListBox Name="listBox">
+        <ListBox Name="listBox" AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown" PreviewMouseMove="ListBox_OnPreviewMouseMove" Drop="ListBox_OnDrop">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal">
