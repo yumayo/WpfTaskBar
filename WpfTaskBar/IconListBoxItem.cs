@@ -1,10 +1,11 @@
-﻿using System.Drawing;
+﻿using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 
 namespace WinFormsTaskBar
 {
 	public class IconListBoxItem
 	{
-		public IconListBoxItem(string text, Image icon, IntPtr handle)
+		public IconListBoxItem(string text, BitmapSource icon, IntPtr handle)
 		{
 			Text = text;
 			Icon = icon;
@@ -12,7 +13,7 @@ namespace WinFormsTaskBar
 		}
 
 		public string Text { get; set; }
-		public Image? Icon { get; set; }
+		public BitmapSource? Icon { get; set; }
 		public IntPtr Handle { get; set; }
 
 		public override string ToString()

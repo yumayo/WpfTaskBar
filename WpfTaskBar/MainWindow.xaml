@@ -8,6 +8,15 @@
         Closed="MainWindow_OnClosed"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <ListBox Name="listBox"></ListBox>
+        <ListBox Name="listBox">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="{Binding Icon}" Width="20" Height="20" />
+                        <TextBlock Text="{Binding Text}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
     </Grid>
 </Window>

@@ -9,9 +9,9 @@ namespace WinFormsTaskBar
 	{
 		public List<IntPtr> WindowHandles = new List<IntPtr>();
 		public List<Window> TaskBarWindows = new List<Window>();
-		
+
 		public event WindowListChangedEventHandler WindowListChanged;
-		
+
 		public delegate void WindowListChangedEventHandler(object sender, TaskBarWindowEventArgs e);
 
 		public Task? BackgroundTask;
@@ -20,36 +20,38 @@ namespace WinFormsTaskBar
 		public void Start()
 		{
 			CancellationTokenSource = new CancellationTokenSource();
-			BackgroundTask = Task.Run(async () =>
+			BackgroundTask = UpdateTaskWindows();
+		}
+
+		private async Task? UpdateTaskWindows()
+		{
+			while (!CancellationTokenSource.IsCancellationRequested)
+			{
+				try
 				{
-					while (!CancellationTokenSource.IsCancellationRequested)
-					{
-						try
-						{
-							WindowHandles.Clear();
-							NativeMethods.EnumWindows(EnumerationWindows, 0);
-							UpdateTaskBarWindows();
-							await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationTokenSource.Token);
-						}
-						catch (OperationCanceledException)
-						{
-							break;
-						}
-						catch (Exception e)
-						{
-							Console.WriteLine(e);
-							break;
-						}
-					}
-				},
-				CancellationTokenSource.Token);
+					WindowHandles.Clear();
+					NativeMethods.EnumWindows(EnumerationWindows, 0);
+					UpdateTaskBarWindows();
+					await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationTokenSource.Token);
+				}
+				catch (TaskCanceledException)
+				{
+					break;
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine(e);
+					break;
+				}
+			}
 		}
 
 		public void Stop()
 		{
 			CancellationTokenSource?.Cancel();
-			BackgroundTask?.Wait();
-			BackgroundTask?.Dispose();
+			// TODO: Windowを閉じようとした際にWaitで止まる。
+			// BackgroundTask?.Wait();
+			// BackgroundTask?.Dispose();
 			BackgroundTask = null;
 			CancellationTokenSource = null;
 		}
@@ -171,8 +173,9 @@ namespace WinFormsTaskBar
 public class TaskBarWindowEventArgs : EventArgs
 {
 	public List<Window> AddedWindows { get; }
+
 	public List<IntPtr> RemovedWindowHandles { get; }
-	
+
 	public TaskBarWindowEventArgs(List<Window> addedWindows, List<IntPtr> removedWindows)
 	{
 		AddedWindows = addedWindows;

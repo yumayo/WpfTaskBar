@@ -1,8 +1,10 @@
 ﻿using System.Text;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
@@ -18,15 +20,15 @@ namespace WpfApp1;
 public partial class MainWindow : Window
 {
 	private WindowManager windowManager = new WindowManager();
-	
+
 	public MainWindow()
 	{
 		Console.OutputEncoding = Encoding.UTF8;
 		InitializeComponent();
-		
-		windowManager.Start();
-		
+
 		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
+
+		windowManager.Start();
 	}
 
 	private void WindowManagerOnWindowListChanged(object sender, TaskBarWindowEventArgs e)
@@ -66,15 +68,16 @@ public partial class MainWindow : Window
 	{
 		windowManager.Stop();
 	}
-	
-	public static System.Drawing.Image? GetIcon(string iconFilePath)
+
+	public static BitmapSource? GetIcon(string iconFilePath)
 	{
 		try
 		{
-			System.Drawing.Icon icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
-			System.Drawing.Image image = icon.ToBitmap();
+			var icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
+			var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap((icon.ToBitmap()).GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+			bitmapSource.Freeze();
 			icon.Dispose();
-			return image;
+			return bitmapSource;
 		}
 		catch (System.ComponentModel.Win32Exception ex)
 		{
