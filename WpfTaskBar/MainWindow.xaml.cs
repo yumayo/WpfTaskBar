@@ -24,7 +24,7 @@ public partial class MainWindow : Window
 	private WindowManager windowManager = new WindowManager();
 
 	private Point _startPoint;
-	private IconListBoxItem _draggedItem;
+	private IconListBoxItem? _draggedItem;
 
 	public MainWindow()
 	{
@@ -102,6 +102,11 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnPreviewMouseMove(object sender, MouseEventArgs e)
 	{
+		if (_draggedItem == null)
+		{
+			return;
+		}
+
 		if (e.LeftButton == MouseButtonState.Pressed)
 		{
 			Point position = e.GetPosition(null);
@@ -118,8 +123,34 @@ public partial class MainWindow : Window
 	{
 		if (e.Data.GetDataPresent(typeof(IconListBoxItem)))
 		{
-			IconListBoxItem droppedData = e.Data.GetData(typeof(IconListBoxItem)) as IconListBoxItem;
-			IconListBoxItem target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+			IconListBoxItem? droppedData = e.Data.GetData(typeof(IconListBoxItem)) as IconListBoxItem;
+			IconListBoxItem? target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+
+			if (target == null)
+			{
+				Point position = e.GetPosition(listBox);
+				if (listBox.Items.Count > 0)
+				{
+					if (position.Y > _startPoint.Y)
+					{
+						target = listBox.Items[^1] as IconListBoxItem;
+					}
+					else
+					{
+						target = listBox.Items[0] as IconListBoxItem;
+					}
+				}
+			}
+
+			if (target == null)
+			{
+				return;
+			}
+
+			if (droppedData == null)
+			{
+				return;
+			}
 
 			int removedIdx = listBox.Items.IndexOf(droppedData);
 			int targetIdx = listBox.Items.IndexOf(target);
