@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -10,6 +11,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using WinFormsTaskBar;
+using WpfTaskBar;
 using Window = System.Windows.Window;
 
 namespace WpfApp1;
@@ -137,5 +139,40 @@ public partial class MainWindow : Window
 				}
 			}
 		}
+	}
+
+	private void Window_Loaded(object sender, RoutedEventArgs e)
+	{
+		int height = (int)SystemParameters.PrimaryScreenHeight;
+		int width = (int)SystemParameters.PrimaryScreenWidth;
+
+		int myTakBarWidth = 400;
+
+		IntPtr handle = new WindowInteropHelper(this).Handle; // 自分のウィンドウハンドルを取得する
+
+		// 登録領域から外されないように属性を変更する
+		ulong style = NativeMethods.GetWindowLongA(handle, NativeMethods.GWL_EXSTYLE);
+		style ^= NativeMethods.WS_EX_APPWINDOW;
+		style |= NativeMethods.WS_EX_TOOLWINDOW;
+		NativeMethods.SetWindowLongA(handle, NativeMethods.GWL_EXSTYLE, style);
+
+		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTakBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - NativeMethodUtility.GetTaskbarHeight()), NativeMethods.SWP_SHOWWINDOW);
+
+		// AppBarの登録
+		NativeMethods.APPBARDATA barData = new NativeMethods.APPBARDATA();
+		barData.cbSize = Marshal.SizeOf(barData);
+		barData.hWnd = handle;
+		NativeMethods.SHAppBarMessage(NativeMethods.ABM_NEW, ref barData);
+
+		// 左端に登録する
+		barData.uEdge = NativeMethods.ABE_LEFT;
+		barData.rc.Top = 0;
+		barData.rc.Left = 0;
+		barData.rc.Right = myTakBarWidth;
+		barData.rc.Bottom = (int)SystemParameters.PrimaryScreenHeight;
+
+		NativeMethods.GetWindowRect(handle, out barData.rc);
+		NativeMethods.SHAppBarMessage(NativeMethods.ABM_QUERYPOS, ref barData);
+		NativeMethods.SHAppBarMessage(NativeMethods.ABM_SETPOS, ref barData);
 	}
 }

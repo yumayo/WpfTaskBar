@@ -5,7 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:WpfApp1"
         mc:Ignorable="d"
+        Loaded="Window_Loaded"
         Closed="MainWindow_OnClosed"
+        WindowStyle="None"
+        AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
         <ListBox Name="listBox" AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown" PreviewMouseMove="ListBox_OnPreviewMouseMove" Drop="ListBox_OnDrop">
