@@ -11,7 +11,7 @@
         AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <ListBox Name="listBox" AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown" PreviewMouseMove="ListBox_OnPreviewMouseMove" Drop="ListBox_OnDrop">
+        <ListBox Name="listBox" AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown" MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp" PreviewMouseMove="ListBox_OnPreviewMouseMove" Drop="ListBox_OnDrop">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal">

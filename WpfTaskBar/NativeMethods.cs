@@ -11,6 +11,7 @@ namespace WinFormsTaskBar
 		public static readonly int GWL_EXSTYLE = -20;
 		public static readonly ulong WS_EX_APPWINDOW = 0x00040000L;
 		public static readonly ulong WS_EX_TOOLWINDOW = 0x00000080L;
+		public static readonly ulong WS_EX_NOACTIVATE = 0x08000000L;
 
 		public static readonly int HWND_TOPMOST = -1;
 		public static readonly int SWP_SHOWWINDOW = 0x0040;
@@ -31,6 +32,11 @@ namespace WinFormsTaskBar
 		public static readonly int ABM_SETAUTOHIDEBAR = 8;
 		public static readonly int ABM_WINDOWPOSCHANGED = 9;
 		public static readonly int ABM_SETSTAT = 10;
+		
+		public static readonly uint WM_SYSCOMMAND = 0x0112;
+		public static readonly int SC_RESTORE = 0xF120;
+		public static readonly int SC_MINIMIZE = 0xF020;
+		
 
 		[return: MarshalAs(UnmanagedType.Bool)]
 		public delegate bool EnumWindowsCallback(IntPtr hwnd, int lParam);
@@ -90,5 +96,19 @@ namespace WinFormsTaskBar
 			public RECT rc;
 			public IntPtr lParam;
 		}
+		
+		[DllImport("user32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		public static extern bool SetForegroundWindow(IntPtr hWnd);
+		
+		[DllImport("user32.dll", CharSet = CharSet.Auto)]
+		public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+		[DllImport("user32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		public static extern bool IsIconic(IntPtr hWnd);
+		
+		[DllImport("user32.dll")]
+		public static extern IntPtr GetForegroundWindow();
 	}
 }

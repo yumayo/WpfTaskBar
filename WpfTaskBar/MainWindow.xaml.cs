@@ -25,10 +25,11 @@ public partial class MainWindow : Window
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
+	private bool _dragMode;
 
 	public MainWindow()
 	{
-		Console.OutputEncoding = Encoding.UTF8;
+		// Console.OutputEncoding = Encoding.UTF8;
 		InitializeComponent();
 
 		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
@@ -98,6 +99,7 @@ public partial class MainWindow : Window
 	{
 		_startPoint = e.GetPosition(null);
 		_draggedItem = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+		_dragMode = false;
 	}
 
 	private void ListBox_OnPreviewMouseMove(object sender, MouseEventArgs e)
@@ -113,6 +115,7 @@ public partial class MainWindow : Window
 			if (Math.Abs(position.X - _startPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
 			    Math.Abs(position.Y - _startPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
 			{
+				_dragMode = true;
 				DataObject data = new DataObject(typeof(IconListBoxItem), _draggedItem);
 				DragDrop.DoDragDrop(listBox, data, DragDropEffects.Move);
 			}
@@ -185,6 +188,7 @@ public partial class MainWindow : Window
 		ulong style = NativeMethods.GetWindowLongA(handle, NativeMethods.GWL_EXSTYLE);
 		style ^= NativeMethods.WS_EX_APPWINDOW;
 		style |= NativeMethods.WS_EX_TOOLWINDOW;
+		style |= NativeMethods.WS_EX_NOACTIVATE;
 		NativeMethods.SetWindowLongA(handle, NativeMethods.GWL_EXSTYLE, style);
 
 		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTakBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - NativeMethodUtility.GetTaskbarHeight()), NativeMethods.SWP_SHOWWINDOW);
@@ -205,5 +209,32 @@ public partial class MainWindow : Window
 		NativeMethods.GetWindowRect(handle, out barData.rc);
 		NativeMethods.SHAppBarMessage(NativeMethods.ABM_QUERYPOS, ref barData);
 		NativeMethods.SHAppBarMessage(NativeMethods.ABM_SETPOS, ref barData);
+	}
+
+	private void ListBox_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+	{
+		if (!_dragMode)
+		{
+			var target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
+			if (target != null)
+			{
+				if (NativeMethods.IsIconic(target.Handle))
+				{
+					NativeMethods.SendMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_RESTORE), IntPtr.Zero);
+					NativeMethods.SetForegroundWindow(target.Handle);
+				}
+				else
+				{
+					if (NativeMethods.GetForegroundWindow() == target.Handle)
+					{
+						NativeMethods.SendMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_MINIMIZE), IntPtr.Zero);
+					}
+					else
+					{
+						NativeMethods.SetForegroundWindow(target.Handle);
+					}
+				}
+			}
+		}
 	}
 }
