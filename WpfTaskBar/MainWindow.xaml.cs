@@ -10,11 +10,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using WinFormsTaskBar;
-using WpfTaskBar;
 using Window = System.Windows.Window;
 
-namespace WpfApp1;
+namespace WpfTaskBar;
 
 /// <summary>
 /// Interaction logic for MainWindow.xaml
@@ -41,11 +39,11 @@ public partial class MainWindow : Window
 	{
 		Dispatcher.Invoke(() =>
 		{
-			if (e.AddedWindows.Count > 0)
+			if (e.AddedTaskBarItems.Count > 0)
 			{
-				foreach (var window in e.AddedWindows)
+				foreach (var taskBarItem in e.AddedTaskBarItems)
 				{
-					var iconListBoxItem = new IconListBoxItem(window.Title, window.IconFilePath != null ? GetIcon(window.IconFilePath) : null, window.Handle);
+					var iconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
 					listBox.Items.Add(iconListBoxItem);
 				}
 			}
@@ -58,12 +56,27 @@ public partial class MainWindow : Window
 				for (int i = items.Length - 1; i >= 0; --i)
 				{
 					var item = items[i];
-					if (item is IconListBoxItem window)
+					if (item is IconListBoxItem iconListBoxItem)
 					{
-						if (window.Handle == handle)
+						if (iconListBoxItem.Handle == handle)
 						{
 							listBox.Items.RemoveAt(i);
 						}
+					}
+				}
+			}
+
+			foreach (var updateTaskBarItem in e.UpdateTaskBarItems)
+			{
+				foreach (var item in listBox.Items)
+				{
+					if (item is IconListBoxItem iconListBoxItem)
+					{
+						if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
+						{
+							iconListBoxItem.Text = updateTaskBarItem.Title;
+							break;
+						} 
 					}
 				}
 			}

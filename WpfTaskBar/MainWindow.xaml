@@ -1,9 +1,9 @@
-﻿<Window x:Class="WpfApp1.MainWindow"
+﻿<Window x:Class="WpfTaskBar.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:WpfApp1"
+        xmlns:local="clr-namespace:WpfTaskBar"
         mc:Ignorable="d"
         Loaded="Window_Loaded"
         Closed="MainWindow_OnClosed"
@@ -11,12 +11,32 @@
         AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <ListBox Name="listBox" AllowDrop="True" PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown" MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp" PreviewMouseMove="ListBox_OnPreviewMouseMove" Drop="ListBox_OnDrop">
+        <ListBox
+            Name="listBox"
+            AllowDrop="True"
+            PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown"
+            MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp"
+            PreviewMouseMove="ListBox_OnPreviewMouseMove"
+            Drop="ListBox_OnDrop">
+            <ListBox.Template>
+                <ControlTemplate TargetType="ListBox">
+                    <Border BorderBrush="#333841" BorderThickness="0,0,1,0">
+                        <ScrollViewer Background="#21252b" Foreground="#bbbbbb" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </ListBox.Template>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="2"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate DataType="{x:Type local:IconListBoxItem}">
                     <StackPanel Orientation="Horizontal">
-                        <Image Source="{Binding Icon}" Width="20" Height="20" />
-                        <TextBlock Text="{Binding Text}" VerticalAlignment="Center" />
+                        <Image Source="{Binding Icon}" Width="24" Height="24" />
+                        <TextBlock Text="{Binding Text}" Padding="5,0,0,0" VerticalAlignment="Center" />
                     </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
