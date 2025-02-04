@@ -264,4 +264,15 @@ public partial class MainWindow : Window
 			}
 		}
 	}
+
+	private void ListBox_OnMouseDown(object sender, MouseButtonEventArgs e)
+	{
+		if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed)
+		{
+			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
+			{
+				NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+			}
+		}
+	}
 }

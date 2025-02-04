@@ -33,9 +33,11 @@ public class NativeMethods
 	public static readonly int ABM_WINDOWPOSCHANGED = 9;
 	public static readonly int ABM_SETSTAT = 10;
 	
+	public static readonly uint WM_CLOSE = 0x0010;
 	public static readonly uint WM_SYSCOMMAND = 0x0112;
 	public static readonly int SC_RESTORE = 0xF120;
 	public static readonly int SC_MINIMIZE = 0xF020;
+	
 	
 
 	[return: MarshalAs(UnmanagedType.Bool)]

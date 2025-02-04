@@ -17,6 +17,7 @@
             PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown"
             MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp"
             PreviewMouseMove="ListBox_OnPreviewMouseMove"
+            MouseDown="ListBox_OnMouseDown"
             Drop="ListBox_OnDrop">
             <ListBox.Template>
                 <ControlTemplate TargetType="ListBox">
