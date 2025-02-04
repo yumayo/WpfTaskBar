@@ -23,12 +23,20 @@ public partial class MainWindow : Window
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
+	private DateTimeItem _dateTimeItem;
 	private bool _dragMode;
 
 	public MainWindow()
 	{
 		// Console.OutputEncoding = Encoding.UTF8;
 		InitializeComponent();
+
+		_dateTimeItem = new DateTimeItem
+		{
+			Date = "2025/02/05",
+			Time = "1:32:39"
+		};
+		stackPanelTime.DataContext = _dateTimeItem;
 
 		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
 
@@ -80,6 +88,8 @@ public partial class MainWindow : Window
 					}
 				}
 			}
+
+			_dateTimeItem.Update();
 		});
 	}
 

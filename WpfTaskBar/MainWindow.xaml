@@ -41,5 +41,9 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+        <StackPanel VerticalAlignment="Bottom" Name="stackPanelTime" d:DataContext="{d:DesignInstance local:DateTimeItem}">
+            <TextBlock Padding="0,0,0,2" Text="{Binding Time}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+            <TextBlock Padding="0,0,0,10" Text="{Binding Date}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+        </StackPanel>
     </Grid>
 </Window>
