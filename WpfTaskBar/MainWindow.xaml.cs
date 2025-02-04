@@ -214,7 +214,11 @@ public partial class MainWindow : Window
 		style |= NativeMethods.WS_EX_NOACTIVATE;
 		NativeMethods.SetWindowLongA(handle, NativeMethods.GWL_EXSTYLE, style);
 
-		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTakBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - NativeMethodUtility.GetTaskbarHeight()), NativeMethods.SWP_SHOWWINDOW);
+		// タスクバーは表示しないほうが分かりやすそうなので高さ0にしておきます。
+		var taskBarHeight = NativeMethodUtility.GetTaskbarHeight();
+		taskBarHeight = 0;
+
+		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTakBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - taskBarHeight), NativeMethods.SWP_SHOWWINDOW);
 
 		// AppBarの登録
 		NativeMethods.APPBARDATA barData = new NativeMethods.APPBARDATA();
