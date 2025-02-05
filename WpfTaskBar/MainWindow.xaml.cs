@@ -31,11 +31,9 @@ public partial class MainWindow : Window
 		// Console.OutputEncoding = Encoding.UTF8;
 		InitializeComponent();
 
-		_dateTimeItem = new DateTimeItem
-		{
-			Date = "2025/02/05",
-			Time = "1:32:39"
-		};
+		_dateTimeItem = new DateTimeItem();
+		_dateTimeItem.Update();
+		
 		stackPanelTime.DataContext = _dateTimeItem;
 
 		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
@@ -59,16 +57,17 @@ public partial class MainWindow : Window
 			object[] items = new object[listBox.Items.Count];
 			listBox.Items.CopyTo(items, 0);
 
-			foreach (var handle in e.RemovedWindowHandles)
+			for (int i = items.Length - 1; i >= 0; --i)
 			{
-				for (int i = items.Length - 1; i >= 0; --i)
+				var item = items[i];
+				if (item is IconListBoxItem iconListBoxItem)
 				{
-					var item = items[i];
-					if (item is IconListBoxItem iconListBoxItem)
+					foreach (var handle in e.RemovedWindowHandles)
 					{
 						if (iconListBoxItem.Handle == handle)
 						{
 							listBox.Items.RemoveAt(i);
+							break;
 						}
 					}
 				}
@@ -203,9 +202,9 @@ public partial class MainWindow : Window
 		int height = (int)SystemParameters.PrimaryScreenHeight;
 		int width = (int)SystemParameters.PrimaryScreenWidth;
 
-		int myTakBarWidth = 400;
+		int myTaskBarWidth = 400;
 
-		IntPtr handle = new WindowInteropHelper(this).Handle; // 自分のウィンドウハンドルを取得する
+		IntPtr handle = new WindowInteropHelper(this).Handle;
 
 		// 登録領域から外されないように属性を変更する
 		ulong style = NativeMethods.GetWindowLongA(handle, NativeMethods.GWL_EXSTYLE);
@@ -218,7 +217,7 @@ public partial class MainWindow : Window
 		var taskBarHeight = NativeMethodUtility.GetTaskbarHeight();
 		taskBarHeight = 0;
 
-		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTakBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - taskBarHeight), NativeMethods.SWP_SHOWWINDOW);
+		NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, myTaskBarWidth, (int)(height * NativeMethodUtility.GetPixelsPerDpi() - taskBarHeight), NativeMethods.SWP_SHOWWINDOW);
 
 		// AppBarの登録
 		NativeMethods.APPBARDATA barData = new NativeMethods.APPBARDATA();
@@ -230,7 +229,7 @@ public partial class MainWindow : Window
 		barData.uEdge = NativeMethods.ABE_LEFT;
 		barData.rc.Top = 0;
 		barData.rc.Left = 0;
-		barData.rc.Right = myTakBarWidth;
+		barData.rc.Right = myTaskBarWidth;
 		barData.rc.Bottom = (int)SystemParameters.PrimaryScreenHeight;
 
 		NativeMethods.GetWindowRect(handle, out barData.rc);
