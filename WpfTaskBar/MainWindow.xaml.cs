@@ -49,17 +49,30 @@ public partial class MainWindow : Window
 			{
 				foreach (var taskBarItem in e.AddedTaskBarItems)
 				{
-					var iconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
-					listBox.Items.Add(iconListBoxItem);
+					var newIconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
+
+					int i;
+					for (i = listBox.Items.Count - 1; i >= 0; --i)
+					{
+						if (listBox.Items[i] is IconListBoxItem iconListBoxItem)
+						{
+							if (iconListBoxItem.ModuleFileName == newIconListBoxItem.ModuleFileName)
+							{
+								listBox.Items.Insert(i + 1, newIconListBoxItem);
+								break;
+							}
+						}
+					}
+					if (i == -1)
+					{
+						listBox.Items.Add(newIconListBoxItem);
+					}
 				}
 			}
 
-			object[] items = new object[listBox.Items.Count];
-			listBox.Items.CopyTo(items, 0);
-
-			for (int i = items.Length - 1; i >= 0; --i)
+			for (int i = listBox.Items.Count - 1; i >= 0; --i)
 			{
-				var item = items[i];
+				var item = listBox.Items[i];
 				if (item is IconListBoxItem iconListBoxItem)
 				{
 					foreach (var handle in e.RemovedWindowHandles)
