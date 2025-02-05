@@ -7,9 +7,10 @@ namespace WpfTaskBar;
 
 public class IconListBoxItem : INotifyPropertyChanged
 {
-	public IconListBoxItem(string text, BitmapSource icon, IntPtr handle)
+	public IconListBoxItem(string text, string? moduleFileName, BitmapSource? icon, IntPtr handle)
 	{
 		Text = text;
+		ModuleFileName = moduleFileName;
 		Icon = icon;
 		Handle = handle;
 	}
@@ -23,6 +24,7 @@ public class IconListBoxItem : INotifyPropertyChanged
 
 	public BitmapSource? Icon { get; set; }
 	public IntPtr Handle { get; set; }
+	public string? ModuleFileName { get; set; }
 
 	public override string ToString()
 	{

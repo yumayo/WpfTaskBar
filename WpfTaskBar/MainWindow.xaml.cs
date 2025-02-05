@@ -49,7 +49,7 @@ public partial class MainWindow : Window
 			{
 				foreach (var taskBarItem in e.AddedTaskBarItems)
 				{
-					var iconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
+					var iconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
 					listBox.Items.Add(iconListBoxItem);
 				}
 			}
@@ -270,7 +270,58 @@ public partial class MainWindow : Window
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
 			{
-				NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+				if (removeItem.ModuleFileName?.EndsWith("EXCEL.EXE") ?? false)
+				{
+					// Excelアプリケーションの取得
+					Microsoft.Office.Interop.Excel.Application excelApp = (Microsoft.Office.Interop.Excel.Application)NativeMethods.GetActiveObject("Excel.Application");
+					try
+					{
+						if (removeItem.Text.Length > " - Excel".Length)
+						{
+							var workbookName = removeItem.Text.Substring(0, removeItem.Text.Length - " - Excel".Length);
+
+							Microsoft.Office.Interop.Excel.Workbooks workbooks = excelApp.Workbooks;
+							try
+							{
+								// ブックを開く
+								Microsoft.Office.Interop.Excel.Workbook workbook = workbooks[workbookName];
+								try
+								{
+									// ブックを保存して閉じる
+									workbook.Close(true);
+
+									if (workbooks.Count == 0)
+									{
+										// 最後のブックの場合、空のExcelが残るのでExcelアプリケーションを終了
+										excelApp.Quit();
+									}
+								}
+								finally
+								{
+									// COMオブジェクトの解放
+									System.Runtime.InteropServices.Marshal.ReleaseComObject(workbook);
+								}
+							}
+							finally
+							{
+								System.Runtime.InteropServices.Marshal.ReleaseComObject(workbooks);
+							}
+						}
+						else
+						{
+							// Excelアプリケーションを終了
+							excelApp.Quit();
+						}
+					}
+					finally
+					{
+						System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
+					}
+				}
+				else
+				{
+					NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+				}
 			}
 		}
 	}
