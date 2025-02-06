@@ -34,6 +34,7 @@ public class NativeMethods
 	public static readonly int ABM_SETSTAT = 10;
 
 	public static readonly uint WM_CLOSE = 0x0010;
+	public static readonly uint WM_QUIT = 0x0012;
 	public static readonly uint WM_SYSCOMMAND = 0x0112;
 	public static readonly int SC_RESTORE = 0xF120;
 	public static readonly int SC_MINIMIZE = 0xF020;
@@ -112,39 +113,4 @@ public class NativeMethods
 
 	[DllImport("user32.dll")]
 	public static extern IntPtr GetForegroundWindow();
-
-	// https://www.reddit.com/r/csharp/comments/1d8hh3u/work_around_marshalgetactiveobject_in_net_core/
-	public static object? GetActiveObject(string progId) => GetActiveObject(progId, true);
-	public static object? GetActiveObject(string progId, bool throwOnError = true)
-	{
-		if (progId == null)
-			throw new ArgumentNullException(nameof(progId));
-
-		var hr = CLSIDFromProgIDEx(progId, out var clsid);
-		if (hr < 0)
-		{
-			if (throwOnError)
-			{
-				System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);
-			}
-			return null;
-		}
-
-		hr = GetActiveObject(clsid, IntPtr.Zero, out var obj);
-		if (hr < 0)
-		{
-			if (throwOnError)
-			{
-				System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(hr);
-			}
-			return null;
-		}
-		return obj;
-	}
-
-	[DllImport("ole32")]
-	private static extern int CLSIDFromProgIDEx([MarshalAs(UnmanagedType.LPWStr)] string lpszProgID, out Guid lpclsid);
-
-	[DllImport("oleaut32")]
-	private static extern int GetActiveObject([MarshalAs(UnmanagedType.LPStruct)] Guid rclsid, IntPtr pvReserved, [MarshalAs(UnmanagedType.IUnknown)] out object ppunk);
 }
