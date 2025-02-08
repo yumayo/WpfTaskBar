@@ -84,7 +84,10 @@ public class WindowManager : IDisposable
 				continue;
 			}
 
-			var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), GetIconFilePath(windowHandle));
+			var processName = UwpUtility.GetProcessName(windowHandle);
+			var processId = UwpUtility.GetProcessId(windowHandle);
+			var appxPackage = AppxPackageUtility.AppxPackage.FromWindow(windowHandle);
+			var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), UwpUtility.GetProcessName(windowHandle));
 			TaskBarItems.Add(taskBarItem);
 			addedTaskBarItems.Add(taskBarItem);
 		}

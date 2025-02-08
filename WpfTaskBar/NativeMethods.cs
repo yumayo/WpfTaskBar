@@ -39,8 +39,6 @@ public class NativeMethods
 	public static readonly int SC_RESTORE = 0xF120;
 	public static readonly int SC_MINIMIZE = 0xF020;
 
-
-
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public delegate bool EnumWindowsCallback(IntPtr hwnd, int lParam);
 
@@ -113,4 +111,33 @@ public class NativeMethods
 
 	[DllImport("user32.dll")]
 	public static extern IntPtr GetForegroundWindow();
+
+	// How to get the "Application Name" from hWnd for Windows 10 Store Apps (e.g. Edge)
+	// https://stackoverflow.com/questions/32001621/how-to-get-the-application-name-from-hwnd-for-windows-10-store-apps-e-g-edge
+
+	/// <summary>
+	/// Delegate for the EnumChildWindows method
+	/// </summary>
+	/// <param name="hWnd">Window handle</param>
+	/// <param name="parameter">Caller-defined variable; we use it for a pointer to our list</param>
+	/// <returns>True to continue enumerating, false to bail.</returns>
+	public delegate bool EnumWindowProc(IntPtr hWnd, IntPtr parameter);
+
+	[DllImport("user32", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowProc lpEnumFunc, IntPtr lParam);
+
+
+	public const UInt32 PROCESS_QUERY_INFORMATION = 0x400;
+	public const UInt32 PROCESS_VM_READ = 0x010;
+
+	[DllImport("kernel32.dll", SetLastError = true)]
+	public static extern bool QueryFullProcessImageName([In] IntPtr hProcess, [In] int dwFlags, [Out] StringBuilder lpExeName, ref int lpdwSize);
+
+	[DllImport("kernel32.dll", SetLastError = true)]
+	public static extern IntPtr OpenProcess(
+		UInt32 dwDesiredAccess,
+		[MarshalAs(UnmanagedType.Bool)] Boolean bInheritHandle,
+		Int32 dwProcessId
+	);
 }
