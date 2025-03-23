@@ -48,7 +48,7 @@ public partial class MainWindow : Window
 			{
 				foreach (var taskBarItem in e.AddedTaskBarItems)
 				{
-					var newIconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.Handle);
+					var newIconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.IsForeground, taskBarItem.Handle);
 
 					int i;
 					for (i = listBox.Items.Count - 1; i >= 0; --i)
@@ -94,6 +94,7 @@ public partial class MainWindow : Window
 						if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
 						{
 							iconListBoxItem.Text = updateTaskBarItem.Title;
+							iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
 							break;
 						} 
 					}

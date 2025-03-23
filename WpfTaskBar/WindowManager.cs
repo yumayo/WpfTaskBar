@@ -69,6 +69,8 @@ public class WindowManager : IDisposable
 		List<TaskBarItem> addedTaskBarItems = new List<TaskBarItem>();
 		List<IntPtr> removedWindowHandles = new List<IntPtr>();
 
+		var foregroundHwnd = NativeMethods.GetForegroundWindow();
+
 		foreach (var windowHandle in WindowHandles)
 		{
 			// タスクバーとして管理すべきなWindowハンドルか？
@@ -95,7 +97,7 @@ public class WindowManager : IDisposable
 					var processName = UwpUtility.GetProcessName(windowHandle);
 					var processId = UwpUtility.GetProcessId(windowHandle);
 					var appxPackage = AppxPackageUtility.AppxPackage.FromWindow(windowHandle);
-					var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), UwpUtility.GetProcessName(windowHandle));
+					var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), UwpUtility.GetProcessName(windowHandle), windowHandle == foregroundHwnd);
 					TaskBarItems.Add(taskBarItem);
 					addedTaskBarItems.Add(taskBarItem);
 				}
@@ -126,7 +128,7 @@ public class WindowManager : IDisposable
 		
 		foreach (var taskBarWindow in TaskBarItems.ToList())
 		{
-			updateTaskBarItems.Add(new UpdateTaskBarItem(taskBarWindow.Handle, GetWindowText(taskBarWindow.Handle)));
+			updateTaskBarItems.Add(new UpdateTaskBarItem(taskBarWindow.Handle, GetWindowText(taskBarWindow.Handle), taskBarWindow.Handle == foregroundHwnd));
 		}
 
 		WindowListChanged?.Invoke(this, new TaskBarWindowEventArgs(updateTaskBarItems, addedTaskBarItems, removedWindowHandles));
