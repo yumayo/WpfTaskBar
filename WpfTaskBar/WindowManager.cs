@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -146,28 +146,64 @@ public class WindowManager : IDisposable
 
 	public static bool IsTaskBarWindow(IntPtr hwnd)
 	{
+		// ウィンドウのスタイルをチェック
 		var style = NativeMethods.WS_BORDER | NativeMethods.WS_VISIBLE;
 		if ((NativeMethods.GetWindowLongA(hwnd, NativeMethods.GWL_STYLE) & style) != style)
 		{
 			return false;
 		}
 
+		// ウィンドウが可視かどうかチェック
 		if (!NativeMethods.IsWindowVisible(hwnd))
 		{
 			return false;
 		}
 
+		// 親ウィンドウがないことを確認
 		if (NativeMethods.GetParent(hwnd) != IntPtr.Zero)
 		{
 			return false;
 		}
 
-		// JetBrainsツールボックスを右クリックした際にウィンドウが表示されてしまうため、それを抑制する。
+		// ツールウィンドウを除外
 		if ((NativeMethods.GetWindowLongA(hwnd, NativeMethods.GWL_EXSTYLE) & NativeMethods.WS_EX_TOOLWINDOW) != 0)
 		{
 			return false;
 		}
 
+		// ウィンドウがクリッピング領域を持っているか確認（実際に表示されているウィンドウはクリッピング領域を持つ）
+		NativeMethods.RECT rect;
+		if (!NativeMethods.GetWindowRect(hwnd, out rect))
+		{
+			return false;
+		}
+    
+		// ウィンドウが最小化されていないか確認
+		if (NativeMethods.IsIconic(hwnd))
+		{
+			// 最小化されているウィンドウもタスクバーに表示されるので、これはtrueを返す
+			return true;
+		}
+    
+		// ウィンドウが実際に表示されているか確認（幅と高さが0より大きい）
+		if (rect.Right - rect.Left <= 0 || rect.Bottom - rect.Top <= 0)
+		{
+			return false;
+		}
+    
+		// ウィンドウタイトルの長さをチェック（タイトルのないウィンドウは通常タスクバーに表示されない）
+		int textLen = NativeMethods.GetWindowTextLength(hwnd);
+		if (textLen <= 0)
+		{
+			return false;
+		}
+    
+		// ウィンドウがタスクバーに表示されないように明示的に設定されているか確認
+		if ((NativeMethods.GetWindowLongA(hwnd, NativeMethods.GWL_EXSTYLE) & NativeMethods.WS_EX_NOACTIVATE) != 0)
+		{
+			return false;
+		}
+    
 		return true;
 	}
 

@@ -70,6 +70,9 @@ public class NativeMethods
 
 	[DllImport("user32.dll")]
 	public static extern ulong SetWindowLongA(IntPtr hWnd, int index, ulong unValue);
+	
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	public static extern int GetWindowTextLength(IntPtr hWnd);
 
 	[StructLayout(LayoutKind.Sequential)]
 	public struct RECT
