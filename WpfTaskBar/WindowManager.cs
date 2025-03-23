@@ -71,25 +71,35 @@ public class WindowManager : IDisposable
 
 		foreach (var windowHandle in WindowHandles)
 		{
-			// すでに含まれていたら除外
+			// タスクバーとして管理すべきなWindowハンドルか？
+			var isTaskBarWindow = IsTaskBarWindow(windowHandle);
+			
+			// タスクバー管理されている場合
 			if (TaskBarItems.Select(x => x.Handle).Contains(windowHandle))
 			{
-				continue;
+				// すでにタスクバー管理化になっているが、今回のフレームではタスクバー管理外となったため削除
+				if (!isTaskBarWindow)
+				{
+					var taskBarItem = TaskBarItems.First(x => x.Handle == windowHandle);
+					TaskBarItems.Remove(taskBarItem);
+					if (!removedWindowHandles.Contains(windowHandle))
+					{
+						removedWindowHandles.Add(windowHandle);
+					}
+				}
 			}
-
-			// タスクバーに表示されるウィンドウでなければ除外
-			var isTaskBarWindow = IsTaskBarWindow(windowHandle);
-			if (!isTaskBarWindow)
+			else
 			{
-				continue;
+				if (isTaskBarWindow)
+				{
+					var processName = UwpUtility.GetProcessName(windowHandle);
+					var processId = UwpUtility.GetProcessId(windowHandle);
+					var appxPackage = AppxPackageUtility.AppxPackage.FromWindow(windowHandle);
+					var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), UwpUtility.GetProcessName(windowHandle));
+					TaskBarItems.Add(taskBarItem);
+					addedTaskBarItems.Add(taskBarItem);
+				}
 			}
-
-			var processName = UwpUtility.GetProcessName(windowHandle);
-			var processId = UwpUtility.GetProcessId(windowHandle);
-			var appxPackage = AppxPackageUtility.AppxPackage.FromWindow(windowHandle);
-			var taskBarItem = new TaskBarItem(windowHandle, GetWindowText(windowHandle), UwpUtility.GetProcessName(windowHandle));
-			TaskBarItems.Add(taskBarItem);
-			addedTaskBarItems.Add(taskBarItem);
 		}
 
 		foreach (var taskBarWindow in TaskBarItems.ToList())
@@ -97,7 +107,10 @@ public class WindowManager : IDisposable
 			if (!WindowHandles.Contains(taskBarWindow.Handle))
 			{
 				TaskBarItems.Remove(taskBarWindow);
-				removedWindowHandles.Add(taskBarWindow.Handle);
+				if (!removedWindowHandles.Contains(taskBarWindow.Handle))
+				{
+					removedWindowHandles.Add(taskBarWindow.Handle);
+				}
 			}
 		}
 
