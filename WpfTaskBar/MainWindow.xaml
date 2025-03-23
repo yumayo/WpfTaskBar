@@ -30,6 +30,7 @@
             </ListBox.Template>
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
+                    <Setter Property="Focusable" Value="False"/>
                     <Setter Property="Padding" Value="2"/>
                     <Setter Property="IsSelected" Value="{Binding IsForeground}"/>
                 </Style>
