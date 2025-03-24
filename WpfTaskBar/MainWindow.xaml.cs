@@ -287,4 +287,9 @@ public partial class MainWindow : Window
 			}
 		}
 	}
+
+	private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		Application.Current.Shutdown();
+	}
 }
