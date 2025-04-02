@@ -8,7 +8,7 @@ namespace WpfTaskBar;
 
 public class AppxPackageUtility
 {
-    private static void Show(int indent, AppxPackage package)
+    public static void Show(int indent, AppxPackage package)
     {
         string sindent = new string(' ', indent);
         Console.WriteLine(sindent + "FullName               : " + package.FullName);

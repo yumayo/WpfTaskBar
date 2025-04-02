@@ -7,32 +7,33 @@ namespace WpfTaskBar;
 
 public class IconListBoxItem : INotifyPropertyChanged
 {
-	public IconListBoxItem(string text, string? moduleFileName, BitmapSource? icon, bool isForeground, IntPtr handle)
-	{
-		Text = text;
-		ModuleFileName = moduleFileName;
-		Icon = icon;
-		IsForeground = isForeground;
-		Handle = handle;
-	}
+	private string _text = "";
 
-	private string _text;
-	public string Text
+	public required string Text
 	{
 		get => _text;
 		set => SetField(ref _text, value);
 	}
 
 	private bool _isForeground;
-	public bool IsForeground
+
+	public required bool IsForeground
 	{
 		get => _isForeground;
 		set => SetField(ref _isForeground, value);
 	}
 
-	public BitmapSource? Icon { get; set; }
-	public IntPtr Handle { get; set; }
-	public string? ModuleFileName { get; set; }
+	private BitmapSource? _icon;
+
+	public required BitmapSource? Icon
+	{
+		get => _icon;
+		set => SetField(ref _icon, value);
+	}
+
+	public required IntPtr Handle { get; set; }
+
+	public required string? ModuleFileName { get; set; }
 
 	public override string ToString()
 	{

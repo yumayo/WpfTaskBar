@@ -1,5 +1,12 @@
 ﻿namespace WpfTaskBar;
 
-public record TaskBarItem(IntPtr Handle, string Title, string IconFilePath, bool IsForeground);
+public class TaskBarItem
+{
+	public required IntPtr Handle { get; init; }
 
-public record UpdateTaskBarItem(IntPtr Handle, string Title, bool IsForeground);
+	public required string Title { get; init; }
+
+	public required string ModuleFileName { get; init; }
+
+	public required bool IsForeground { get; init; }
+}

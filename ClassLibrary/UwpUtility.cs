@@ -64,6 +64,7 @@ public class UwpUtility
 
 			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO));
 
+			return windowinfo.childpid;
 			IntPtr proc;
 			if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)windowinfo.childpid)) == IntPtr.Zero)
 				return IntPtr.Zero;

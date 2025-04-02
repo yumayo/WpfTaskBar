@@ -13,6 +13,13 @@
       <Reference Include="PresentationFramework">
         <HintPath>C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App\8.0.11\PresentationFramework.dll</HintPath>
       </Reference>
+      <Reference Include="System.Drawing.Common">
+        <HintPath>C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App\8.0.11\System.Drawing.Common.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="System.Management" Version="9.0.3" />
     </ItemGroup>
 
 </Project>

@@ -1,4 +1,7 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -9,6 +12,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
 namespace WpfTaskBar;
@@ -48,7 +52,14 @@ public partial class MainWindow : Window
 			{
 				foreach (var taskBarItem in e.AddedTaskBarItems)
 				{
-					var newIconListBoxItem = new IconListBoxItem(taskBarItem.Title, taskBarItem.IconFilePath, taskBarItem.IconFilePath != null ? GetIcon(taskBarItem.IconFilePath) : null, taskBarItem.IsForeground, taskBarItem.Handle);
+					var newIconListBoxItem = new IconListBoxItem
+					{
+						Handle = taskBarItem.Handle,
+						Icon = taskBarItem.ModuleFileName != null ? GetIcon(taskBarItem.ModuleFileName) : null,
+						Text = taskBarItem.Title,
+						IsForeground = taskBarItem.IsForeground,
+						ModuleFileName = taskBarItem.ModuleFileName,
+					};
 
 					int i;
 					for (i = listBox.Items.Count - 1; i >= 0; --i)
@@ -93,6 +104,12 @@ public partial class MainWindow : Window
 					{
 						if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
 						{
+							if (iconListBoxItem.ModuleFileName != updateTaskBarItem.ModuleFileName)
+							{
+								Console.WriteLine($"Changed {iconListBoxItem.ModuleFileName} to {updateTaskBarItem.ModuleFileName}");
+								iconListBoxItem.Icon = updateTaskBarItem.ModuleFileName != null ? GetIcon(updateTaskBarItem.ModuleFileName) : null;
+								iconListBoxItem.ModuleFileName = updateTaskBarItem.ModuleFileName;
+							}
 							iconListBoxItem.Text = updateTaskBarItem.Title;
 							iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
 							break;
@@ -114,11 +131,16 @@ public partial class MainWindow : Window
 	{
 		try
 		{
-			var icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
-			var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap((icon.ToBitmap()).GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-			bitmapSource.Freeze();
-			icon.Dispose();
-			return bitmapSource;
+			System.Drawing.Icon? icon;
+			if (iconFilePath.EndsWith("exe"))
+			{
+				icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
+			}
+			else
+			{
+				icon = IconUtility.ConvertPngToIcon(iconFilePath);
+			}
+			return GetIcon(icon);
 		}
 		catch (System.ComponentModel.Win32Exception ex)
 		{
@@ -128,6 +150,14 @@ public partial class MainWindow : Window
 			}
 			throw;
 		}
+	}
+
+	public static BitmapSource? GetIcon(System.Drawing.Icon icon)
+	{
+		var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap((icon.ToBitmap()).GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+		bitmapSource.Freeze();
+		icon.Dispose();
+		return bitmapSource;
 	}
 
 	private void ListBox_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
