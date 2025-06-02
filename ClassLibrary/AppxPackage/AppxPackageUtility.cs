@@ -4,6 +4,7 @@ namespace WpfTaskBar;
 
 public partial class AppxPackageUtility
 {
+    // https://stackoverflow.com/questions/32122679/getting-icon-of-modern-windows-app-from-a-desktop-application
     public static void Show(int indent, AppxPackage package)
     {
         string sindent = new string(' ', indent);
