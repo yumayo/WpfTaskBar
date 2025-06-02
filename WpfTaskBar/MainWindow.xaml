@@ -50,6 +50,27 @@
             </ListBox.ItemTemplate>
         </ListBox>
         <StackPanel VerticalAlignment="Bottom" Name="stackPanelTime" d:DataContext="{d:DesignInstance local:DateTimeItem}">
+            <!-- 打刻時刻表示エリア -->
+            <Grid Margin="5,0,5,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- 打刻開始時刻 -->
+                <StackPanel Grid.Column="0" HorizontalAlignment="Left">
+                    <TextBlock Padding="50,0,0,0" Text="出勤" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
+                    <TextBlock Padding="50,0,0,0" Text="{Binding StartTime}" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
+                </StackPanel>
+                
+                <!-- 退勤時刻 -->
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock Padding="0,0,50,0" Text="退勤" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
+                    <TextBlock Padding="0,0,50,0" Text="{Binding EndTime}" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+            
+            <!-- 現在時刻表示 -->
             <TextBlock Padding="0,0,0,2" Text="{Binding Time}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
             <TextBlock Padding="0,0,0,10" Text="{Binding Date}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
         </StackPanel>
