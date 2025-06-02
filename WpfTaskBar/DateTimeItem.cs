@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using WpfTaskBar.Rest.Models;
 
 namespace WpfTaskBar;
 
@@ -35,15 +36,25 @@ public class DateTimeItem : INotifyPropertyChanged
 		set => SetField(ref _endTime, value);
 	}
 
+	private DateTime _updateDate;
+
 	public void Update()
 	{
 		var now = DateTime.Now;
+		
+		if (now.Hour < 4 && _updateDate.Hour >= 4)
+		{
+			TimeRecordModel.ClockInDate = default;
+			TimeRecordModel.ClockOutDate = default;
+		}
 
-		StartTime = "2025/05/24 09:55:14";
-		EndTime = "2025/05/24 22:49:10";
+		StartTime = TimeRecordModel.ClockInDate != default ? TimeRecordModel.ClockInDate.ToString("HH:mm:ss") : "";
+		EndTime = TimeRecordModel.ClockOutDate != default ? TimeRecordModel.ClockOutDate.ToString("HH:mm:ss") : "";
 		
 		Date = now.ToString("yyyy/MM/dd");
-		Time = now.ToString("H:mm:ss");
+		Time = now.ToString("HH:mm:ss");
+
+		_updateDate = now;
 	}
 
 	public event PropertyChangedEventHandler? PropertyChanged;
