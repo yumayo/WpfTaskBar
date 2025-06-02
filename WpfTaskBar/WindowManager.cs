@@ -96,7 +96,7 @@ public class WindowManager : IDisposable
 				{
 					var processName = UwpUtility.GetProcessName(windowHandle);
 					var processId = (int)UwpUtility.GetProcessId(windowHandle);
-					var appxPackage = AppxPackageUtility.AppxPackage.FromUwpProcess(processId);
+					var appxPackage = AppxPackage.FromUwpProcess(processId);
 					if (appxPackage != null)
 					{
 						processName = appxPackage.FindHighestScaleQualifiedImagePath(appxPackage.Logo);
@@ -139,12 +139,15 @@ public class WindowManager : IDisposable
 		foreach (var taskBarWindow in TaskBarItems.ToList())
 		{
 			var processName = UwpUtility.GetProcessName(taskBarWindow.Handle);
-			var processId = (int)UwpUtility.GetProcessId(taskBarWindow.Handle);
-			var appxPackage = AppxPackageUtility.AppxPackage.FromUwpProcess(processId);
-			if (appxPackage != null)
-			{
-				processName = appxPackage.FindHighestScaleQualifiedImagePath(appxPackage.Logo);
-			}
+			
+			// TODO: UWPのアプリケーションに対応する
+			// var processId = (int)UwpUtility.GetProcessId(taskBarWindow.Handle);
+			// var appxPackage = AppxPackage.FromProcess(processId);
+			// if (appxPackage != null)
+			// {
+			// 	processName = appxPackage.FindHighestScaleQualifiedImagePath(appxPackage.Logo);
+			// }
+
 			updateTaskBarItems.Add(new TaskBarItem
 			{
 				Handle = taskBarWindow.Handle,
