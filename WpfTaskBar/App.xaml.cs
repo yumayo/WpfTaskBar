@@ -14,6 +14,8 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        ConsoleManager.Setup();
+        
         base.OnStartup(e);
 
         // REST APIサーバーを起動
