@@ -36,7 +36,7 @@ public partial class MainWindow : Window
 
 		_dateTimeItem = new DateTimeItem();
 		_dateTimeItem.Update();
-		
+
 		stackPanelTime.DataContext = _dateTimeItem;
 
 		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
@@ -113,7 +113,7 @@ public partial class MainWindow : Window
 							iconListBoxItem.Text = updateTaskBarItem.Title;
 							iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
 							break;
-						} 
+						}
 					}
 				}
 			}
@@ -132,7 +132,7 @@ public partial class MainWindow : Window
 		try
 		{
 			System.Drawing.Icon? icon;
-			if (iconFilePath.EndsWith("exe"))
+			if (iconFilePath.ToUpper().EndsWith("EXE"))
 			{
 				icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
 			}
@@ -149,6 +149,11 @@ public partial class MainWindow : Window
 				return null;
 			}
 			throw;
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e);
+			return null;
 		}
 	}
 
