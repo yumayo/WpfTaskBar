@@ -318,7 +318,7 @@ public partial class MainWindow : Window
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
 			{
-				NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+				NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
 			}
 		}
 	}

@@ -38,6 +38,7 @@ public class NativeMethods
 	public static readonly uint WM_SYSCOMMAND = 0x0112;
 	public static readonly int SC_RESTORE = 0xF120;
 	public static readonly int SC_MINIMIZE = 0xF020;
+	public static readonly int SC_CLOSE = 0xF060;
 
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public delegate bool EnumWindowsCallback(IntPtr hwnd, int lParam);
