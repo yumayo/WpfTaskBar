@@ -95,12 +95,15 @@ public class WindowManager : IDisposable
 				if (isTaskBarWindow)
 				{
 					var processName = UwpUtility.GetProcessName(windowHandle);
-					var processId = (int)UwpUtility.GetProcessId(windowHandle);
-					var appxPackage = AppxPackage.FromUwpProcess(processId);
-					if (appxPackage != null)
-					{
-						processName = appxPackage.FindHighestScaleQualifiedImagePath(appxPackage.Logo);
-					}
+					
+					// TODO: UWPのアプリケーションに対応する
+					// var processId = (int)UwpUtility.GetProcessId(windowHandle);
+					// var appxPackage = AppxPackage.FromUwpProcess(processId);
+					// if (appxPackage != null)
+					// {
+					// 	processName = appxPackage.FindHighestScaleQualifiedImagePath(appxPackage.Logo);
+					// }
+
 					var taskBarItem = new TaskBarItem
 					{
 						Handle = windowHandle,
