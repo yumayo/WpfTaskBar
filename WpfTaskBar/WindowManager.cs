@@ -171,6 +171,12 @@ public class WindowManager : IDisposable
 	{
 		Stop();
 	}
+
+	public int CountBySameProcess(IntPtr hwnd)
+	{
+		var targetProcessId = (int)UwpUtility.GetProcessId(hwnd);
+		return TaskBarItems.Count(item => (int)UwpUtility.GetProcessId(item.Handle) == targetProcessId);
+	}
 }
 
 public class TaskBarWindowEventArgs : EventArgs
