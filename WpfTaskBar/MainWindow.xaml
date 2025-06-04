@@ -28,6 +28,7 @@
             <ListBox
                 Grid.Row="0"
                 Name="listBox"
+                Margin="0,0,0,-1"
                 AllowDrop="True"
                 PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown"
                 MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp"
