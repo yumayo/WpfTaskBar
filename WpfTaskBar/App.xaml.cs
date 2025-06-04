@@ -10,7 +10,7 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class App : Application
 {
-    private IHost _host;
+    private IHost? _host;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
