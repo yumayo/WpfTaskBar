@@ -11,8 +11,7 @@ class Program
 
 	static async Task Main(string[] args)
 	{
-		// ShowWindowTitles();
-
+		ShowWindowTitles();
 		var windowHandles = FindWindowHandles("設定");
 		foreach (var windowHandle in windowHandles)
 		{
@@ -22,17 +21,8 @@ class Program
 				continue;
 			}
 			AppxPackageUtility.Show(0, AppxPackage.FromWindow(windowHandle));
-			// PrintAppPackage(windowHandle);
+			PrintAppPackage(windowHandle);
 		}
-		
-		// NativeMethodUtility.IsTaskBarWindow(10619234);
-
-		// var 電卓Result = NativeMethods.GetWindowThreadProcessId(10619234, out var 電卓);
-		// var メディアプレイヤーResult = NativeMethods.GetWindowThreadProcessId(4065632, out var メディアプレイヤー);
-		// var processIds = ProcessUtility.GetDescendantProcessIds(電卓);
-		// var メディアプレイヤーprocessIds = ProcessUtility.GetDescendantProcessIds(メディアプレイヤー);
-
-		var a = 0;
 	}
 
 	private static void ShowWindowTitles()
