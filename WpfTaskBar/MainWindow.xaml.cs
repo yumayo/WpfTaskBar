@@ -294,14 +294,14 @@ public partial class MainWindow : Window
 			{
 				if (NativeMethods.IsIconic(target.Handle))
 				{
-					NativeMethods.SendMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_RESTORE), IntPtr.Zero);
+					NativeMethods.PostMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_RESTORE), IntPtr.Zero);
 					NativeMethods.SetForegroundWindow(target.Handle);
 				}
 				else
 				{
 					if (NativeMethods.GetForegroundWindow() == target.Handle)
 					{
-						NativeMethods.SendMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_MINIMIZE), IntPtr.Zero);
+						NativeMethods.PostMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_MINIMIZE), IntPtr.Zero);
 					}
 					else
 					{
@@ -318,7 +318,7 @@ public partial class MainWindow : Window
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
 			{
-				NativeMethods.SendMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
+				NativeMethods.PostMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
 			}
 		}
 	}
