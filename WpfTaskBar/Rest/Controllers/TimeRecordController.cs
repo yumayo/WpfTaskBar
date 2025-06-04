@@ -1,24 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json.Serialization;
 using WpfTaskBar.Rest.Models;
 
 namespace WpfTaskBar
 {
     [ApiController]
-    [Route("api/[controller]")]
     public class TimeRecordController : ControllerBase
     {
         [HttpPost("clock-in")]
-        public ActionResult<DateTime> ClockIn()
+        public ActionResult<ClockInResponse> ClockIn([FromBody] ClockInRequest request)
         {
-            TimeRecordModel.ClockInDate = DateTime.Now;
-            return Ok(TimeRecordModel.ClockInDate);
+            TimeRecordModel.ClockInDate = request.Date;
+            return Ok(new ClockInResponse { ClockInDate = TimeRecordModel.ClockInDate });
         }
 
         [HttpPost("clock-out")]
-        public ActionResult<DateTime> ClockOut()
+        public ActionResult<ClockOutResponse> ClockOut([FromBody] ClockOutRequest request)
         {
-            TimeRecordModel.ClockOutDate = DateTime.Now;
-            return Ok(TimeRecordModel.ClockOutDate);
+            TimeRecordModel.ClockOutDate = request.Date;
+            return Ok(new ClockOutResponse { ClockOutDate = TimeRecordModel.ClockOutDate });
         }
         
         [HttpPost("clear")]
@@ -28,5 +28,29 @@ namespace WpfTaskBar
             TimeRecordModel.ClockOutDate = default;
             return Ok();
         }
+    }
+
+    public class ClockInRequest
+    {
+        [JsonPropertyName("date")]
+        public DateTime Date { get; set; }
+    }
+
+    public class ClockOutRequest
+    {
+        [JsonPropertyName("date")]
+        public DateTime Date { get; set; }
+    }
+
+    public class ClockInResponse
+    {
+        [JsonPropertyName("clock_in_date")]
+        public DateTime ClockInDate { get; set; }
+    }
+
+    public class ClockOutResponse
+    {
+        [JsonPropertyName("clock_out_date")]
+        public DateTime ClockOutDate { get; set; }
     }
 }
