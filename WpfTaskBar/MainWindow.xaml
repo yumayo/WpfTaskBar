@@ -10,69 +10,75 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <Grid.ContextMenu>
-            <ContextMenu>
-                <MenuItem Header="Exit" Click="ExitMenuItem_Click"/>
-            </ContextMenu>
-        </Grid.ContextMenu>
-        <ListBox
-            Name="listBox"
-            AllowDrop="True"
-            PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown"
-            MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp"
-            PreviewMouseMove="ListBox_OnPreviewMouseMove"
-            MouseDown="ListBox_OnMouseDown"
-            Drop="ListBox_OnDrop">
-            <ListBox.Template>
-                <ControlTemplate TargetType="ListBox">
-                    <Border BorderBrush="#333841" BorderThickness="0,0,1,0">
-                        <ScrollViewer Background="#21252b" Foreground="#bbbbbb" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+    <Border BorderBrush="#333841" BorderThickness="0,0,1,0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Exit" Click="ExitMenuItem_Click" />
+                </ContextMenu>
+            </Grid.ContextMenu>
+            <ListBox
+                Grid.Row="0"
+                Name="listBox"
+                AllowDrop="True"
+                PreviewMouseLeftButtonDown="ListBox_OnPreviewMouseLeftButtonDown"
+                MouseLeftButtonUp="ListBox_OnMouseLeftButtonUp"
+                PreviewMouseMove="ListBox_OnPreviewMouseMove"
+                MouseDown="ListBox_OnMouseDown"
+                Drop="ListBox_OnDrop">
+                <ListBox.Template>
+                    <ControlTemplate TargetType="ListBox">
+                        <ScrollViewer Background="#21252b" Foreground="#bbbbbb" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Hidden">
                             <ItemsPresenter />
                         </ScrollViewer>
-                    </Border>
-                </ControlTemplate>
-            </ListBox.Template>
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="Focusable" Value="False"/>
-                    <Setter Property="Padding" Value="2"/>
-                    <Setter Property="IsSelected" Value="{Binding IsForeground}"/>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate DataType="{x:Type local:IconListBoxItem}">
-                    <StackPanel Orientation="Horizontal">
-                        <Image Source="{Binding Icon}" Width="24" Height="24" />
-                        <TextBlock Text="{Binding Text}" Padding="5,0,0,0" VerticalAlignment="Center" />
+                    </ControlTemplate>
+                </ListBox.Template>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="Padding" Value="2" />
+                        <Setter Property="IsSelected" Value="{Binding IsForeground}" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:IconListBoxItem}">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="{Binding Icon}" Width="24" Height="24" />
+                            <TextBlock Text="{Binding Text}" Padding="5,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Name="stackPanelTime"
+                        d:DataContext="{d:DesignInstance local:DateTimeItem}" Background="#21252b">
+                <!-- 打刻時刻表示エリア -->
+                <Grid Margin="5,0,5,20" >
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 打刻開始時刻 -->
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Left">
+                        <TextBlock Padding="50,0,0,0" Text="出勤" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+                        <TextBlock Padding="50,0,0,0" Text="{Binding StartTime}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
                     </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-        <StackPanel VerticalAlignment="Bottom" Name="stackPanelTime" d:DataContext="{d:DesignInstance local:DateTimeItem}">
-            <!-- 打刻時刻表示エリア -->
-            <Grid Margin="5,0,5,20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                
-                <!-- 打刻開始時刻 -->
-                <StackPanel Grid.Column="0" HorizontalAlignment="Left">
-                    <TextBlock Padding="50,0,0,0" Text="出勤" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
-                    <TextBlock Padding="50,0,0,0" Text="{Binding StartTime}" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
-                </StackPanel>
-                
-                <!-- 退勤時刻 -->
-                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                    <TextBlock Padding="0,0,50,0" Text="退勤" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
-                    <TextBlock Padding="0,0,50,0" Text="{Binding EndTime}" Foreground="#bbbbbb" FontSize="11" HorizontalAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-            
-            <!-- 現在時刻表示 -->
-            <TextBlock Padding="0,0,0,2" Text="{Binding Time}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
-            <TextBlock Padding="0,0,0,10" Text="{Binding Date}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
-        </StackPanel>
-    </Grid>
+
+                    <!-- 退勤時刻 -->
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                        <TextBlock Padding="0,0,50,0" Text="退勤" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+                        <TextBlock Padding="0,0,50,0" Text="{Binding EndTime}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- 現在時刻表示 -->
+                <TextBlock Padding="0,0,0,2" Text="{Binding Time}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+                <TextBlock Padding="0,0,0,10" Text="{Binding Date}" Foreground="#bbbbbb" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Border>
 </Window>
