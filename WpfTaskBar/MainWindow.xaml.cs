@@ -188,6 +188,8 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnDrop(object sender, DragEventArgs e)
 	{
+		_draggedItem = null;
+		
 		if (e.Data.GetDataPresent(typeof(IconListBoxItem)))
 		{
 			IconListBoxItem? droppedData = e.Data.GetData(typeof(IconListBoxItem)) as IconListBoxItem;
