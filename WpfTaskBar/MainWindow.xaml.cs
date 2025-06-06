@@ -129,6 +129,18 @@ public partial class MainWindow : Window
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
+		try
+		{
+			HandleMainWindowClosed(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ウィンドウクローズ時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleMainWindowClosed(object? sender, EventArgs e)
+	{
 		_windowManager.Stop();
 		_logger.Dispose();
 	}
@@ -173,12 +185,36 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
 	{
+		try
+		{
+			HandlePreviewMouseLeftButtonDown(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ListBox_OnPreviewMouseLeftButtonDown時にエラーが発生しました。");
+		}
+	}
+
+	private void HandlePreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+	{
 		_startPoint = e.GetPosition(null);
 		_draggedItem = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
 		_dragMode = false;
 	}
 
 	private void ListBox_OnPreviewMouseMove(object sender, MouseEventArgs e)
+	{
+		try
+		{
+			HandlePreviewMouseMove(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ListBox_OnPreviewMouseMove時にエラーが発生しました。");
+		}
+	}
+
+	private void HandlePreviewMouseMove(object sender, MouseEventArgs e)
 	{
 		if (_draggedItem == null)
 		{
@@ -202,7 +238,7 @@ public partial class MainWindow : Window
 	{
 		try
 		{
-			DropItem(e);
+			HandleDrop(sender, e);
 		}
 		catch (Exception ex)
 		{
@@ -215,7 +251,7 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void DropItem(DragEventArgs e)
+	private void HandleDrop(object sender, DragEventArgs e)
 	{
 		_dragMode = false;
 		_draggedItem = null;
@@ -273,6 +309,18 @@ public partial class MainWindow : Window
 
 	private void Window_Loaded(object sender, RoutedEventArgs e)
 	{
+		try
+		{
+			HandleWindowLoaded(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "Window_Loaded時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleWindowLoaded(object sender, RoutedEventArgs e)
+	{
 		int height = (int)SystemParameters.PrimaryScreenHeight;
 		int width = (int)SystemParameters.PrimaryScreenWidth;
 
@@ -313,6 +361,18 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
 	{
+		try
+		{
+			HandleMouseLeftButtonUp(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ListBox_OnMouseLeftButtonUp時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+	{
 		if (!_dragMode)
 		{
 			var target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
@@ -340,6 +400,18 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnMouseDown(object sender, MouseButtonEventArgs e)
 	{
+		try
+		{
+			HandleMouseDown(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ListBox_OnMouseDown時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleMouseDown(object sender, MouseButtonEventArgs e)
+	{
 		if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed)
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
@@ -357,6 +429,18 @@ public partial class MainWindow : Window
 	}
 
 	private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+	{
+		try
+		{
+			HandleExitMenuItemClick(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ExitMenuItem_Click時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleExitMenuItemClick(object sender, RoutedEventArgs e)
 	{
 		Application.Current.Shutdown();
 	}
