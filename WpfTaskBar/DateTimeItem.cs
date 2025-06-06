@@ -1,7 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Controls;
-using System.Windows.Media.Imaging;
 using WpfTaskBar.Rest.Models;
 
 namespace WpfTaskBar;
@@ -41,11 +39,12 @@ public class DateTimeItem : INotifyPropertyChanged
 	public void Update()
 	{
 		var now = DateTime.Now;
-		
-		if (now.Hour < 4 && _updateDate.Hour >= 4)
+
+		if (now.Hour >= 4 && _updateDate.Hour < 4)
 		{
 			TimeRecordModel.ClockInDate = default;
 			TimeRecordModel.ClockOutDate = default;
+			Logger.Debug("日付が更新されました。出勤・退勤時刻をリセットします。");
 		}
 
 		StartTime = TimeRecordModel.ClockInDate != default ? TimeRecordModel.ClockInDate.ToString("HH:mm:ss") : "";
