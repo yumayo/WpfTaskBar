@@ -24,14 +24,22 @@ public class DateTimeItem : INotifyPropertyChanged
 	public string StartTime
 	{
 		get => _startTime;
-		set => SetField(ref _startTime, value);
+		set
+		{
+			SetField(ref _startTime, value);
+			OnPropertyChanged(nameof(IsStartTimeMissing));
+		}
 	}
 
 	private string _endTime;
 	public string EndTime
 	{
 		get => _endTime;
-		set => SetField(ref _endTime, value);
+		set
+		{
+			SetField(ref _endTime, value);
+			OnPropertyChanged(nameof(IsEndTimeMissingAfter19)); // 追加
+		}
 	}
 
 	private DateTime _updateDate;
@@ -70,4 +78,10 @@ public class DateTimeItem : INotifyPropertyChanged
 		OnPropertyChanged(propertyName);
 		return true;
 	}
+
+	public bool IsStartTimeMissing =>
+		string.IsNullOrEmpty(StartTime);
+
+	public bool IsEndTimeMissingAfter19 =>
+		string.IsNullOrEmpty(EndTime) && DateTime.Now.Hour >= 19;
 }
