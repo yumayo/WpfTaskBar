@@ -27,14 +27,21 @@ public partial class MainWindow : Window
 
 		_logger = Logger.CreateLogger();
 
-		_dateTimeItem = new DateTimeItem();
-		_dateTimeItem.Update();
+		try
+		{
+			_dateTimeItem = new DateTimeItem();
+			_dateTimeItem.Update();
 
-		stackPanelTime.DataContext = _dateTimeItem;
+			stackPanelTime.DataContext = _dateTimeItem;
 
-		_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
+			_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
 
-		_windowManager.Start();
+			_windowManager.Start();
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "MainWindow初期化時にエラーが発生しました。");
+		}
 	}
 
 	private void WindowManagerOnWindowListChanged(object sender, TaskBarWindowEventArgs e)
