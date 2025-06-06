@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 
 namespace WpfTaskBar;
 
@@ -36,14 +37,40 @@ public class Logger : IDisposable
 
 	public static void Debug(object message)
 	{
-		_logger?.InternalDebug(message);
+		_logger?.InternalLog("DEBUG", message);
 	}
 
-	private void InternalDebug(object message)
+	public static void Info(object message)
+	{
+		_logger?.InternalLog(" INFO", message);
+	}
+
+	public static void Warning(object message)
+	{
+		_logger?.InternalLog(" WARN", message);
+	}
+
+	public static void Error(Exception exception, object message)
+	{
+		_logger?.InternalLog("ERROR", message);
+	}
+
+	private void InternalLog(string type, object message, Exception? exception = null)
 	{
 		var now = DateTime.Now;
 		var dateTimeString = now.ToString("yyyy-MM-dd HH:mm:ss");
-		_textWriterSynchronized.WriteLine(dateTimeString + " " + message);
+		var sb = new StringBuilder();
+		sb.Append(dateTimeString).Append(" ").Append(type).Append(" ").Append(message);
+		if (exception != null)
+		{
+			sb.Append(" Exception: ").Append(exception.Message);
+			if (!string.IsNullOrEmpty(exception.StackTrace))
+			{
+				sb.Append(" StackTrace: ").Append(exception.StackTrace);
+			}
+		}
+		_textWriterSynchronized.Write(sb.ToString());
+		_textWriterSynchronized.WriteLine();
 		_textWriterSynchronized.Flush();
 	}
 
