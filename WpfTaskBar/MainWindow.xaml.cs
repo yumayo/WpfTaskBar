@@ -41,78 +41,90 @@ public partial class MainWindow : Window
 	{
 		Dispatcher.Invoke(() =>
 		{
-			if (e.AddedTaskBarItems.Count > 0)
+			try
 			{
-				foreach (var taskBarItem in e.AddedTaskBarItems)
-				{
-					var newIconListBoxItem = new IconListBoxItem
-					{
-						Handle = taskBarItem.Handle,
-						Icon = taskBarItem.ModuleFileName != null ? GetIcon(taskBarItem.ModuleFileName) : null,
-						Text = taskBarItem.Title,
-						IsForeground = taskBarItem.IsForeground,
-						ModuleFileName = taskBarItem.ModuleFileName,
-					};
+				UpdateTaskBarList(e);
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タスクバーの更新中にエラーが発生しました。");
+			}
+		});
+	}
 
-					int i;
-					for (i = listBox.Items.Count - 1; i >= 0; --i)
+	private void UpdateTaskBarList(TaskBarWindowEventArgs e)
+	{
+		if (e.AddedTaskBarItems.Count > 0)
+		{
+			foreach (var taskBarItem in e.AddedTaskBarItems)
+			{
+				var newIconListBoxItem = new IconListBoxItem
+				{
+					Handle = taskBarItem.Handle,
+					Icon = taskBarItem.ModuleFileName != null ? GetIcon(taskBarItem.ModuleFileName) : null,
+					Text = taskBarItem.Title,
+					IsForeground = taskBarItem.IsForeground,
+					ModuleFileName = taskBarItem.ModuleFileName,
+				};
+
+				int i;
+				for (i = listBox.Items.Count - 1; i >= 0; --i)
+				{
+					if (listBox.Items[i] is IconListBoxItem iconListBoxItem)
 					{
-						if (listBox.Items[i] is IconListBoxItem iconListBoxItem)
+						if (iconListBoxItem.ModuleFileName == newIconListBoxItem.ModuleFileName)
 						{
-							if (iconListBoxItem.ModuleFileName == newIconListBoxItem.ModuleFileName)
-							{
-								listBox.Items.Insert(i + 1, newIconListBoxItem);
-								break;
-							}
+							listBox.Items.Insert(i + 1, newIconListBoxItem);
+							break;
 						}
 					}
-					if (i == -1)
+				}
+				if (i == -1)
+				{
+					listBox.Items.Add(newIconListBoxItem);
+				}
+			}
+		}
+
+		for (int i = listBox.Items.Count - 1; i >= 0; --i)
+		{
+			var item = listBox.Items[i];
+			if (item is IconListBoxItem iconListBoxItem)
+			{
+				foreach (var handle in e.RemovedWindowHandles)
+				{
+					if (iconListBoxItem.Handle == handle)
 					{
-						listBox.Items.Add(newIconListBoxItem);
+						listBox.Items.RemoveAt(i);
+						break;
 					}
 				}
 			}
+		}
 
-			for (int i = listBox.Items.Count - 1; i >= 0; --i)
+		foreach (var updateTaskBarItem in e.UpdateTaskBarItems)
+		{
+			foreach (var item in listBox.Items)
 			{
-				var item = listBox.Items[i];
 				if (item is IconListBoxItem iconListBoxItem)
 				{
-					foreach (var handle in e.RemovedWindowHandles)
+					if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
 					{
-						if (iconListBoxItem.Handle == handle)
+						if (iconListBoxItem.ModuleFileName != updateTaskBarItem.ModuleFileName)
 						{
-							listBox.Items.RemoveAt(i);
-							break;
+							Console.WriteLine($"Changed {iconListBoxItem.ModuleFileName} to {updateTaskBarItem.ModuleFileName}");
+							iconListBoxItem.Icon = updateTaskBarItem.ModuleFileName != null ? GetIcon(updateTaskBarItem.ModuleFileName) : null;
+							iconListBoxItem.ModuleFileName = updateTaskBarItem.ModuleFileName;
 						}
+						iconListBoxItem.Text = updateTaskBarItem.Title;
+						iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
+						break;
 					}
 				}
 			}
+		}
 
-			foreach (var updateTaskBarItem in e.UpdateTaskBarItems)
-			{
-				foreach (var item in listBox.Items)
-				{
-					if (item is IconListBoxItem iconListBoxItem)
-					{
-						if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
-						{
-							if (iconListBoxItem.ModuleFileName != updateTaskBarItem.ModuleFileName)
-							{
-								Console.WriteLine($"Changed {iconListBoxItem.ModuleFileName} to {updateTaskBarItem.ModuleFileName}");
-								iconListBoxItem.Icon = updateTaskBarItem.ModuleFileName != null ? GetIcon(updateTaskBarItem.ModuleFileName) : null;
-								iconListBoxItem.ModuleFileName = updateTaskBarItem.ModuleFileName;
-							}
-							iconListBoxItem.Text = updateTaskBarItem.Title;
-							iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
-							break;
-						}
-					}
-				}
-			}
-
-			_dateTimeItem.Update();
-		});
+		_dateTimeItem.Update();
 	}
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
@@ -188,6 +200,24 @@ public partial class MainWindow : Window
 
 	private void ListBox_OnDrop(object sender, DragEventArgs e)
 	{
+		try
+		{
+			DropItem(e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ドロップ中にエラーが発生しました。");
+		}
+		finally
+		{
+			_dragMode = false;
+			_draggedItem = null;
+		}
+	}
+
+	private void DropItem(DragEventArgs e)
+	{
+		_dragMode = false;
 		_draggedItem = null;
 		
 		if (e.Data.GetDataPresent(typeof(IconListBoxItem)))
