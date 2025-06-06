@@ -1,17 +1,8 @@
-﻿using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
@@ -22,26 +13,28 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class MainWindow : Window
 {
-	private WindowManager windowManager = new WindowManager();
+	private readonly WindowManager _windowManager = new WindowManager();
+	private readonly Logger _logger;
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
-	private DateTimeItem _dateTimeItem;
+	private readonly DateTimeItem _dateTimeItem;
 	private bool _dragMode;
 
 	public MainWindow()
 	{
-		// Console.OutputEncoding = Encoding.UTF8;
 		InitializeComponent();
+
+		_logger = Logger.CreateLogger();
 
 		_dateTimeItem = new DateTimeItem();
 		_dateTimeItem.Update();
 
 		stackPanelTime.DataContext = _dateTimeItem;
 
-		windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
+		_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
 
-		windowManager.Start();
+		_windowManager.Start();
 	}
 
 	private void WindowManagerOnWindowListChanged(object sender, TaskBarWindowEventArgs e)
@@ -124,7 +117,8 @@ public partial class MainWindow : Window
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
-		windowManager.Stop();
+		_windowManager.Stop();
+		_logger.Dispose();
 	}
 
 	public static BitmapSource? GetIcon(string iconFilePath)
@@ -318,7 +312,7 @@ public partial class MainWindow : Window
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
 			{
-				if (windowManager.CountBySameProcess(removeItem.Handle) > 1)
+				if (_windowManager.CountBySameProcess(removeItem.Handle) > 1)
 				{
 					NativeMethods.PostMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
 				}
