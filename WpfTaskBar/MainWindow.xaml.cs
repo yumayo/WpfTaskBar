@@ -98,9 +98,9 @@ public partial class MainWindow : Window
 			var item = listBox.Items[i];
 			if (item is IconListBoxItem iconListBoxItem)
 			{
-				foreach (var handle in e.RemovedWindowHandles)
+				foreach (var taskBarItem in e.RemovedTaskBarItemHandles)
 				{
-					if (iconListBoxItem.Handle == handle)
+					if (iconListBoxItem.Handle == taskBarItem.Handle)
 					{
 						listBox.Items.RemoveAt(i);
 						break;

@@ -15,6 +15,8 @@ public class WindowManager : IDisposable
 
 	public Task? BackgroundTask;
 	public CancellationTokenSource? CancellationTokenSource;
+	
+	private readonly ApplicationOrderService _orderService = new();
 
 	public void Start()
 	{
@@ -67,7 +69,7 @@ public class WindowManager : IDisposable
 	{
 		List<TaskBarItem> updateTaskBarItems = new List<TaskBarItem>();
 		List<TaskBarItem> addedTaskBarItems = new List<TaskBarItem>();
-		List<IntPtr> removedWindowHandles = new List<IntPtr>();
+		List<TaskBarItem> removedTaskBarItems = new List<TaskBarItem>();
 
 		var foregroundHwnd = NativeMethods.GetForegroundWindow();
 
@@ -84,10 +86,7 @@ public class WindowManager : IDisposable
 				{
 					var taskBarItem = TaskBarItems.First(x => x.Handle == windowHandle);
 					TaskBarItems.Remove(taskBarItem);
-					if (!removedWindowHandles.Contains(windowHandle))
-					{
-						removedWindowHandles.Add(windowHandle);
-					}
+					removedTaskBarItems.Add(taskBarItem);
 				}
 			}
 			else
@@ -122,21 +121,20 @@ public class WindowManager : IDisposable
 			if (!WindowHandles.Contains(taskBarWindow.Handle))
 			{
 				TaskBarItems.Remove(taskBarWindow);
-				if (!removedWindowHandles.Contains(taskBarWindow.Handle))
-				{
-					removedWindowHandles.Add(taskBarWindow.Handle);
-				}
+				removedTaskBarItems.Add(taskBarWindow);
 			}
 		}
 
 		foreach (var taskBarItem in addedTaskBarItems)
 		{
 			Console.WriteLine($"追加({taskBarItem.Handle.ToString(),10}) {taskBarItem.Title}");
+			_orderService.UpdateOrder(taskBarItem.ModuleFileName ?? string.Empty);
 		}
 
-		foreach (var hwnd in removedWindowHandles)
+		foreach (var taskBarItem in removedTaskBarItems)
 		{
-			Console.WriteLine($"削除({hwnd.ToString(),10})");
+			Console.WriteLine($"削除({taskBarItem.Handle.ToString(),10}) {taskBarItem.Title}");
+			_orderService.RemoveFromOrder(taskBarItem.ModuleFileName ?? string.Empty);
 		}
 
 		foreach (var taskBarWindow in TaskBarItems.ToList())
@@ -160,7 +158,10 @@ public class WindowManager : IDisposable
 			});
 		}
 
-		WindowListChanged?.Invoke(this, new TaskBarWindowEventArgs(updateTaskBarItems, addedTaskBarItems, removedWindowHandles));
+		var sortedUpdateTaskBarItems = _orderService.SortByOrder(updateTaskBarItems, item => item.ModuleFileName ?? string.Empty);
+		var sortedAddedTaskBarItems = _orderService.SortByOrder(addedTaskBarItems, item => item.ModuleFileName ?? string.Empty);
+
+		WindowListChanged?.Invoke(this, new TaskBarWindowEventArgs(sortedUpdateTaskBarItems, sortedAddedTaskBarItems, removedTaskBarItems));
 	}
 
 	public static string GetWindowText(IntPtr hwnd)
@@ -188,12 +189,12 @@ public class TaskBarWindowEventArgs : EventArgs
 
 	public List<TaskBarItem> AddedTaskBarItems { get; }
 
-	public List<IntPtr> RemovedWindowHandles { get; }
+	public List<TaskBarItem> RemovedTaskBarItemHandles { get; }
 
-	public TaskBarWindowEventArgs(List<TaskBarItem> updateTaskBarItems, List<TaskBarItem> addedTaskBarItems, List<IntPtr> removedWindows)
+	public TaskBarWindowEventArgs(List<TaskBarItem> updateTaskBarItems, List<TaskBarItem> addedTaskBarItems, List<TaskBarItem> removedTaskBarItems)
 	{
 		UpdateTaskBarItems = updateTaskBarItems;
 		AddedTaskBarItems = addedTaskBarItems;
-		RemovedWindowHandles = removedWindows;
+		RemovedTaskBarItemHandles = removedTaskBarItems;
 	}
 }
