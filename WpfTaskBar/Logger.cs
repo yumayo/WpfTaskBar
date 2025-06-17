@@ -50,9 +50,9 @@ public class Logger : IDisposable
 		_logger?.InternalLog(" WARN", message);
 	}
 
-	public static void Error(Exception exception, object message)
+	public static void Error(Exception? exception, object message)
 	{
-		_logger?.InternalLog("ERROR", message);
+		_logger?.InternalLog("ERROR", message, exception);
 	}
 
 	private void InternalLog(string type, object message, Exception? exception = null)
