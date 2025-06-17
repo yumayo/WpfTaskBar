@@ -74,22 +74,7 @@ public partial class MainWindow : Window
 					ModuleFileName = taskBarItem.ModuleFileName,
 				};
 
-				int i;
-				for (i = listBox.Items.Count - 1; i >= 0; --i)
-				{
-					if (listBox.Items[i] is IconListBoxItem iconListBoxItem)
-					{
-						if (iconListBoxItem.ModuleFileName == newIconListBoxItem.ModuleFileName)
-						{
-							listBox.Items.Insert(i + 1, newIconListBoxItem);
-							break;
-						}
-					}
-				}
-				if (i == -1)
-				{
-					listBox.Items.Add(newIconListBoxItem);
-				}
+				listBox.Items.Add(newIconListBoxItem);
 			}
 		}
 
@@ -131,6 +116,7 @@ public partial class MainWindow : Window
 			}
 		}
 
+		RearrangeListBoxItems(e.UpdateTaskBarItems);
 		_dateTimeItem.Update();
 	}
 
@@ -470,6 +456,29 @@ public partial class MainWindow : Window
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "並び替え順序の保存中にエラーが発生しました。");
+		}
+	}
+
+	private void RearrangeListBoxItems(List<TaskBarItem> sortedTaskBarItems)
+	{
+		try
+		{
+			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
+			var handleToItem = currentItems.ToDictionary(item => item.Handle);
+			
+			listBox.Items.Clear();
+			
+			foreach (var taskBarItem in sortedTaskBarItems)
+			{
+				if (handleToItem.ContainsKey(taskBarItem.Handle))
+				{
+					listBox.Items.Add(handleToItem[taskBarItem.Handle]);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ListBox項目の並び替え中にエラーが発生しました。");
 		}
 	}
 }
