@@ -134,7 +134,9 @@ public class WindowManager : IDisposable
 		foreach (var taskBarItem in removedTaskBarItems)
 		{
 			Console.WriteLine($"削除({taskBarItem.Handle.ToString(),10}) {taskBarItem.Title}");
-			_orderService.RemoveFromOrder(taskBarItem.ModuleFileName ?? string.Empty);
+			
+			// 削除はしないほうが使い勝手が良いのでそのままにしておく。
+			// _orderService.RemoveFromOrder(taskBarItem.ModuleFileName ?? string.Empty);
 		}
 
 		foreach (var taskBarWindow in TaskBarItems.ToList())
@@ -180,6 +182,11 @@ public class WindowManager : IDisposable
 	{
 		var targetProcessId = (int)UwpUtility.GetProcessId(hwnd);
 		return TaskBarItems.Count(item => (int)UwpUtility.GetProcessId(item.Handle) == targetProcessId);
+	}
+
+	public void UpdateApplicationOrder(IEnumerable<string> orderedExecutablePaths)
+	{
+		_orderService.SaveOrder(orderedExecutablePaths);
 	}
 }
 

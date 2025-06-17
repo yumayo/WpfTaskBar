@@ -311,6 +311,8 @@ public partial class MainWindow : Window
 					listBox.Items.RemoveAt(remIdx);
 				}
 			}
+
+			SaveCurrentOrder();
 		}
 	}
 
@@ -450,5 +452,24 @@ public partial class MainWindow : Window
 	private void HandleExitMenuItemClick(object sender, RoutedEventArgs e)
 	{
 		Application.Current.Shutdown();
+	}
+
+	private void SaveCurrentOrder()
+	{
+		try
+		{
+			var orderedPaths = listBox.Items
+				.OfType<IconListBoxItem>()
+				.Where(item => !string.IsNullOrEmpty(item.ModuleFileName))
+				.Select(item => item.ModuleFileName!)
+				.Distinct()
+				.ToList();
+
+			_windowManager.UpdateApplicationOrder(orderedPaths);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "並び替え順序の保存中にエラーが発生しました。");
+		}
 	}
 }
