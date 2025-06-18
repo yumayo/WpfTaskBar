@@ -63,6 +63,7 @@ public partial class MainWindow : Window
 	{
 		if (e.AddedTaskBarItems.Count > 0)
 		{
+			var newItems = new List<IconListBoxItem>();
 			foreach (var taskBarItem in e.AddedTaskBarItems)
 			{
 				var newIconListBoxItem = new IconListBoxItem
@@ -74,7 +75,19 @@ public partial class MainWindow : Window
 					ModuleFileName = taskBarItem.ModuleFileName,
 				};
 
-				listBox.Items.Add(newIconListBoxItem);
+				newItems.Add(newIconListBoxItem);
+			}
+
+			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
+			var allItems = new List<IconListBoxItem>(currentItems);
+			allItems.AddRange(newItems);
+
+			var sortedItems = _windowManager.SortItemsByOrder(allItems);
+
+			listBox.Items.Clear();
+			foreach (var item in sortedItems)
+			{
+				listBox.Items.Add(item);
 			}
 		}
 
@@ -464,16 +477,24 @@ public partial class MainWindow : Window
 		try
 		{
 			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
-			var handleToItem = currentItems.ToDictionary(item => item.Handle);
+			var sortedHandles = sortedTaskBarItems.Select(item => item.Handle).ToHashSet();
 			
 			var orderedItems = new List<IconListBoxItem>();
-			foreach (var taskBarItem in sortedTaskBarItems)
+			var addedItems = new List<IconListBoxItem>();
+			
+			foreach (var currentItem in currentItems)
 			{
-				if (handleToItem.ContainsKey(taskBarItem.Handle))
+				if (sortedHandles.Contains(currentItem.Handle))
 				{
-					orderedItems.Add(handleToItem[taskBarItem.Handle]);
+					orderedItems.Add(currentItem);
+				}
+				else
+				{
+					addedItems.Add(currentItem);
 				}
 			}
+			
+			orderedItems.AddRange(addedItems);
 			
 			bool needsReorder = false;
 			if (currentItems.Count != orderedItems.Count)

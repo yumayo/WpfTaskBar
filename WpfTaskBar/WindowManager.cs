@@ -184,6 +184,15 @@ public class WindowManager : IDisposable
 	{
 		_orderService.UpdateOrderFromList(orderedExecutablePaths);
 	}
+
+	public List<T> SortItemsByOrder<T>(IEnumerable<T> items) where T : class
+	{
+		return _orderService.SortByRelations(items, item =>
+		{
+			var property = item.GetType().GetProperty("ModuleFileName");
+			return property?.GetValue(item) as string ?? string.Empty;
+		});
+	}
 }
 
 public class TaskBarWindowEventArgs : EventArgs
