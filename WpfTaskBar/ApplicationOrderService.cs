@@ -5,94 +5,184 @@ namespace WpfTaskBar;
 
 public class ApplicationOrderService
 {
-    private readonly string _orderFilePath;
-    private List<string> _applicationOrder = new();
+    private readonly string _relationsFilePath;
+    private Dictionary<string, HashSet<string>> _aboveRelations = new();
 
     public ApplicationOrderService()
     {
         var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
         Directory.CreateDirectory(appFolder);
-        _orderFilePath = Path.Combine(appFolder, "application_order.json");
-        Logger.Debug("タスクバーの順序を保管するファイルを作成します。" + _orderFilePath);
-        LoadOrder();
+        _relationsFilePath = Path.Combine(appFolder, "application_relations.json");
+        LoadRelations();
     }
 
-    public void SaveOrder(IEnumerable<string> executablePaths)
+    public void UpdateOrderFromList(IEnumerable<string> orderedPaths)
     {
-        try
-        {
-            _applicationOrder = executablePaths.ToList();
-            var json = JsonSerializer.Serialize(_applicationOrder, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-            File.WriteAllText(_orderFilePath, json);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "アプリケーション順序の保存");
-        }
-    }
-
-    public List<string> GetOrder()
-    {
-        return new List<string>(_applicationOrder);
-    }
-
-    public void UpdateOrder(string executablePath)
-    {
-        if (!_applicationOrder.Contains(executablePath))
-        {
-            _applicationOrder.Add(executablePath);
-            SaveOrder(_applicationOrder);
-        }
-    }
-
-    public void RemoveFromOrder(string executablePath)
-    {
-        if (_applicationOrder.Remove(executablePath))
-        {
-            SaveOrder(_applicationOrder);
-        }
-    }
-
-    public List<T> SortByOrder<T>(IEnumerable<T> items, Func<T, string> getExecutablePath)
-    {
-        var itemList = items.ToList();
-        var result = new List<T>();
+        var pathList = orderedPaths.Where(p => !string.IsNullOrEmpty(p)).ToList();
         
-        foreach (var orderPath in _applicationOrder)
+        for (int i = 0; i < pathList.Count; i++)
         {
-            var matchingItems = itemList.Where(item => 
-                string.Equals(getExecutablePath(item), orderPath, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var currentApp = pathList[i];
             
-            result.AddRange(matchingItems);
-            foreach (var item in matchingItems)
+            if (!_aboveRelations.ContainsKey(currentApp))
             {
-                itemList.Remove(item);
+                _aboveRelations[currentApp] = new HashSet<string>();
+            }
+            
+            for (int j = i + 1; j < pathList.Count; j++)
+            {
+                var belowApp = pathList[j];
+                _aboveRelations[currentApp].Add(belowApp);
+                
+                if (_aboveRelations.ContainsKey(belowApp))
+                {
+                    _aboveRelations[belowApp].Remove(currentApp);
+                }
             }
         }
         
-        result.AddRange(itemList);
+        SaveRelations();
+    }
+
+    public List<T> SortByRelations<T>(IEnumerable<T> items, Func<T, string> getExecutablePath)
+    {
+        var itemList = items.ToList();
+        var pathToItems = new Dictionary<string, List<T>>();
+        
+        foreach (var item in itemList)
+        {
+            var path = getExecutablePath(item);
+            if (!string.IsNullOrEmpty(path))
+            {
+                if (!pathToItems.ContainsKey(path))
+                {
+                    pathToItems[path] = new List<T>();
+                }
+                pathToItems[path].Add(item);
+            }
+        }
+        
+        var paths = pathToItems.Keys.ToList();
+        var sortedPaths = TopologicalSort(paths);
+        var result = new List<T>();
+        
+        foreach (var path in sortedPaths)
+        {
+            if (pathToItems.ContainsKey(path))
+            {
+                result.AddRange(pathToItems[path]);
+            }
+        }
+        
         return result;
     }
 
-    private void LoadOrder()
+    private List<string> TopologicalSort(List<string> apps)
+    {
+        var inDegree = new Dictionary<string, int>();
+        var graph = new Dictionary<string, List<string>>();
+        
+        foreach (var app in apps)
+        {
+            inDegree[app] = 0;
+            graph[app] = new List<string>();
+        }
+        
+        foreach (var app in apps)
+        {
+            if (_aboveRelations.ContainsKey(app))
+            {
+                foreach (var belowApp in _aboveRelations[app])
+                {
+                    if (apps.Contains(belowApp))
+                    {
+                        graph[app].Add(belowApp);
+                        inDegree[belowApp]++;
+                    }
+                }
+            }
+        }
+        
+        var queue = new Queue<string>();
+        foreach (var app in apps)
+        {
+            if (inDegree[app] == 0)
+            {
+                queue.Enqueue(app);
+            }
+        }
+        
+        var result = new List<string>();
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            result.Add(current);
+            
+            foreach (var neighbor in graph[current])
+            {
+                inDegree[neighbor]--;
+                if (inDegree[neighbor] == 0)
+                {
+                    queue.Enqueue(neighbor);
+                }
+            }
+        }
+        
+        foreach (var app in apps)
+        {
+            if (!result.Contains(app))
+            {
+                result.Add(app);
+            }
+        }
+        
+        return result;
+    }
+
+    private void SaveRelations()
     {
         try
         {
-            if (File.Exists(_orderFilePath))
+            var serializableData = _aboveRelations.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.ToList()
+            );
+            
+            var json = JsonSerializer.Serialize(serializableData, new JsonSerializerOptions
             {
-                var json = File.ReadAllText(_orderFilePath);
-                _applicationOrder = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                WriteIndented = true
+            });
+            File.WriteAllText(_relationsFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "相対的位置関係の保存");
+        }
+    }
+
+    private void LoadRelations()
+    {
+        try
+        {
+            if (File.Exists(_relationsFilePath))
+            {
+                var json = File.ReadAllText(_relationsFilePath);
+                var data = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json);
+                
+                if (data != null)
+                {
+                    _aboveRelations = data.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new HashSet<string>(kvp.Value)
+                    );
+                }
             }
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "アプリケーション順序の読み込み");
-            _applicationOrder = new List<string>();
+            Logger.Error(ex, "相対的位置関係の読み込み");
+            _aboveRelations = new Dictionary<string, HashSet<string>>();
         }
     }
 }

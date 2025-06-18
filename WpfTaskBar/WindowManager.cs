@@ -16,7 +16,7 @@ public class WindowManager : IDisposable
 	public Task? BackgroundTask;
 	public CancellationTokenSource? CancellationTokenSource;
 	
-	private readonly RelativeOrderService _relativeOrderService = new();
+	private readonly ApplicationOrderService _orderService = new();
 
 	public void Start()
 	{
@@ -133,9 +133,6 @@ public class WindowManager : IDisposable
 		foreach (var taskBarItem in removedTaskBarItems)
 		{
 			Console.WriteLine($"削除({taskBarItem.Handle.ToString(),10}) {taskBarItem.Title}");
-			
-			// 削除はしないほうが使い勝手が良いのでそのままにしておく。
-			// _orderService.RemoveFromOrder(taskBarItem.ModuleFileName ?? string.Empty);
 		}
 
 		foreach (var taskBarWindow in TaskBarItems.ToList())
@@ -159,8 +156,8 @@ public class WindowManager : IDisposable
 			});
 		}
 
-		var sortedUpdateTaskBarItems = _relativeOrderService.SortByRelations(updateTaskBarItems, item => item.ModuleFileName ?? string.Empty);
-		var sortedAddedTaskBarItems = _relativeOrderService.SortByRelations(addedTaskBarItems, item => item.ModuleFileName ?? string.Empty);
+		var sortedUpdateTaskBarItems = _orderService.SortByRelations(updateTaskBarItems, item => item.ModuleFileName ?? string.Empty);
+		var sortedAddedTaskBarItems = _orderService.SortByRelations(addedTaskBarItems, item => item.ModuleFileName ?? string.Empty);
 
 		WindowListChanged?.Invoke(this, new TaskBarWindowEventArgs(sortedUpdateTaskBarItems, sortedAddedTaskBarItems, removedTaskBarItems));
 	}
@@ -185,7 +182,7 @@ public class WindowManager : IDisposable
 
 	public void UpdateApplicationOrder(IEnumerable<string> orderedExecutablePaths)
 	{
-		_relativeOrderService.UpdateOrderFromList(orderedExecutablePaths);
+		_orderService.UpdateOrderFromList(orderedExecutablePaths);
 	}
 }
 

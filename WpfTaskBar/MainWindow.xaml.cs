@@ -466,13 +466,38 @@ public partial class MainWindow : Window
 			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
 			var handleToItem = currentItems.ToDictionary(item => item.Handle);
 			
-			listBox.Items.Clear();
-			
+			var orderedItems = new List<IconListBoxItem>();
 			foreach (var taskBarItem in sortedTaskBarItems)
 			{
 				if (handleToItem.ContainsKey(taskBarItem.Handle))
 				{
-					listBox.Items.Add(handleToItem[taskBarItem.Handle]);
+					orderedItems.Add(handleToItem[taskBarItem.Handle]);
+				}
+			}
+			
+			bool needsReorder = false;
+			if (currentItems.Count != orderedItems.Count)
+			{
+				needsReorder = true;
+			}
+			else
+			{
+				for (int i = 0; i < currentItems.Count; i++)
+				{
+					if (currentItems[i].Handle != orderedItems[i].Handle)
+					{
+						needsReorder = true;
+						break;
+					}
+				}
+			}
+			
+			if (needsReorder)
+			{
+				listBox.Items.Clear();
+				foreach (var item in orderedItems)
+				{
+					listBox.Items.Add(item);
 				}
 			}
 		}
