@@ -14,7 +14,6 @@ namespace WpfTaskBar;
 public partial class MainWindow : Window
 {
 	private readonly WindowManager _windowManager = new WindowManager();
-	private readonly Logger _logger;
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
@@ -25,7 +24,7 @@ public partial class MainWindow : Window
 	{
 		InitializeComponent();
 
-		_logger = Logger.CreateLogger();
+		Logger.Setup();
 
 		try
 		{
@@ -148,7 +147,7 @@ public partial class MainWindow : Window
 	private void HandleMainWindowClosed(object? sender, EventArgs e)
 	{
 		_windowManager.Stop();
-		_logger.Dispose();
+		Logger.Close();
 	}
 
 	public static BitmapSource? GetIcon(string iconFilePath)

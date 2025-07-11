@@ -1,7 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
+﻿using System.Windows;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 
@@ -10,7 +7,7 @@ namespace WpfTaskBar;
 /// <summary>
 /// Interaction logic for App.xaml
 /// </summary>
-public partial class App : Application
+public partial class App
 {
 	private IHost? _host;
 
@@ -56,14 +53,14 @@ public partial class App : Application
 		// UIスレッドの未処理例外をキャッチ
 		DispatcherUnhandledException += (sender, e) =>
 		{
-			HandleException(e.Exception, "UIスレッド");
+			HandleException(e.Exception, sender, "UIスレッド");
 			e.Handled = true; // アプリケーションの終了を防ぐ
 		};
 
 		// バックグラウンドスレッドの未処理例外をキャッチ
 		TaskScheduler.UnobservedTaskException += (sender, e) =>
 		{
-			HandleException(e.Exception, "バックグラウンドタスク");
+			HandleException(e.Exception, sender, "バックグラウンドタスク");
 			e.SetObserved(); // 例外を観測済みとしてマーク
 		};
 
@@ -71,11 +68,11 @@ public partial class App : Application
 		AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
 		{
 			var exception = e.ExceptionObject as Exception;
-			HandleException(exception, "AppDomain");
+			HandleException(exception, sender, "AppDomain");
 		};
 	}
 
-	private void HandleException(Exception? exception, string source)
+	private void HandleException(Exception? exception, object? sender, string source)
 	{
 		if (exception == null)
 		{

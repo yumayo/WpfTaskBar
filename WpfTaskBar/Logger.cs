@@ -3,9 +3,9 @@ using System.Text;
 
 namespace WpfTaskBar;
 
-public class Logger : IDisposable
+public class Logger
 {
-	private static Logger? _logger;
+	private static Logger? _singleton;
 
 	private static readonly string LogName = "WpfTaskBar";
 
@@ -16,7 +16,7 @@ public class Logger : IDisposable
 		_textWriterSynchronized = textWriterSynchronized;
 	}
 
-	public static Logger CreateLogger()
+	public static void Setup()
 	{
 		var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "log");
 		var logName = LogName + ".log";
@@ -30,29 +30,29 @@ public class Logger : IDisposable
 
 		var streamWriter = File.AppendText(path);
 		var textWriterSynchronized = TextWriter.Synchronized(streamWriter);
-		_logger = new Logger(textWriterSynchronized);
 
-		return _logger;
+		_singleton?._textWriterSynchronized.Dispose();
+		_singleton = new Logger(textWriterSynchronized);
 	}
 
 	public static void Debug(object message)
 	{
-		_logger?.InternalLog("DEBUG", message);
+		_singleton?.InternalLog("DEBUG", message);
 	}
 
 	public static void Info(object message)
 	{
-		_logger?.InternalLog(" INFO", message);
+		_singleton?.InternalLog(" INFO", message);
 	}
 
 	public static void Warning(object message)
 	{
-		_logger?.InternalLog(" WARN", message);
+		_singleton?.InternalLog(" WARN", message);
 	}
 
 	public static void Error(Exception? exception, object message)
 	{
-		_logger?.InternalLog("ERROR", message, exception);
+		_singleton?.InternalLog("ERROR", message, exception);
 	}
 
 	private void InternalLog(string type, object message, Exception? exception = null)
@@ -74,8 +74,8 @@ public class Logger : IDisposable
 		_textWriterSynchronized.Flush();
 	}
 
-	public void Dispose()
+	public static void Close()
 	{
-		_textWriterSynchronized.Dispose();
+		_singleton?._textWriterSynchronized.Dispose();
 	}
 }
