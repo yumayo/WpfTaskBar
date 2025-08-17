@@ -27,21 +27,35 @@ public class UwpUtility
 		if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)pID)) == IntPtr.Zero)
 			return IntPtr.Zero;
 
-		int capacity = 2000;
-		StringBuilder sb = new StringBuilder(capacity);
-		NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
-
-		processName = sb.ToString(0, capacity);
-
-		// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
-		if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
+		try
 		{
-			proc = UwpProcessId(hWnd, pID);
-		}
+			int capacity = 2000;
+			StringBuilder sb = new StringBuilder(capacity);
+			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
 
-		return proc;
+			processName = sb.ToString(0, capacity);
+
+			// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
+			if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
+			{
+				var childProcId = UwpProcessId(hWnd, pID);
+				return childProcId;
+			}
+
+			return (IntPtr)pID;
+		}
+		finally
+		{
+			NativeMethods.CloseHandle(proc);
+		}
 	}
 
+	/// <summary>
+	/// Find child process for uwp apps, edge, mail, etc.
+	/// </summary>
+	/// <param name="hWnd">hWnd</param>
+	/// <param name="pID">pID</param>
+	/// <returns>The application name of the UWP.</returns>
 	/// <summary>
 	/// Find child process for uwp apps, edge, mail, etc.
 	/// </summary>
@@ -64,12 +78,7 @@ public class UwpUtility
 
 			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO));
 
-			return windowinfo.childpid;
-			IntPtr proc;
-			if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)windowinfo.childpid)) == IntPtr.Zero)
-				return IntPtr.Zero;
-
-			return proc;
+			return (IntPtr)windowinfo.childpid;
 		}
 		finally
 		{
@@ -88,21 +97,34 @@ public class UwpUtility
 		if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)pID)) == IntPtr.Zero)
 			return null;
 
-		int capacity = 2000;
-		StringBuilder sb = new StringBuilder(capacity);
-		NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
-
-		processName = sb.ToString(0, capacity);
-
-		// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
-		if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
+		try
 		{
-			processName = UWP_AppName(hWnd, pID);
-		}
+			int capacity = 2000;
+			StringBuilder sb = new StringBuilder(capacity);
+			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
 
-		return processName;
+			processName = sb.ToString(0, capacity);
+
+			// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
+			if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
+			{
+				processName = UWP_AppName(hWnd, pID);
+			}
+
+			return processName;
+		}
+		finally
+		{
+			NativeMethods.CloseHandle(proc);
+		}
 	}
 
+	/// <summary>
+	/// Find child process for uwp apps, edge, mail, etc.
+	/// </summary>
+	/// <param name="hWnd">hWnd</param>
+	/// <param name="pID">pID</param>
+	/// <returns>The application name of the UWP.</returns>
 	/// <summary>
 	/// Find child process for uwp apps, edge, mail, etc.
 	/// </summary>
@@ -129,11 +151,18 @@ public class UwpUtility
 			if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)windowinfo.childpid)) == IntPtr.Zero)
 				return null;
 
-			int capacity = 2000;
-			StringBuilder sb = new StringBuilder(capacity);
-			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
-			
-			return sb.ToString(0, capacity);
+			try
+			{
+				int capacity = 2000;
+				StringBuilder sb = new StringBuilder(capacity);
+				NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
+				
+				return sb.ToString(0, capacity);
+			}
+			finally
+			{
+				NativeMethods.CloseHandle(proc);
+			}
 		}
 		finally
 		{

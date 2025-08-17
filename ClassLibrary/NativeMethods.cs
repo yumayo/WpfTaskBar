@@ -148,4 +148,12 @@ public class NativeMethods
 		[MarshalAs(UnmanagedType.Bool)] Boolean bInheritHandle,
 		Int32 dwProcessId
 	);
+
+	[DllImport("kernel32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool CloseHandle(IntPtr hObject);
+
+	[DllImport("gdi32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool DeleteObject(IntPtr hObject);
 }

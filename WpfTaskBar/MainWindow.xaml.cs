@@ -182,10 +182,20 @@ public partial class MainWindow : Window
 
 	public static BitmapSource? GetIcon(System.Drawing.Icon icon)
 	{
-		var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap((icon.ToBitmap()).GetHbitmap(), IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-		bitmapSource.Freeze();
-		icon.Dispose();
-		return bitmapSource;
+		using (var bitmap = icon.ToBitmap())
+		{
+			var hBitmap = bitmap.GetHbitmap();
+			try
+			{
+				var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+				bitmapSource.Freeze();
+				return bitmapSource;
+			}
+			finally
+			{
+				NativeMethods.DeleteObject(hBitmap);
+			}
+		}
 	}
 
 	private void ListBox_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
