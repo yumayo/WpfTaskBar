@@ -56,12 +56,6 @@ public class UwpUtility
 	/// <param name="hWnd">hWnd</param>
 	/// <param name="pID">pID</param>
 	/// <returns>The application name of the UWP.</returns>
-	/// <summary>
-	/// Find child process for uwp apps, edge, mail, etc.
-	/// </summary>
-	/// <param name="hWnd">hWnd</param>
-	/// <param name="pID">pID</param>
-	/// <returns>The application name of the UWP.</returns>
 	private static IntPtr UwpProcessId(IntPtr hWnd, int pID)
 	{
 		WINDOWINFO windowinfo = new WINDOWINFO();
@@ -119,12 +113,6 @@ public class UwpUtility
 		}
 	}
 
-	/// <summary>
-	/// Find child process for uwp apps, edge, mail, etc.
-	/// </summary>
-	/// <param name="hWnd">hWnd</param>
-	/// <param name="pID">pID</param>
-	/// <returns>The application name of the UWP.</returns>
 	/// <summary>
 	/// Find child process for uwp apps, edge, mail, etc.
 	/// </summary>
