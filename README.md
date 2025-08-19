@@ -26,7 +26,7 @@ curl -X POST http://localhost:5000/clear
 
 # 開発
 
-``sh
+```sh
 dotnet build
 ```
 
