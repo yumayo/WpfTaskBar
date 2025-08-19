@@ -56,7 +56,8 @@
                     <DataTemplate DataType="{x:Type local:IconListBoxItem}">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="{Binding Icon}" Width="24" Height="24" />
-                            <TextBlock Text="{Binding Text}" Padding="5,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Text}" Padding="5,0,0,0" VerticalAlignment="Center" 
+                                       TextTrimming="CharacterEllipsis" MaxWidth="290" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
