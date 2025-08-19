@@ -23,6 +23,11 @@ curl -X POST http://localhost:5000/clear
 
 呼び出さなくても午前0時にリセットされます。
 
+## 通知
+
+```sh
+curl -X POST "http://localhost:5000/notification" -H "Content-Type: application/json" -d "{\"title\": \"通知タイトル\", \"message\": \"通知内容\"}"
+```
 
 # 開発
 

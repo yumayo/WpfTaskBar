@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using System.Collections.Specialized;
+using WpfTaskBar.Rest.Models;
 using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
@@ -32,6 +34,11 @@ public partial class MainWindow : Window
 			_dateTimeItem.Update();
 
 			stackPanelTime.DataContext = _dateTimeItem;
+
+			// 通知リストをバインド
+			notificationListBox.ItemsSource = NotificationModel.Notifications;
+			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
+			UpdateNotificationVisibility();
 
 			_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
 
@@ -146,8 +153,36 @@ public partial class MainWindow : Window
 
 	private void HandleMainWindowClosed(object? sender, EventArgs e)
 	{
+		NotificationModel.Notifications.CollectionChanged -= OnNotificationsChanged;
 		_windowManager.Stop();
 		Logger.Close();
+	}
+
+	private void OnNotificationsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+	{
+		Dispatcher.Invoke(() =>
+		{
+			try
+			{
+				UpdateNotificationVisibility();
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "通知表示の更新中にエラーが発生しました。");
+			}
+		});
+	}
+
+	private void UpdateNotificationVisibility()
+	{
+		if (NotificationModel.Notifications.Count > 0)
+		{
+			notificationListBox.Visibility = Visibility.Visible;
+		}
+		else
+		{
+			notificationListBox.Visibility = Visibility.Collapsed;
+		}
 	}
 
 	public static BitmapSource? GetIcon(string iconFilePath)

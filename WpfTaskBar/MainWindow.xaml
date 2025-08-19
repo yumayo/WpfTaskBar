@@ -14,11 +14,13 @@
     <Window.Resources>
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
         <converters:BoolToThicknessConverter x:Key="BoolToThicknessConverter" />
+        <converters:IndexToMarginConverter x:Key="IndexToMarginConverter" />
     </Window.Resources>
     <Border BorderBrush="#333841" BorderThickness="0,0,1,0">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ContextMenu>
@@ -59,7 +61,43 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Name="stackPanelTime"
+            <!-- 通知表示エリア -->
+            <ListBox Grid.Row="1" Name="notificationListBox" MaxHeight="680" Background="#21252b"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                     ScrollViewer.CanContentScroll="False"
+                     Visibility="Collapsed"
+                     BorderThickness="0">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="Padding" Value="0,5" />
+                        <Setter Property="Margin" Value="{Binding RelativeSource={RelativeSource Self}, Converter={StaticResource IndexToMarginConverter}}" />
+                        <Setter Property="Background" Value="#3e4451" />
+                        <Setter Property="BorderBrush" Value="#555" />
+                        <Setter Property="BorderThickness" Value="1" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="Bold" Foreground="#bbbbbb" FontSize="12" 
+                                           TextTrimming="CharacterEllipsis" MaxWidth="230" HorizontalAlignment="Left" />
+                                <TextBlock Grid.Column="1" Text="{Binding Timestamp, StringFormat='{}{0:M/d H:mm}'}" 
+                                           Foreground="#777" FontSize="11" VerticalAlignment="Top" HorizontalAlignment="Right" />
+                            </Grid>
+                            <TextBlock Text="{Binding Message}" Foreground="#999" FontSize="11" 
+                                       TextWrapping="Wrap" Margin="0,2,0,0" MaxWidth="290" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Name="stackPanelTime"
                         d:DataContext="{d:DesignInstance local:DateTimeItem}" Background="#21252b">
                 <!-- 打刻時刻表示エリア -->
                 <Grid Margin="5,0,5,20" >
