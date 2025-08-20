@@ -17,6 +17,10 @@ Windows11の標準タスクバーから改良した点
 - Chromeのプロフィールアイコンの表示
 - システムトレイ
 
+# ルール
+
+デバッグ用の出力はLoggerクラスを使用してください。
+
 # フォルダ構成
 
 ## ClassLibrary
@@ -41,10 +45,13 @@ AppxPackage等のデバッグに使用しています。
 - DateTimeItem.cs
 - IconListBoxItem.cs
 - TaskBarItem.cs
+- Converters/*.cs
 
 ### REST API系
 - Rest/Controllers/TimeRecordController.cs
 - Rest/Models/TimeRecordModel.cs
+- Rest/Controllers/NotifactionController.cs
+- Rest/Models/NotificationModel.cs
 - Startup.cs
 
 ### タスクバーを構成するクラス群
