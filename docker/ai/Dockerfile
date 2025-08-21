@@ -48,12 +48,17 @@ ENV TERM=xterm-256color
 ENV LANG=ja_JP.UTF-8
 ENV TZ=Asia/Tokyo
 
-# Copy and set up firewall script
+# Copy and set up firewall script and entrypoint
 COPY ./docker/ai/init-firewall.sh /usr/local/bin/
+COPY ./docker/ai/entrypoint.sh /usr/local/bin/
 USER root
 RUN chmod +x /usr/local/bin/init-firewall.sh && \
+  chmod +x /usr/local/bin/entrypoint.sh && \
   echo "ubuntu ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/ubuntu-firewall && \
   chmod 0440 /etc/sudoers.d/ubuntu-firewall
 USER ubuntu
 
 WORKDIR /var/app
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["bash"]

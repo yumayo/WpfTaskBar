@@ -6,7 +6,9 @@ services:
     tty: true
     stop_grace_period: 0s
     # iptablesでip制限を行うため
-    privileged: true
+    cap_add:
+        - NET_ADMIN
+        - NET_RAW
     volumes:
       - ./:/var/app
       - type: tmpfs
