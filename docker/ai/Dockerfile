@@ -44,6 +44,9 @@ npm install -g npm \
 
 RUN bash -c "source $HOME/.nvm/nvm.sh && npm install -g @anthropic-ai/claude-code"
 
+# Add Node.js PATH to .bashrc
+RUN echo 'export PATH="$HOME/.nvm/versions/node/$(node --version)/bin:$PATH"' >> /home/ubuntu/.bashrc
+
 ENV TERM=xterm-256color
 ENV LANG=ja_JP.UTF-8
 ENV TZ=Asia/Tokyo

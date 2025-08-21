@@ -38,3 +38,8 @@ dotnet build
 ```sh
 dotnet run --project WpfTaskBar
 ```
+
+iオプションは対話シェルで、.bashrcを読み込んでくれます。
+```sh
+docker compose up -d --build && docker compose exec ai bash -i -c "claude -c"
+```
