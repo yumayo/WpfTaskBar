@@ -1,10 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# 
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfTaskBar", "WpfTaskBar\WpfTaskBar.csproj", "{39652856-A6E4-46AF-B491-6E6159E02D54}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp", "ConsoleApp\ConsoleApp.csproj", "{C4D99F63-3156-4C2E-917F-8A1D4CF6082F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClassLibrary", "ClassLibrary\ClassLibrary.csproj", "{C317E674-5BF6-452C-9855-6B188D333DCD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp2", "ConsoleApp2\ConsoleApp2.csproj", "{DED4C512-2A0C-4BED-92C8-87BA52F86220}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,5 +27,9 @@ Global
 		{C317E674-5BF6-452C-9855-6B188D333DCD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C317E674-5BF6-452C-9855-6B188D333DCD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C317E674-5BF6-452C-9855-6B188D333DCD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DED4C512-2A0C-4BED-92C8-87BA52F86220}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DED4C512-2A0C-4BED-92C8-87BA52F86220}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DED4C512-2A0C-4BED-92C8-87BA52F86220}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DED4C512-2A0C-4BED-92C8-87BA52F86220}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
