@@ -5,6 +5,8 @@ services:
       dockerfile: docker/ai/Dockerfile
     tty: true
     stop_grace_period: 0s
+    # iptablesでip制限を行うため
+    privileged: true
     volumes:
       - ./:/var/app
       - type: tmpfs
