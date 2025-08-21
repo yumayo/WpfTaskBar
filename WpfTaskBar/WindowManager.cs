@@ -77,11 +77,18 @@ public class WindowManager : IDisposable
 		{
 			// タスクバーとして管理すべきなWindowハンドルか？
 			var isTaskBarWindow = NativeMethodUtility.IsTaskBarWindow(windowHandle);
+			
+			// 現在の仮想デスクトップにあるウィンドウのみを対象とする
+			if (isTaskBarWindow && !VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(windowHandle))
+			{
+				isTaskBarWindow = false;
+			}
 
 			// タスクバー管理されている場合
 			if (TaskBarItems.Select(x => x.Handle).Contains(windowHandle))
 			{
 				// すでにタスクバー管理化になっているが、今回のフレームではタスクバー管理外となったため削除
+				// または異なる仮想デスクトップに移動されたため削除
 				if (!isTaskBarWindow)
 				{
 					var taskBarItem = TaskBarItems.First(x => x.Handle == windowHandle);
