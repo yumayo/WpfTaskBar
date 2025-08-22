@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.WebSockets;
 
 namespace WpfTaskBar
 {
@@ -37,7 +38,11 @@ namespace WpfTaskBar
             app.UseCors();
 
             // WebSocketサポートを有効化
-            app.UseWebSockets();
+            app.UseWebSockets(new WebSocketOptions
+            {
+                KeepAliveInterval = TimeSpan.FromSeconds(30), // 30秒ごとにKeep-Alive
+                ReceiveBufferSize = 4096,
+            });
 
             app.UseEndpoints(endpoints =>
             {

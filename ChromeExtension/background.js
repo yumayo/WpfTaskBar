@@ -1,6 +1,8 @@
 let ws = null;
 let isConnected = false;
 let reconnectTimer = null;
+let heartbeatTimer = null;
+let heartbeatInterval = 30000; // 30秒ごとにping送信
 
 // WebSocket接続を初期化
 function initializeWebSocket() {
@@ -16,6 +18,9 @@ function initializeWebSocket() {
                 clearTimeout(reconnectTimer);
                 reconnectTimer = null;
             }
+            
+            // ハートビートを開始
+            startHeartbeat();
             
             // 既存のタブ情報を登録
             registerCurrentTabs();
@@ -34,6 +39,9 @@ function initializeWebSocket() {
         ws.onclose = () => {
             console.log('WebSocket connection closed');
             isConnected = false;
+            
+            // ハートビートを停止
+            stopHeartbeat();
             
             // 5秒後に再接続を試行
             reconnectTimer = setTimeout(() => {
@@ -208,6 +216,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
     }
 });
+
+// ハートビート機能
+function startHeartbeat() {
+    stopHeartbeat(); // 既存のタイマーをクリア
+    
+    heartbeatTimer = setInterval(() => {
+        if (isConnected) {
+            console.log('Sending heartbeat ping...');
+            sendMessage({ action: 'ping', data: {} });
+        }
+    }, heartbeatInterval);
+    
+    console.log(`Heartbeat started with ${heartbeatInterval}ms interval`);
+}
+
+function stopHeartbeat() {
+    if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+        console.log('Heartbeat stopped');
+    }
+}
+
+// Chrome拡張機能のService Worker維持
+function keepAlive() {
+    console.log('Keep-alive ping');
+    // Service Workerを維持するための処理
+    chrome.runtime.getPlatformInfo(() => {
+        // 何もしないが、このAPIコールによってService Workerが維持される
+    });
+}
+
+// Service Workerを定期的に維持（5分ごと）
+setInterval(keepAlive, 5 * 60 * 1000);
 
 // 初期化
 initializeWebSocket();
