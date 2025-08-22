@@ -88,7 +88,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="Bold" Foreground="#bbbbbb" FontSize="12" 
-                                           TextTrimming="CharacterEllipsis" MaxWidth="230" HorizontalAlignment="Left" />
+                                           TextTrimming="CharacterEllipsis" Width="230" HorizontalAlignment="Left" />
                                 <TextBlock Grid.Column="1" Text="{Binding Timestamp, StringFormat='{}{0:M/d H:mm}'}" 
                                            Foreground="#777" FontSize="11" VerticalAlignment="Top" HorizontalAlignment="Right" />
                             </Grid>
