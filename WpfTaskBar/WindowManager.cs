@@ -20,12 +20,15 @@ public class WindowManager : IDisposable
 
 	public void Start()
 	{
+		Logger.Info("WindowManager.Start() called");
 		CancellationTokenSource = new CancellationTokenSource();
 		BackgroundTask = UpdateTaskWindows();
+		Logger.Info("WindowManager background task started");
 	}
 
 	private async Task? UpdateTaskWindows()
 	{
+		Logger.Info("WindowManager.UpdateTaskWindows() loop started");
 		while (!CancellationTokenSource.IsCancellationRequested)
 		{
 			try
@@ -37,14 +40,16 @@ public class WindowManager : IDisposable
 			}
 			catch (TaskCanceledException)
 			{
+				Logger.Info("WindowManager task cancelled");
 				break;
 			}
 			catch (Exception e)
 			{
-				Console.WriteLine(e);
+				Logger.Error(e, "Error in WindowManager.UpdateTaskWindows()");
 				break;
 			}
 		}
+		Logger.Info("WindowManager.UpdateTaskWindows() loop ended");
 	}
 
 	public void Stop()

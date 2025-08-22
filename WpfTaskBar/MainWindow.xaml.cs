@@ -29,7 +29,7 @@ public partial class MainWindow : Window
 	{
 		InitializeComponent();
 
-		Logger.Setup();
+		Logger.Info("MainWindow initialized");
 
 		try
 		{
@@ -42,8 +42,6 @@ public partial class MainWindow : Window
 			notificationListBox.ItemsSource = NotificationModel.Notifications;
 			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
 			UpdateNotificationVisibility();
-
-			// DI初期化はApp.xaml.csから実行される
 		}
 		catch (Exception ex)
 		{
@@ -59,16 +57,30 @@ public partial class MainWindow : Window
 			return;
 		}
 		
-		// DIコンテナからサービスを取得
-		_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
-		_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
-		_tabManager = App.ServiceProvider.GetRequiredService<TabManager>();
-		
-		// WindowManagerの初期化
-		_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
-		_windowManager.Start();
-		
-		Logger.Info("MainWindow services initialized from DI container");
+		try
+		{
+			Logger.Info("Starting MainWindow service initialization");
+			
+			// DIコンテナからサービスを取得
+			_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
+			_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
+			_tabManager = App.ServiceProvider.GetRequiredService<TabManager>();
+			
+			Logger.Info("Services obtained from DI container");
+			
+			// WindowManagerの初期化
+			_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
+			Logger.Info("WindowManager event handler attached");
+			
+			_windowManager.Start();
+			Logger.Info("WindowManager started");
+			
+			Logger.Info("MainWindow services initialized successfully from DI container");
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "Failed to initialize services from DI container");
+		}
 	}
 
 	public void ShowNotification(NotificationData notification)
@@ -429,6 +441,10 @@ public partial class MainWindow : Window
 
 	private void HandleWindowLoaded(object sender, RoutedEventArgs e)
 	{
+		// まずサービスを初期化
+		Logger.Info("MainWindow loaded, initializing services...");
+		InitializeServices();
+
 		int height = (int)SystemParameters.PrimaryScreenHeight;
 		int width = (int)SystemParameters.PrimaryScreenWidth;
 

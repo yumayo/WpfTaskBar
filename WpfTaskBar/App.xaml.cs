@@ -17,23 +17,27 @@ public partial class App
 	{
 		ConsoleManager.Setup();
 
+		Logger.Setup();
+		Logger.Info("Application startup beginning");
+
 		// グローバル例外ハンドラーを設定
 		SetupGlobalExceptionHandlers();
+		Logger.Info("Global exception handlers set up");
 
 		base.OnStartup(e);
+		Logger.Info("WPF base.OnStartup completed");
 
 		// REST APIサーバーを起動
+		Logger.Info("Starting REST API server...");
 		_host = CreateHostBuilder(e.Args).Build();
 		await _host.StartAsync();
+		Logger.Info("REST API server started");
 
 		// 静的ServiceProviderを設定
 		ServiceProvider = _host.Services;
+		Logger.Info("Static ServiceProvider set");
 
-		// MainWindowのサービスを初期化
-		if (MainWindow is MainWindow mainWindow)
-		{
-			mainWindow.InitializeServices();
-		}
+		Logger.Info("Application startup completed - MainWindow services will be initialized when MainWindow is loaded");
 	}
 
 	protected override async void OnExit(ExitEventArgs e)
