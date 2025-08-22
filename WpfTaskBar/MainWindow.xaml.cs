@@ -448,6 +448,9 @@ public partial class MainWindow : Window
 				}
 			}
 		}
+
+		_draggedItem = null;
+		_dragMode = false;
 	}
 
 	private void ListBox_OnMouseDown(object sender, MouseButtonEventArgs e)
