@@ -11,6 +11,7 @@ namespace WpfTaskBar;
 public partial class App
 {
 	private IHost? _host;
+	public static IServiceProvider? ServiceProvider { get; private set; }
 
 	protected override async void OnStartup(StartupEventArgs e)
 	{
@@ -25,11 +26,13 @@ public partial class App
 		_host = CreateHostBuilder(e.Args).Build();
 		await _host.StartAsync();
 
-		// MainWindowにWebSocketHandlerを設定
+		// 静的ServiceProviderを設定
+		ServiceProvider = _host.Services;
+
+		// MainWindowのサービスを初期化
 		if (MainWindow is MainWindow mainWindow)
 		{
-			var webSocketHandler = _host.Services.GetRequiredService<WebSocketHandler>();
-			mainWindow.SetWebSocketHandler(webSocketHandler);
+			mainWindow.InitializeServices();
 		}
 	}
 
@@ -41,6 +44,9 @@ public partial class App
 			await _host.StopAsync();
 			_host.Dispose();
 		}
+
+		// 静的ServiceProviderをクリア
+		ServiceProvider = null;
 
 		base.OnExit(e);
 	}

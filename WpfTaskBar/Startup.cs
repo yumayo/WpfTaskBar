@@ -20,9 +20,10 @@ namespace WpfTaskBar
                 });
             });
 
-            // WebSocket関連のサービスを追加
+            // サービスを追加
             services.AddSingleton<TabManager>();
             services.AddSingleton<WebSocketHandler>();
+            services.AddSingleton<WindowManager>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

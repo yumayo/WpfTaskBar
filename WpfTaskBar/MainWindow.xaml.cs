@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Collections.Specialized;
 using WpfTaskBar.Rest.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
@@ -15,9 +16,9 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class MainWindow : Window
 {
-	private readonly WindowManager _windowManager = new WindowManager();
+	private WindowManager? _windowManager;
 	private WebSocketHandler? _webSocketHandler;
-	private readonly TabManager _tabManager = new TabManager();
+	private TabManager? _tabManager;
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
@@ -42,9 +43,7 @@ public partial class MainWindow : Window
 			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
 			UpdateNotificationVisibility();
 
-			_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
-
-			_windowManager.Start();
+			// DI初期化はApp.xaml.csから実行される
 		}
 		catch (Exception ex)
 		{
@@ -52,27 +51,52 @@ public partial class MainWindow : Window
 		}
 	}
 
-	public void SetWebSocketHandler(WebSocketHandler webSocketHandler)
+	public void InitializeServices()
 	{
-		_webSocketHandler = webSocketHandler;
+		if (App.ServiceProvider == null)
+		{
+			Logger.Info("ServiceProvider not yet available, services will be initialized later");
+			return;
+		}
+		
+		// DIコンテナからサービスを取得
+		_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
+		_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
+		_tabManager = App.ServiceProvider.GetRequiredService<TabManager>();
+		
+		// WindowManagerの初期化
+		_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
+		_windowManager.Start();
+		
+		Logger.Info("MainWindow services initialized from DI container");
 	}
 
 	public void ShowNotification(NotificationData notification)
 	{
 		try
 		{
-			var notificationModel = new NotificationModel
+			var notificationItem = new NotificationItem
 			{
-				Id = Guid.NewGuid().ToString(),
+				Id = Guid.NewGuid(),
 				Title = notification.Title,
 				Message = notification.Message,
 				Timestamp = DateTime.Now
 			};
 
-			NotificationModel.Notifications.Add(notificationModel);
+			// 通知をUIに追加
+			Application.Current.Dispatcher.Invoke(() =>
+			{
+				NotificationModel.Notifications.Insert(0, notificationItem);
+				
+				// 500件を超える場合は古いものを削除
+				while (NotificationModel.Notifications.Count > 500)
+				{
+					NotificationModel.Notifications.RemoveAt(NotificationModel.Notifications.Count - 1);
+				}
+			});
 
 			// 通知とタブIDの関連付けを保存
-			_tabManager.AssociateNotificationWithTab(notificationModel.Id, notification);
+			_tabManager?.AssociateNotificationWithTab(notificationItem.Id.ToString(), notification);
 
 			Logger.Info($"Notification added: {notification.Title}");
 		}
@@ -120,7 +144,7 @@ public partial class MainWindow : Window
 			var allItems = new List<IconListBoxItem>(currentItems);
 			allItems.AddRange(newItems);
 
-			var sortedItems = _windowManager.SortItemsByOrder(allItems);
+			var sortedItems = _windowManager?.SortItemsByOrder(allItems) ?? allItems;
 
 			listBox.Items.Clear();
 			foreach (var item in sortedItems)
@@ -186,7 +210,7 @@ public partial class MainWindow : Window
 	private void HandleMainWindowClosed(object? sender, EventArgs e)
 	{
 		NotificationModel.Notifications.CollectionChanged -= OnNotificationsChanged;
-		_windowManager.Stop();
+		_windowManager?.Stop();
 		Logger.Close();
 	}
 
@@ -503,7 +527,7 @@ public partial class MainWindow : Window
 		{
 			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
 			{
-				if (_windowManager.CountBySameProcess(removeItem.Handle) > 1)
+				if (_windowManager?.CountBySameProcess(removeItem.Handle) > 1)
 				{
 					NativeMethods.PostMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
 				}
@@ -543,7 +567,7 @@ public partial class MainWindow : Window
 				.Distinct()
 				.ToList();
 
-			_windowManager.UpdateApplicationOrder(orderedPaths);
+			_windowManager?.UpdateApplicationOrder(orderedPaths);
 		}
 		catch (Exception ex)
 		{
@@ -621,9 +645,9 @@ public partial class MainWindow : Window
 
 	private void HandleNotificationClick(object sender, MouseButtonEventArgs e)
 	{
-		if (((FrameworkElement)e.OriginalSource).DataContext is NotificationModel clickedNotification)
+		if (((FrameworkElement)e.OriginalSource).DataContext is NotificationItem clickedNotification)
 		{
-			var notificationData = _tabManager.GetNotificationData(clickedNotification.Id);
+			var notificationData = _tabManager?.GetNotificationData(clickedNotification.Id.ToString());
 			if (notificationData != null && _webSocketHandler != null)
 			{
 				Task.Run(async () =>
@@ -636,7 +660,7 @@ public partial class MainWindow : Window
 				Dispatcher.Invoke(() =>
 				{
 					NotificationModel.Notifications.Remove(clickedNotification);
-					_tabManager.RemoveNotificationAssociation(clickedNotification.Id);
+					_tabManager?.RemoveNotificationAssociation(clickedNotification.Id.ToString());
 				});
 			}
 		}
