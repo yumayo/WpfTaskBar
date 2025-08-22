@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace WpfTaskBar;
 
@@ -23,6 +24,13 @@ public partial class App
 		// REST APIサーバーを起動
 		_host = CreateHostBuilder(e.Args).Build();
 		await _host.StartAsync();
+
+		// MainWindowにWebSocketHandlerを設定
+		if (MainWindow is MainWindow mainWindow)
+		{
+			var webSocketHandler = _host.Services.GetRequiredService<WebSocketHandler>();
+			mainWindow.SetWebSocketHandler(webSocketHandler);
+		}
 	}
 
 	protected override async void OnExit(ExitEventArgs e)
@@ -42,7 +50,7 @@ public partial class App
 		var builder = Host.CreateDefaultBuilder(args);
 		builder.ConfigureWebHostDefaults(webBuilder =>
 		{
-			webBuilder.UseUrls("http://0.0.0.0:5000");
+			webBuilder.UseUrls("http://localhost:8080");
 			webBuilder.UseStartup<Startup>();
 		});
 		return builder;

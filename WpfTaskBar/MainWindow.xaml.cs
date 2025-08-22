@@ -16,6 +16,8 @@ namespace WpfTaskBar;
 public partial class MainWindow : Window
 {
 	private readonly WindowManager _windowManager = new WindowManager();
+	private WebSocketHandler? _webSocketHandler;
+	private readonly TabManager _tabManager = new TabManager();
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
@@ -47,6 +49,36 @@ public partial class MainWindow : Window
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "MainWindow初期化時にエラーが発生しました。");
+		}
+	}
+
+	public void SetWebSocketHandler(WebSocketHandler webSocketHandler)
+	{
+		_webSocketHandler = webSocketHandler;
+	}
+
+	public void ShowNotification(NotificationData notification)
+	{
+		try
+		{
+			var notificationModel = new NotificationModel
+			{
+				Id = Guid.NewGuid().ToString(),
+				Title = notification.Title,
+				Message = notification.Message,
+				Timestamp = DateTime.Now
+			};
+
+			NotificationModel.Notifications.Add(notificationModel);
+
+			// 通知とタブIDの関連付けを保存
+			_tabManager.AssociateNotificationWithTab(notificationModel.Id, notification);
+
+			Logger.Info($"Notification added: {notification.Title}");
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "通知表示時にエラーが発生しました。");
 		}
 	}
 
@@ -572,6 +604,41 @@ public partial class MainWindow : Window
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "ListBox項目の並び替え中にエラーが発生しました。");
+		}
+	}
+
+	private void NotificationListBox_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+	{
+		try
+		{
+			HandleNotificationClick(sender, e);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "NotificationListBox_OnMouseLeftButtonUp時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleNotificationClick(object sender, MouseButtonEventArgs e)
+	{
+		if (((FrameworkElement)e.OriginalSource).DataContext is NotificationModel clickedNotification)
+		{
+			var notificationData = _tabManager.GetNotificationData(clickedNotification.Id);
+			if (notificationData != null && _webSocketHandler != null)
+			{
+				Task.Run(async () =>
+				{
+					await _webSocketHandler.FocusTab(notificationData.TabId, notificationData.WindowId);
+					Logger.Info($"Focus tab requested: TabId={notificationData.TabId}, WindowId={notificationData.WindowId}");
+				});
+
+				// 通知を削除
+				Dispatcher.Invoke(() =>
+				{
+					NotificationModel.Notifications.Remove(clickedNotification);
+					_tabManager.RemoveNotificationAssociation(clickedNotification.Id);
+				});
+			}
 		}
 	}
 }

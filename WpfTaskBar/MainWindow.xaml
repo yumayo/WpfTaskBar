@@ -68,7 +68,8 @@
                      ScrollViewer.HorizontalScrollBarVisibility="Hidden"
                      ScrollViewer.CanContentScroll="False"
                      Visibility="Collapsed"
-                     BorderThickness="0">
+                     BorderThickness="0"
+                     MouseLeftButtonUp="NotificationListBox_OnMouseLeftButtonUp">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Focusable" Value="False" />
