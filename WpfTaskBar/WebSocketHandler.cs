@@ -10,6 +10,11 @@ namespace WpfTaskBar
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
         private readonly TabManager _tabManager;
+        
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
 
         public WebSocketHandler(TabManager tabManager)
         {
@@ -70,14 +75,16 @@ namespace WpfTaskBar
         {
             try
             {
-                var webSocketMessage = JsonSerializer.Deserialize<WebSocketMessage>(message);
+                Logger.Info($"Raw message from {connectionId}: {message}");
+                
+                var webSocketMessage = JsonSerializer.Deserialize<WebSocketMessage>(message, JsonOptions);
                 if (webSocketMessage == null)
                 {
                     Logger.Info($"Invalid message format from {connectionId}: {message}");
                     return;
                 }
 
-                Logger.Info($"Received message from {connectionId}: {webSocketMessage.Action}");
+                Logger.Info($"Parsed message from {connectionId}: Action='{webSocketMessage.Action}', Data={JsonSerializer.Serialize(webSocketMessage.Data, JsonOptions)}");
 
                 switch (webSocketMessage.Action)
                 {
@@ -105,8 +112,8 @@ namespace WpfTaskBar
         {
             try
             {
-                var json = JsonSerializer.Serialize(data);
-                var tabInfo = JsonSerializer.Deserialize<TabInfo>(json);
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
                     _tabManager.RegisterTab(tabInfo);
@@ -123,8 +130,8 @@ namespace WpfTaskBar
         {
             try
             {
-                var json = JsonSerializer.Serialize(data);
-                var notification = JsonSerializer.Deserialize<NotificationData>(json);
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var notification = JsonSerializer.Deserialize<NotificationData>(json, JsonOptions);
                 if (notification != null)
                 {
                     ShowNotification(notification);
@@ -172,7 +179,7 @@ namespace WpfTaskBar
         {
             try
             {
-                var json = JsonSerializer.Serialize(message);
+                var json = JsonSerializer.Serialize(message, JsonOptions);
                 var bytes = Encoding.UTF8.GetBytes(json);
                 await webSocket.SendAsync(
                     new ArraySegment<byte>(bytes),

@@ -60,7 +60,7 @@ public partial class App
 		var builder = Host.CreateDefaultBuilder(args);
 		builder.ConfigureWebHostDefaults(webBuilder =>
 		{
-			webBuilder.UseUrls("http://localhost:8080");
+			webBuilder.UseUrls("http://0.0.0.0:5000");
 			webBuilder.UseStartup<Startup>();
 		});
 		return builder;
