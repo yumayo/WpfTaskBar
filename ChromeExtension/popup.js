@@ -6,16 +6,14 @@ const messageArea = document.getElementById('messageArea');
 const currentTabInfo = document.getElementById('currentTabInfo');
 
 // 初期化
-document.addEventListener('DOMContentLoaded', () => {
-    updateConnectionStatus();
-    updateCurrentTabInfo();
-    
-    // イベントリスナーを設定
-    sendNotificationBtn.addEventListener('click', sendTestNotification);
-    
-    // 1秒ごとに接続確認を実行
-    setInterval(updateConnectionStatus, 1000);
-});
+updateConnectionStatus();
+updateCurrentTabInfo();
+
+// イベントリスナーを設定
+sendNotificationBtn.addEventListener('click', sendTestNotification);
+
+// 1秒ごとに接続確認を実行
+setInterval(updateConnectionStatus, 1000);
 
 // 接続状況を更新
 function updateConnectionStatus() {
