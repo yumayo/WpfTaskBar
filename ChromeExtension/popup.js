@@ -2,7 +2,6 @@
 const connectionStatus = document.getElementById('connectionStatus');
 const statusText = document.getElementById('statusText');
 const sendNotificationBtn = document.getElementById('sendNotificationBtn');
-const refreshStatusBtn = document.getElementById('refreshStatusBtn');
 const messageArea = document.getElementById('messageArea');
 const currentTabInfo = document.getElementById('currentTabInfo');
 
@@ -13,7 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // イベントリスナーを設定
     sendNotificationBtn.addEventListener('click', sendTestNotification);
-    refreshStatusBtn.addEventListener('click', updateConnectionStatus);
+    
+    // 1秒ごとに接続確認を実行
+    setInterval(updateConnectionStatus, 1000);
 });
 
 // 接続状況を更新
@@ -102,5 +103,3 @@ function showMessage(text, type) {
     }, 3000);
 }
 
-// 定期的に接続状況を更新（5秒ごと）
-setInterval(updateConnectionStatus, 5000);
