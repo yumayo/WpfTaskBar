@@ -1,7 +1,5 @@
 // WebSocketメッセージハンドラーを処理するモジュール
 
-import { sendMessage } from './websocket-client.js';
-
 // メッセージ処理のメインハンドラー
 export function handleMessage(message) {
     switch (message.action) {
