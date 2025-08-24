@@ -5,7 +5,8 @@
   "description": "Chrome extension for testing WebSocket communication with WpfTaskBar",
   
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   
   "permissions": [
