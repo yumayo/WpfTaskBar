@@ -9,7 +9,7 @@
 			_app = app;
 		}
 
-		public string GetStringValue(string name)
+		public string? GetStringValue(string name)
 		{
 			if (name == null)
 				throw new ArgumentNullException("name");

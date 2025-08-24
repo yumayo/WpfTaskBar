@@ -20,7 +20,7 @@ class Program
 			{
 				continue;
 			}
-			AppxPackageUtility.Show(0, AppxPackage.FromWindow(windowHandle));
+			AppxPackageUtility.Show(0, package);
 			PrintAppPackage(windowHandle);
 		}
 		return Task.CompletedTask;

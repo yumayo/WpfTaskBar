@@ -82,7 +82,7 @@ public static class NativeMethodUtility
 	
 	public static double GetPixelsPerDpi()
 	{
-		var dpiScale = VisualTreeHelper.GetDpi(Application.Current.MainWindow);
+		var dpiScale = VisualTreeHelper.GetDpi(System.Windows.Application.Current.MainWindow);
 		return dpiScale.PixelsPerDip;
 	}
 
