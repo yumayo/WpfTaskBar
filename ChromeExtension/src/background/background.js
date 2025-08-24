@@ -2,7 +2,7 @@
 
 import { initializeWebSocket, getConnectionStatus, onConnected, onMessage, onDisconnected } from '../utils/websocket-client.js';
 import { setupTabEventListeners, sendTestNotification } from '../utils/tab-manager.js';
-import { setupPopupMessageListener } from './popup-handler.js';
+import { setupPopupMessageListener } from '../popup/popup-handler.js';
 import { handleMessage } from './message-handlers.js';
 import { startHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { registerCurrentTabs } from '../utils/tab-registration.js';
