@@ -10,7 +10,6 @@ namespace WpfTaskBar
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
         private readonly ChromeTabManager _tabManager;
-        private readonly Timer _pingTimer;
         
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -21,9 +20,7 @@ namespace WpfTaskBar
         {
             _tabManager = tabManager;
             
-            // 60秒ごとに全ての接続にpingを送信
-            _pingTimer = new Timer(SendPingToAllConnections, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
-            Logger.Info("WebSocketHandler initialized with ping timer");
+            Logger.Info("WebSocketHandler initialized");
         }
 
         public async Task HandleWebSocketAsync(HttpContext context)
@@ -210,51 +207,9 @@ namespace WpfTaskBar
             });
         }
 
-        private async void SendPingToAllConnections(object? state)
-        {
-            var disconnectedConnections = new List<string>();
-            var pingMessage = new WebSocketMessage { Action = "ping", Data = new {} };
-
-            foreach (var kvp in _connections)
-            {
-                var connectionId = kvp.Key;
-                var webSocket = kvp.Value;
-
-                if (webSocket.State == WebSocketState.Open)
-                {
-                    try
-                    {
-                        await SendMessage(webSocket, pingMessage);
-                        Logger.Debug($"Ping sent to connection {connectionId}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Info($"Failed to send ping to {connectionId}: {ex.Message}");
-                        disconnectedConnections.Add(connectionId);
-                    }
-                }
-                else
-                {
-                    disconnectedConnections.Add(connectionId);
-                }
-            }
-
-            // 切断された接続をクリーンアップ
-            foreach (var connectionId in disconnectedConnections)
-            {
-                _connections.TryRemove(connectionId, out _);
-                Logger.Info($"Removed disconnected connection: {connectionId}");
-            }
-
-            if (disconnectedConnections.Count > 0)
-            {
-                Logger.Info($"Cleaned up {disconnectedConnections.Count} disconnected connections");
-            }
-        }
 
         public void Dispose()
         {
-            _pingTimer?.Dispose();
             
             // 全ての接続を閉じる
             foreach (var connection in _connections.Values)
