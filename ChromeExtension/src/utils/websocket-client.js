@@ -1,12 +1,14 @@
 // WebSocket接続とメッセージング機能を処理するモジュール
 
-import { handleMessage } from './message-handlers.js';
-import { startHeartbeat, stopHeartbeat } from './heartbeat.js';
-import { registerCurrentTabs } from './tab-registration.js';
-
 let ws = null;
 let isConnected = false;
 let reconnectTimer = null;
+
+// コールバック関数を格納
+let onConnectedCallback = null;
+let onMessageCallback = null;
+let onDisconnectedCallback = null;
+let onErrorCallback = null;
 
 // WebSocket接続を初期化
 export function initializeWebSocket() {
@@ -28,18 +30,20 @@ export function initializeWebSocket() {
                 reconnectTimer = null;
             }
             
-            // ハートビートを開始
-            startHeartbeat();
-            
-            // 既存のタブ情報を登録
-            registerCurrentTabs();
+            // 接続コールバックを実行
+            if (onConnectedCallback) {
+                onConnectedCallback();
+            }
         };
         
         ws.onmessage = (event) => {
             console.log('WebSocket message received:', event.data);
             try {
                 const message = JSON.parse(event.data);
-                handleMessage(message);
+                // メッセージコールバックを実行
+                if (onMessageCallback) {
+                    onMessageCallback(message);
+                }
             } catch (error) {
                 console.error('Failed to parse WebSocket message:', error);
             }
@@ -49,8 +53,10 @@ export function initializeWebSocket() {
             console.log('WebSocket connection closed');
             isConnected = false;
             
-            // ハートビートを停止
-            stopHeartbeat();
+            // 切断コールバックを実行
+            if (onDisconnectedCallback) {
+                onDisconnectedCallback();
+            }
             
             // 5秒後に再接続を試行
             reconnectTimer = setTimeout(() => {
@@ -62,6 +68,11 @@ export function initializeWebSocket() {
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
             isConnected = false;
+            
+            // エラーコールバックを実行
+            if (onErrorCallback) {
+                onErrorCallback(error);
+            }
         };
         
     } catch (error) {
@@ -87,6 +98,23 @@ export function sendMessage(message) {
 // 接続状態を取得
 export function getConnectionStatus() {
     return isConnected;
+}
+
+// コールバック登録関数
+export function onConnected(callback) {
+    onConnectedCallback = callback;
+}
+
+export function onMessage(callback) {
+    onMessageCallback = callback;
+}
+
+export function onDisconnected(callback) {
+    onDisconnectedCallback = callback;
+}
+
+export function onError(callback) {
+    onErrorCallback = callback;
 }
 
 
