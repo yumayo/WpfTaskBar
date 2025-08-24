@@ -19,16 +19,8 @@ function handleFocusTab(data) {
     chrome.tabs.update(data.tabId, { active: true }, (tab) => {
         if (chrome.runtime.lastError) {
             console.error('Failed to focus tab:', chrome.runtime.lastError);
-            return;
+        } else {
+            console.log('Successfully focused tab and tab');
         }
-        
-        // ウィンドウも最前面に表示
-        chrome.windows.update(data.windowId, { focused: true }, (window) => {
-            if (chrome.runtime.lastError) {
-                console.error('Failed to focus window:', chrome.runtime.lastError);
-            } else {
-                console.log('Successfully focused tab and window');
-            }
-        });
     });
 }
