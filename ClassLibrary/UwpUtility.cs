@@ -18,7 +18,7 @@ public class UwpUtility
 {
 	public static IntPtr GetProcessId(IntPtr hWnd)
 	{
-		string processName = null;
+		string? processName = null;
 
 		int pID;
 		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);
@@ -70,7 +70,7 @@ public class UwpUtility
 			NativeMethods.EnumWindowProc lpEnumFunc = new NativeMethods.EnumWindowProc(EnumChildWindowsCallback);
 			NativeMethods.EnumChildWindows(hWnd, lpEnumFunc, pWindowinfo);
 
-			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO));
+			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO))!;
 
 			return (IntPtr)windowinfo.childpid;
 		}
@@ -82,7 +82,7 @@ public class UwpUtility
 	
 	public static string? GetProcessName(IntPtr hWnd)
 	{
-		string processName = null;
+		string? processName = null;
 
 		int pID;
 		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);
@@ -133,7 +133,7 @@ public class UwpUtility
 			NativeMethods.EnumWindowProc lpEnumFunc = new NativeMethods.EnumWindowProc(EnumChildWindowsCallback);
 			NativeMethods.EnumChildWindows(hWnd, lpEnumFunc, pWindowinfo);
 
-			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO));
+			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO))!;
 
 			IntPtr proc;
 			if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)windowinfo.childpid)) == IntPtr.Zero)
@@ -166,7 +166,7 @@ public class UwpUtility
 	/// <returns>always <c>true</c>.</returns>
 	private static bool EnumChildWindowsCallback(IntPtr hWnd, IntPtr lParam)
 	{
-		WINDOWINFO info = (WINDOWINFO)Marshal.PtrToStructure(lParam, typeof(WINDOWINFO));
+		WINDOWINFO info = (WINDOWINFO)Marshal.PtrToStructure(lParam, typeof(WINDOWINFO))!;
 
 		int pID;
 		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);

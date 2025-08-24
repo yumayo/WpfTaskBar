@@ -9,7 +9,7 @@ class Program
 {
 	private static List<IntPtr> windowHandles = new List<IntPtr>();
 
-	static async Task Main(string[] args)
+	static Task Main(string[] args)
 	{
 		ShowWindowTitles();
 		var windowHandles = FindWindowHandles("設定");
@@ -23,6 +23,7 @@ class Program
 			AppxPackageUtility.Show(0, AppxPackage.FromWindow(windowHandle));
 			PrintAppPackage(windowHandle);
 		}
+		return Task.CompletedTask;
 	}
 
 	private static void ShowWindowTitles()

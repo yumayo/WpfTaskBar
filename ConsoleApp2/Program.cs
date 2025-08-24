@@ -9,7 +9,7 @@ class Program
     private static List<IntPtr> windowHandles = new List<IntPtr>();
 
 
-    static async Task Main(string[] args)
+    static Task Main(string[] args)
     {
         Console.WriteLine("=== 仮想デスクトップ プロセス判定ツール ===\n");
         
@@ -53,6 +53,8 @@ class Program
             Console.WriteLine($"デスクトップGUID: {desktopId}");
             Console.WriteLine("---");
         }
+        
+        return Task.CompletedTask;
     }
 
     [return: MarshalAs(UnmanagedType.Bool)]

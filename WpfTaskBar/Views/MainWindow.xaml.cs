@@ -203,7 +203,7 @@ public partial class MainWindow : Window
 		}
 
 		RearrangeListBoxItems(e.UpdateTaskBarItems);
-		_dateTimeItem.Update();
+		_dateTimeItem?.Update();
 	}
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)

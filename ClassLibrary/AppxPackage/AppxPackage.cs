@@ -8,37 +8,37 @@ namespace WpfTaskBar
 	public sealed class AppxPackage
 	{
 		private List<AppxApp> _apps = new List<AppxApp>();
-		private AppxNativeMethods.IAppxManifestProperties _properties;
+		private AppxNativeMethods.IAppxManifestProperties _properties = null!;
 
 		private AppxPackage()
 		{
 		}
 
-		public string FullName { get; private set; }
+		public string FullName { get; private set; } = "";
 
-		public string Path { get; private set; }
+		public string Path { get; private set; } = "";
 
-		public string Publisher { get; private set; }
+		public string Publisher { get; private set; } = "";
 
-		public string PublisherId { get; private set; }
+		public string PublisherId { get; private set; } = "";
 
-		public string ResourceId { get; private set; }
+		public string ResourceId { get; private set; } = "";
 
-		public string FamilyName { get; private set; }
+		public string FamilyName { get; private set; } = "";
 
-		public string ApplicationUserModelId { get; private set; }
+		public string ApplicationUserModelId { get; private set; } = "";
 
-		public string Logo { get; private set; }
+		public string Logo { get; private set; } = "";
 
-		public string PublisherDisplayName { get; private set; }
+		public string PublisherDisplayName { get; private set; } = "";
 
-		public string Description { get; private set; }
+		public string Description { get; private set; } = "";
 
-		public string DisplayName { get; private set; }
+		public string DisplayName { get; private set; } = "";
 
 		public bool IsFramework { get; private set; }
 
-		public Version Version { get; private set; }
+		public Version Version { get; private set; } = new Version();
 
 		public AppxPackageArchitecture ProcessorArchitecture { get; private set; }
 
