@@ -6,6 +6,11 @@ let heartbeatInterval = 30000; // 30秒ごとにping送信
 
 // WebSocket接続を初期化
 function initializeWebSocket() {
+    // 既存のWebSocketがあり、接続中または接続中の場合は何もしない
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+    }
+    
     try {
         ws = new WebSocket('ws://127.0.0.1:5000/ws');
         
