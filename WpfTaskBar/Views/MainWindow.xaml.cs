@@ -17,7 +17,7 @@ public partial class MainWindow : Window
 {
 	private WindowManager? _windowManager;
 	private WebSocketHandler? _webSocketHandler;
-	private TabManager? _tabManager;
+	private ChromeTabManager? _tabManager;
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
@@ -63,7 +63,7 @@ public partial class MainWindow : Window
 			// DIコンテナからサービスを取得
 			_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
 			_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
-			_tabManager = App.ServiceProvider.GetRequiredService<TabManager>();
+			_tabManager = App.ServiceProvider.GetRequiredService<ChromeTabManager>();
 			
 			Logger.Info("Services obtained from DI container");
 			

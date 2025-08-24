@@ -22,7 +22,7 @@ namespace WpfTaskBar
             });
 
             // サービスを追加
-            services.AddSingleton<TabManager>();
+            services.AddSingleton<ChromeTabManager>();
             services.AddSingleton<WebSocketHandler>();
             services.AddSingleton<WindowManager>();
         }

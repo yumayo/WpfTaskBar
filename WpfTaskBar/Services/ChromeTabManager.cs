@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace WpfTaskBar
 {
-    public class TabManager
+    public class ChromeTabManager
     {
         private readonly ConcurrentDictionary<int, TabInfo> _tabs = new();
         private readonly ConcurrentDictionary<string, NotificationData> _notificationTabMap = new();

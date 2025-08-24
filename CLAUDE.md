@@ -53,7 +53,7 @@ AppxPackage等のデバッグに使用しています。
 - ApplicationOrderService.cs - アプリケーション順序管理
 - WindowManager.cs - ウィンドウ管理
 - ConsoleManager.cs - コンソール管理
-- TabManager.cs - タブ管理
+- ChromeTabManager.cs - Chromeタブ管理
 - WebSocketHandler.cs - WebSocket通信処理
 
 ### Api/ - REST API層

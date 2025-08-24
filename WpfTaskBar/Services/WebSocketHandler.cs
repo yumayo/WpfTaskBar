@@ -9,7 +9,7 @@ namespace WpfTaskBar
     public class WebSocketHandler : IDisposable
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
-        private readonly TabManager _tabManager;
+        private readonly ChromeTabManager _tabManager;
         private readonly Timer _pingTimer;
         
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -17,7 +17,7 @@ namespace WpfTaskBar
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        public WebSocketHandler(TabManager tabManager)
+        public WebSocketHandler(ChromeTabManager tabManager)
         {
             _tabManager = tabManager;
             
