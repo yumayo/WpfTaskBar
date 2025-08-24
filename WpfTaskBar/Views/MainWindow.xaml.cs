@@ -665,6 +665,13 @@ public partial class MainWindow : Window
 			var notificationData = _tabManager?.GetNotificationData(clickedNotification.Id.ToString());
 			if (notificationData != null && _webSocketHandler != null)
 			{
+				// まずChromeウィンドウを最前面に持ってくる
+				if (notificationData.WindowHandle != IntPtr.Zero)
+				{
+					NativeMethods.SetForegroundWindow(notificationData.WindowHandle);
+					Logger.Info($"Chrome window brought to foreground: Handle={notificationData.WindowHandle}");
+				}
+
 				Task.Run(async () =>
 				{
 					await _webSocketHandler.FocusTab(notificationData.TabId, notificationData.WindowId);

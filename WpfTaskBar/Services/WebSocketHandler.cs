@@ -3,12 +3,15 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using System.Net.NetworkInformation;
+using System.Diagnostics;
 
 namespace WpfTaskBar
 {
     public class WebSocketHandler : IDisposable
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
+        private readonly ConcurrentDictionary<string, IntPtr> _connectionWindowHandles = new();
         private readonly ChromeTabManager _tabManager;
         
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -35,7 +38,17 @@ namespace WpfTaskBar
             var webSocket = await context.WebSockets.AcceptWebSocketAsync();
             _connections[connectionId] = webSocket;
 
-            Logger.Info($"WebSocket connection established: {connectionId}");
+            // WebSocket接続からChromeプロセスを特定
+            var chromeHandle = FindChromeProcessByConnection(context);
+            if (chromeHandle != IntPtr.Zero)
+            {
+                _connectionWindowHandles[connectionId] = chromeHandle;
+                Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle: {chromeHandle}");
+            }
+            else
+            {
+                Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle not found");
+            }
 
             try
             {
@@ -48,6 +61,7 @@ namespace WpfTaskBar
             finally
             {
                 _connections.TryRemove(connectionId, out _);
+                _connectionWindowHandles.TryRemove(connectionId, out _);
                 Logger.Info($"WebSocket connection closed: {connectionId}");
             }
         }
@@ -136,8 +150,19 @@ namespace WpfTaskBar
                 var notification = JsonSerializer.Deserialize<NotificationData>(json, JsonOptions);
                 if (notification != null)
                 {
+                    // 通知を送信してきた接続のChromeウィンドウハンドルを設定
+                    var connectionId = _connections.FirstOrDefault(c => c.Value.State == WebSocketState.Open).Key;
+                    if (!string.IsNullOrEmpty(connectionId) && _connectionWindowHandles.TryGetValue(connectionId, out var handle))
+                    {
+                        notification.WindowHandle = handle;
+                        Logger.Info($"Notification received: {notification.Title}, WindowHandle: {notification.WindowHandle}");
+                    }
+                    else
+                    {
+                        Logger.Info($"Notification received: {notification.Title}, WindowHandle not found");
+                    }
+
                     ShowNotification(notification);
-                    Logger.Info($"Notification received: {notification.Title}");
                 }
             }
             catch (Exception ex)
@@ -207,6 +232,162 @@ namespace WpfTaskBar
             });
         }
 
+        private IntPtr FindChromeProcessByConnection(HttpContext context)
+        {
+            try
+            {
+                // リモートIPアドレスとポートを取得
+                var remoteEndPoint = context.Connection.RemoteIpAddress;
+                var remotePort = context.Connection.RemotePort;
+                
+                Logger.Info($"WebSocket connection from: {remoteEndPoint}:{remotePort}");
+
+                // netstatの情報を使ってプロセスIDを特定
+                var processId = GetProcessIdByPort(remotePort);
+                if (processId > 0)
+                {
+                    // プロセスIDからChromeのメインウィンドウハンドルを取得
+                    var chromeHandle = GetChromeMainWindowByProcessId(processId);
+                    if (chromeHandle != IntPtr.Zero)
+                    {
+                        Logger.Info($"Chrome process found: PID={processId}, Handle={chromeHandle}");
+                        return chromeHandle;
+                    }
+                }
+
+                Logger.Info("Chrome process not found for this connection");
+                return IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error finding Chrome process by connection");
+                return IntPtr.Zero;
+            }
+        }
+
+        private int GetProcessIdByPort(int port)
+        {
+            try
+            {
+                // netstatコマンドを実行してプロセスIDを取得
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "netstat",
+                    Arguments = "-ano",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(startInfo);
+                if (process == null) return 0;
+
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+
+                var lines = output.Split('\n');
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length >= 5 && parts[0] == "TCP")
+                    {
+                        var localEndPoint = parts[1];
+                        if (localEndPoint.EndsWith($":{port}"))
+                        {
+                            if (int.TryParse(parts[4], out var processId))
+                            {
+                                // プロセスがChromeかチェック
+                                try
+                                {
+                                    var proc = Process.GetProcessById(processId);
+                                    if (proc.ProcessName.Contains("chrome", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        Logger.Info($"Found Chrome process for port {port}: PID={processId}");
+                                        return processId;
+                                    }
+                                }
+                                catch
+                                {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error getting process ID by port using netstat");
+                return 0;
+            }
+        }
+
+        private IntPtr GetChromeMainWindowByProcessId(int processId)
+        {
+            try
+            {
+                // 同じプロセス名のすべてのプロセスをチェック
+                var processes = Process.GetProcessesByName("chrome");
+                
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        if (process.MainWindowHandle != IntPtr.Zero && !string.IsNullOrEmpty(process.MainWindowTitle))
+                        {
+                            Logger.Info($"Found Chrome window: PID={process.Id}, Handle={process.MainWindowHandle}, Title={process.MainWindowTitle}");
+                            return process.MainWindowHandle;
+                        }
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+
+                // フォールバック：WindowManagerから最初のChromeウィンドウを取得
+                var chromeWindows = GetChromeWindowsFromWindowManager();
+                if (chromeWindows.Any())
+                {
+                    var firstChrome = chromeWindows.First();
+                    Logger.Info($"Fallback Chrome window: Handle={firstChrome}");
+                    return firstChrome;
+                }
+
+                return IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, $"Error getting Chrome main window for PID {processId}");
+                return IntPtr.Zero;
+            }
+        }
+
+        private List<IntPtr> GetChromeWindowsFromWindowManager()
+        {
+            try
+            {
+                // WindowManagerが利用できない場合のフォールバック
+                var chromeHandles = new List<IntPtr>();
+                var processes = Process.GetProcessesByName("chrome");
+                
+                foreach (var process in processes)
+                {
+                    if (process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        chromeHandles.Add(process.MainWindowHandle);
+                    }
+                }
+                
+                return chromeHandles;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error getting Chrome windows from WindowManager");
+                return new List<IntPtr>();
+            }
+        }
 
         public void Dispose()
         {
@@ -248,5 +429,6 @@ namespace WpfTaskBar
         public string Url { get; set; } = "";
         public string TabTitle { get; set; } = "";
         public string Timestamp { get; set; } = "";
+        public IntPtr WindowHandle { get; set; } = IntPtr.Zero;
     }
 }
