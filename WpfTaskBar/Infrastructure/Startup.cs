@@ -41,7 +41,6 @@ namespace WpfTaskBar
             app.UseWebSockets(new WebSocketOptions
             {
                 KeepAliveInterval = TimeSpan.FromSeconds(30), // 30秒ごとにKeep-Alive
-                ReceiveBufferSize = 4096,
             });
 
             app.UseEndpoints(endpoints =>

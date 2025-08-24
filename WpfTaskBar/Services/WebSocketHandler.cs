@@ -210,7 +210,7 @@ namespace WpfTaskBar
             });
         }
 
-        private async void SendPingToAllConnections(object state)
+        private async void SendPingToAllConnections(object? state)
         {
             var disconnectedConnections = new List<string>();
             var pingMessage = new WebSocketMessage { Action = "ping", Data = new {} };

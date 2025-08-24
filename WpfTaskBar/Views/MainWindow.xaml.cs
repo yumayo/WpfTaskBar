@@ -21,7 +21,7 @@ public partial class MainWindow : Window
 
 	private Point _startPoint;
 	private IconListBoxItem? _draggedItem;
-	private readonly DateTimeItem _dateTimeItem;
+	private readonly DateTimeItem? _dateTimeItem;
 	private bool _dragMode;
 
 	public MainWindow()
@@ -265,7 +265,7 @@ public partial class MainWindow : Window
 			{
 				icon = IconUtility.ConvertPngToIcon(iconFilePath);
 			}
-			return GetIcon(icon);
+			return icon != null ? GetIcon(icon) : null;
 		}
 		catch (System.ComponentModel.Win32Exception ex)
 		{

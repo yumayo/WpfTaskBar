@@ -5,21 +5,21 @@ namespace WpfTaskBar;
 
 public class DateTimeItem : INotifyPropertyChanged
 {
-	private string _date;
+	private string _date = "";
 	public string Date
 	{
 		get => _date;
 		set => SetField(ref _date, value);
 	}
 	
-	private string _time;
+	private string _time = "";
 	public string Time
 	{
 		get => _time;
 		set => SetField(ref _time, value);
 	}
 
-	private string _startTime;
+	private string _startTime = "";
 	public string StartTime
 	{
 		get => _startTime;
@@ -30,7 +30,7 @@ public class DateTimeItem : INotifyPropertyChanged
 		}
 	}
 
-	private string _endTime;
+	private string _endTime = "";
 	public string EndTime
 	{
 		get => _endTime;

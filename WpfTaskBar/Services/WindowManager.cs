@@ -9,7 +9,7 @@ public class WindowManager : IDisposable
 	public List<IntPtr> WindowHandles = new List<IntPtr>();
 	public List<TaskBarItem> TaskBarItems = new List<TaskBarItem>();
 
-	public event WindowListChangedEventHandler WindowListChanged;
+	public event WindowListChangedEventHandler? WindowListChanged;
 
 	public delegate void WindowListChangedEventHandler(object sender, TaskBarWindowEventArgs e);
 
@@ -29,7 +29,7 @@ public class WindowManager : IDisposable
 	private async Task? UpdateTaskWindows()
 	{
 		Logger.Info("WindowManager.UpdateTaskWindows() loop started");
-		while (!CancellationTokenSource.IsCancellationRequested)
+		while (CancellationTokenSource?.IsCancellationRequested == false)
 		{
 			try
 			{
@@ -105,7 +105,7 @@ public class WindowManager : IDisposable
 			{
 				if (isTaskBarWindow)
 				{
-					var processName = UwpUtility.GetProcessName(windowHandle);
+					var processName = UwpUtility.GetProcessName(windowHandle) ?? "";
 					
 					// TODO: UWPのアプリケーションに対応する
 					// var processId = (int)UwpUtility.GetProcessId(windowHandle);
@@ -149,7 +149,7 @@ public class WindowManager : IDisposable
 
 		foreach (var taskBarWindow in TaskBarItems.ToList())
 		{
-			var processName = UwpUtility.GetProcessName(taskBarWindow.Handle);
+			var processName = UwpUtility.GetProcessName(taskBarWindow.Handle) ?? "";
 			
 			// TODO: UWPのアプリケーションに対応する
 			// var processId = (int)UwpUtility.GetProcessId(taskBarWindow.Handle);
