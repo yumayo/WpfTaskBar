@@ -1,6 +1,7 @@
 // タブ管理とイベント処理を行うモジュール
 
-import { sendMessage, getConnectionStatus, registerTab } from './websocket-client.js';
+import { sendMessage, getConnectionStatus } from './websocket-client.js';
+import { registerTab } from './tab-registration.js';
 
 // 通知を送信（テスト用）
 export function sendTestNotification(tabId) {
