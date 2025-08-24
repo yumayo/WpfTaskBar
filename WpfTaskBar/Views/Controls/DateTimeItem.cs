@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using WpfTaskBar.Rest.Models;
 
 namespace WpfTaskBar;
 

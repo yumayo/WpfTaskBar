@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 
-namespace WpfTaskBar.Rest.Models
+namespace WpfTaskBar
 {
     public class NotificationModel
     {

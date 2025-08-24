@@ -4,7 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 
-namespace WpfTaskBar.Converters
+namespace WpfTaskBar
 {
     public class IndexToMarginConverter : IValueConverter
     {

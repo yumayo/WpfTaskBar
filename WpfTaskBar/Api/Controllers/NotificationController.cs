@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
-using WpfTaskBar.Rest.Models;
 
 namespace WpfTaskBar
 {

@@ -4,7 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:WpfTaskBar"
-        xmlns:converters="clr-namespace:WpfTaskBar.Converters"
         mc:Ignorable="d"
         Loaded="Window_Loaded"
         Closed="MainWindow_OnClosed"
@@ -12,9 +11,9 @@
         AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
     <Window.Resources>
-        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
-        <converters:BoolToThicknessConverter x:Key="BoolToThicknessConverter" />
-        <converters:IndexToMarginConverter x:Key="IndexToMarginConverter" />
+        <local:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+        <local:BoolToThicknessConverter x:Key="BoolToThicknessConverter" />
+        <local:IndexToMarginConverter x:Key="IndexToMarginConverter" />
     </Window.Resources>
     <Border BorderBrush="#333841" BorderThickness="0,0,1,0">
         <Grid>

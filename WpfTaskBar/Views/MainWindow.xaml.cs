@@ -4,7 +4,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Collections.Specialized;
-using WpfTaskBar.Rest.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Point = System.Windows.Point;
 using Window = System.Windows.Window;

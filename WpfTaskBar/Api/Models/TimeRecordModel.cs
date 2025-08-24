@@ -1,4 +1,4 @@
-﻿namespace WpfTaskBar.Rest.Models
+﻿namespace WpfTaskBar
 {
 	public class TimeRecordModel
 	{

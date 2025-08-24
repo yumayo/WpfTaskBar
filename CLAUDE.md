@@ -38,28 +38,35 @@ AppxPackage等のデバッグに使用しています。
 プロジェクトの本体です。
 基本的にはここを弄ります。
 
-### UI系
-- MainWindow.xaml
-- MainWindow.xaml.cs
-- App.xaml
-- App.xaml.cs
-- DateTimeItem.cs
-- IconListBoxItem.cs
-- TaskBarItem.cs
-- Converters/*.cs
+### Views/ - UI層
+- Views/MainWindow.xaml / MainWindow.xaml.cs - メインウィンドウ
+- Views/Controls/ - カスタムコントロール
+  - DateTimeItem.cs - 日時表示コントロール
+  - IconListBoxItem.cs - アイコンリストアイテム
+  - TaskBarItem.cs - タスクバーアイテム
+- Views/Converters/ - データ変換
+  - BoolToThicknessConverter.cs
+  - IndexToMarginConverter.cs
+  - StringToVisibilityConverter.cs
 
-### REST API系
-- Rest/Controllers/TimeRecordController.cs
-- Rest/Models/TimeRecordModel.cs
-- Rest/Controllers/NotifactionController.cs
-- Rest/Models/NotificationModel.cs
-- Startup.cs
+### Services/ - ビジネスロジック層
+- ApplicationOrderService.cs - アプリケーション順序管理
+- WindowManager.cs - ウィンドウ管理
+- ConsoleManager.cs - コンソール管理
+- TabManager.cs - タブ管理
+- WebSocketHandler.cs - WebSocket通信処理
 
-### タスクバーを構成するクラス群
+### Api/ - REST API層
+- Api/Controllers/ - APIコントローラー
+  - TimeRecordController.cs - 勤怠記録API
+  - NotificationController.cs - 通知API
+- Api/Models/ - APIモデル
+  - TimeRecordModel.cs - 勤怠記録モデル
+  - NotificationModel.cs - 通知モデル
 
-- ApplicationOrderService.cs
-- ConsoleManager.cs
-- WindowManager.cs
+### Infrastructure/ - インフラストラクチャ層
+- Logger.cs - ログ機能
+- Startup.cs - DIコンテナ設定
 
-### Utility
-- Logger.cs
+### アプリケーション設定
+- App.xaml / App.xaml.cs - アプリケーション初期化

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace WpfTaskBar.Converters
+namespace WpfTaskBar
 {
     public class BoolToThicknessConverter : IValueConverter
     {
