@@ -5,6 +5,10 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Collections.Specialized;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
+using System.Text.Json;
+using System.IO;
 using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
@@ -28,23 +32,353 @@ public partial class MainWindow : Window
 	{
 		InitializeComponent();
 
-		Logger.Info("MainWindow initialized");
+		Logger.Info("MainWindow initialized with WebView2");
 
 		try
 		{
 			_dateTimeItem = new DateTimeItem();
 			_dateTimeItem.Update();
 
-			stackPanelTime.DataContext = _dateTimeItem;
-
-			// 通知リストをバインド
-			notificationListBox.ItemsSource = NotificationModel.Notifications;
+			// 通知リストのイベントハンドラーを設定
 			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
-			UpdateNotificationVisibility();
+
+			// WebView2の初期化
+			InitializeWebView();
 		}
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "MainWindow初期化時にエラーが発生しました。");
+		}
+	}
+
+	private async void InitializeWebView()
+	{
+		try
+		{
+			// WebView2環境を初期化
+			await webView.EnsureCoreWebView2Async(null);
+
+			// JavaScriptからのメッセージを受信するイベントハンドラを設定
+			webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+
+			// HTMLファイルのパスを取得
+			var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Web", "index.html");
+			var htmlUri = new Uri($"file:///{htmlPath.Replace('\\', '/')}");
+
+			Logger.Info($"Loading HTML from: {htmlUri}");
+
+			// HTMLファイルを読み込み
+			webView.CoreWebView2.Navigate(htmlUri.ToString());
+
+			Logger.Info("WebView2初期化完了 - NavigationCompletedイベントを待機中");
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "WebView2初期化時にエラーが発生しました。");
+		}
+	}
+
+	private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+	{
+		try
+		{
+			string? messageJson = null;
+			try
+			{
+				// WebView2のメッセージを文字列として取得
+				messageJson = e.WebMessageAsJson;
+
+				// JSON文字列をパースして実際の文字列メッセージを取得
+				if (!string.IsNullOrEmpty(messageJson))
+				{
+					// JSON形式の場合はパースして文字列部分を取得
+					if (messageJson.StartsWith("\"") && messageJson.EndsWith("\""))
+					{
+						messageJson = JsonSerializer.Deserialize<string>(messageJson);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "メッセージの取得に失敗しました");
+				return;
+			}
+
+			Logger.Info($"WebView2からメッセージ受信: {messageJson}");
+
+			if (!string.IsNullOrEmpty(messageJson))
+			{
+				using var document = JsonDocument.Parse(messageJson);
+				var root = document.RootElement;
+
+				if (root.TryGetProperty("type", out var typeElement))
+				{
+					var messageType = typeElement.GetString();
+
+					switch (messageType)
+					{
+						case "webview_loaded":
+							Logger.Info("WebView2が正常に読み込まれました");
+							SendInitialData();
+							break;
+
+						case "request_initial_data":
+							SendInitialData();
+							break;
+
+						case "request_datetime_update":
+							SendDateTimeUpdate();
+							break;
+
+						case "task_click":
+							HandleTaskClick(root);
+							break;
+
+						case "task_middle_click":
+							HandleTaskMiddleClick(root);
+							break;
+
+						case "task_context_menu":
+							HandleTaskContextMenu(root);
+							break;
+
+						case "notification_click":
+							HandleNotificationClick(root);
+							break;
+
+						case "exit_application":
+							Application.Current.Shutdown();
+							break;
+
+						default:
+							Logger.Info($"未知のメッセージタイプ: {messageType}");
+							break;
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "WebView2メッセージ処理時にエラーが発生しました。");
+		}
+	}
+
+	private void SendInitialData()
+	{
+		try
+		{
+			// 初期化データを送信
+			var initData = new
+			{
+				type = "init",
+				message = "タスクバー初期化完了",
+				version = "2.0.0",
+				timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+			};
+			SendMessageToWebView(initData);
+
+			// 現在の時刻情報を送信
+			SendDateTimeUpdate();
+
+			// 通知情報を送信
+			SendNotificationUpdate();
+
+			Logger.Info("初期データをWebView2に送信しました");
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "初期データ送信時にエラーが発生しました。");
+		}
+	}
+
+	private void SendDateTimeUpdate()
+	{
+		try
+		{
+			if (_dateTimeItem == null) return;
+
+			_dateTimeItem.Update();
+
+			var dateTimeData = new
+			{
+				type = "datetime_update",
+				dateTime = new
+				{
+					startTime = _dateTimeItem.StartTime,
+					endTime = _dateTimeItem.EndTime,
+					currentTime = _dateTimeItem.Time,
+					currentDate = _dateTimeItem.Date,
+					isStartTimeMissing = _dateTimeItem.IsStartTimeMissing,
+					isEndTimeMissingAfter19 = _dateTimeItem.IsEndTimeMissingAfter19
+				}
+			};
+
+			SendMessageToWebView(dateTimeData);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "日時更新送信時にエラーが発生しました。");
+		}
+	}
+
+	private void SendNotificationUpdate()
+	{
+		try
+		{
+			var notificationData = new
+			{
+				type = "notification_update",
+				notifications = NotificationModel.Notifications.Select(n => new
+				{
+					id = n.Id.ToString(),
+					title = n.Title,
+					message = n.Message,
+					timestamp = n.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss"),
+					windowHandle = IntPtr.Zero // 必要に応じて設定
+				}).ToArray()
+			};
+
+			SendMessageToWebView(notificationData);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "通知更新送信時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleTaskClick(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("handle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var handle))
+				{
+					// ウィンドウをアクティブにする
+					NativeMethods.SetForegroundWindow(handle);
+					Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "タスククリック処理時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleTaskMiddleClick(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("handle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var handle))
+				{
+					// プロセスを終了する
+					NativeMethods.PostMessage(handle, 0x0010, IntPtr.Zero, IntPtr.Zero); // WM_CLOSE
+					Logger.Info($"プロセス終了メッセージを送信: {handle}");
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "タスク中クリック処理時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleTaskContextMenu(JsonElement root)
+	{
+		// 今回は基本的なコンテキストメニューのログのみ
+		Logger.Info("タスクのコンテキストメニューが要求されました");
+	}
+
+	private void HandleNotificationClick(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("windowHandle", out var handleElement))
+			{
+				var handleValue = handleElement.GetInt64();
+				if (handleValue > 0)
+				{
+					var handle = new IntPtr(handleValue);
+					NativeMethods.SetForegroundWindow(handle);
+					Logger.Info($"通知クリックでウィンドウをアクティブにしました: {handle}");
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "通知クリック処理時にエラーが発生しました。");
+		}
+	}
+
+	private void SendMessageToWebView(object data)
+	{
+		try
+		{
+			if (webView?.CoreWebView2 != null)
+			{
+				var json = JsonSerializer.Serialize(data, new JsonSerializerOptions
+				{
+					PropertyNamingPolicy = null, // CamelCaseを削除
+					WriteIndented = false
+				});
+
+				Logger.Info($"WebView2にメッセージ送信準備: {json}");
+				webView.CoreWebView2.PostWebMessageAsString(json);
+				Logger.Info("WebView2にメッセージ送信完了");
+			}
+			else
+			{
+				Logger.Error(null, "WebView2が初期化されていません。メッセージ送信をスキップします。");
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "WebView2へのメッセージ送信時にエラーが発生しました。");
+		}
+	}
+
+	private void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+	{
+		try
+		{
+			if (e.IsSuccess)
+			{
+				Logger.Info("WebView2のナビゲーションが完了しました。");
+
+				// 少し待ってからJavaScriptが準備完了するのを待つ
+				Task.Delay(500).ContinueWith(_ =>
+				{
+					Dispatcher.Invoke(() =>
+					{
+						// 初期データを送信
+						var initData = new
+						{
+							type = "init",
+							message = "C# MainWindowからの初期化メッセージ",
+							version = "1.0.0",
+							timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+						};
+						SendMessageToWebView(initData);
+						Logger.Info("初期データ送信完了");
+					});
+				});
+			}
+			else
+			{
+				Logger.Error(null, $"WebView2のナビゲーションに失敗しました: {e.WebErrorStatus}");
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "WebView2ナビゲーション完了処理時にエラーが発生しました。");
 		}
 	}
 
@@ -98,12 +432,15 @@ public partial class MainWindow : Window
 			Application.Current.Dispatcher.Invoke(() =>
 			{
 				NotificationModel.Notifications.Insert(0, notificationItem);
-				
+
 				// 500件を超える場合は古いものを削除
 				while (NotificationModel.Notifications.Count > 500)
 				{
 					NotificationModel.Notifications.RemoveAt(NotificationModel.Notifications.Count - 1);
 				}
+
+				// WebView2に通知更新を送信
+				SendNotificationUpdate();
 			});
 
 			// 通知とタブIDの関連付けを保存
@@ -134,76 +471,113 @@ public partial class MainWindow : Window
 
 	private void UpdateTaskBarList(TaskBarWindowEventArgs e)
 	{
-		if (e.AddedTaskBarItems.Count > 0)
+		try
 		{
-			var newItems = new List<IconListBoxItem>();
+			// WindowManagerからタスクバー情報を取得
+			var currentTasks = GetCurrentTaskBarItems(e);
+
+			// WebView2にタスクバー更新を送信
+			var taskBarData = new
+			{
+				type = "taskbar_update",
+				tasks = currentTasks
+			};
+
+			SendMessageToWebView(taskBarData);
+			Logger.Info($"タスクバー更新をWebView2に送信: {currentTasks.Count}件");
+
+			// 時刻情報も更新
+			_dateTimeItem?.Update();
+			SendDateTimeUpdate();
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "タスクバーリスト更新時にエラーが発生しました。");
+		}
+	}
+
+	private List<object> GetCurrentTaskBarItems(TaskBarWindowEventArgs e)
+	{
+		var tasks = new List<object>();
+
+		if (_windowManager != null)
+		{
+			// WindowManagerから現在のタスクリストを取得
+			var allItems = new List<IconListBoxItem>();
+
+			// 新しく追加されたアイテム
 			foreach (var taskBarItem in e.AddedTaskBarItems)
 			{
-				var newIconListBoxItem = new IconListBoxItem
+				var iconData = GetIconAsBase64(taskBarItem.ModuleFileName);
+				allItems.Add(new IconListBoxItem
 				{
 					Handle = taskBarItem.Handle,
 					Icon = taskBarItem.ModuleFileName != null ? GetIcon(taskBarItem.ModuleFileName) : null,
 					Text = taskBarItem.Title,
 					IsForeground = taskBarItem.IsForeground,
 					ModuleFileName = taskBarItem.ModuleFileName,
-				};
-
-				newItems.Add(newIconListBoxItem);
+				});
 			}
 
-			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
-			var allItems = new List<IconListBoxItem>(currentItems);
-			allItems.AddRange(newItems);
+			// 更新されたアイテムも含める
+			foreach (var updateItem in e.UpdateTaskBarItems)
+			{
+				var iconData = GetIconAsBase64(updateItem.ModuleFileName);
+				allItems.Add(new IconListBoxItem
+				{
+					Handle = updateItem.Handle,
+					Icon = updateItem.ModuleFileName != null ? GetIcon(updateItem.ModuleFileName) : null,
+					Text = updateItem.Title,
+					IsForeground = updateItem.IsForeground,
+					ModuleFileName = updateItem.ModuleFileName,
+				});
+			}
 
-			var sortedItems = _windowManager?.SortItemsByOrder(allItems) ?? allItems;
+			// ソート
+			var sortedItems = _windowManager.SortItemsByOrder(allItems);
 
-			listBox.Items.Clear();
+			// WebView2用の形式に変換
 			foreach (var item in sortedItems)
 			{
-				listBox.Items.Add(item);
-			}
-		}
-
-		for (int i = listBox.Items.Count - 1; i >= 0; --i)
-		{
-			var item = listBox.Items[i];
-			if (item is IconListBoxItem iconListBoxItem)
-			{
-				foreach (var taskBarItem in e.RemovedTaskBarItemHandles)
+				var iconData = GetIconAsBase64(item.ModuleFileName);
+				tasks.Add(new
 				{
-					if (iconListBoxItem.Handle == taskBarItem.Handle)
-					{
-						listBox.Items.RemoveAt(i);
-						break;
-					}
-				}
+					handle = item.Handle.ToString(),
+					text = item.Text,
+					isForeground = item.IsForeground,
+					moduleFileName = item.ModuleFileName,
+					iconData = iconData
+				});
 			}
 		}
 
-		foreach (var updateTaskBarItem in e.UpdateTaskBarItems)
+		return tasks;
+	}
+
+	private string? GetIconAsBase64(string? moduleFileName)
+	{
+		if (string.IsNullOrEmpty(moduleFileName))
+			return null;
+
+		try
 		{
-			foreach (var item in listBox.Items)
-			{
-				if (item is IconListBoxItem iconListBoxItem)
-				{
-					if (iconListBoxItem.Handle == updateTaskBarItem.Handle)
-					{
-						if (iconListBoxItem.ModuleFileName != updateTaskBarItem.ModuleFileName)
-						{
-							Console.WriteLine($"Changed {iconListBoxItem.ModuleFileName} to {updateTaskBarItem.ModuleFileName}");
-							iconListBoxItem.Icon = updateTaskBarItem.ModuleFileName != null ? GetIcon(updateTaskBarItem.ModuleFileName) : null;
-							iconListBoxItem.ModuleFileName = updateTaskBarItem.ModuleFileName;
-						}
-						iconListBoxItem.Text = updateTaskBarItem.Title;
-						iconListBoxItem.IsForeground = updateTaskBarItem.IsForeground;
-						break;
-					}
-				}
-			}
-		}
+			var icon = GetIcon(moduleFileName);
+			if (icon == null)
+				return null;
 
-		RearrangeListBoxItems(e.UpdateTaskBarItems);
-		_dateTimeItem?.Update();
+			// BitmapSourceをBase64に変換
+			var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+			encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(icon));
+
+			using var stream = new System.IO.MemoryStream();
+			encoder.Save(stream);
+			return Convert.ToBase64String(stream.ToArray());
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, $"アイコンの変換に失敗しました: {moduleFileName}");
+			return null;
+		}
 	}
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
@@ -220,7 +594,7 @@ public partial class MainWindow : Window
 
 	private void HandleMainWindowClosed(object? sender, EventArgs e)
 	{
-		NotificationModel.Notifications.CollectionChanged -= OnNotificationsChanged;
+		// WebView2版では通知管理も変更
 		_windowManager?.Stop();
 		Logger.Close();
 	}
@@ -231,25 +605,14 @@ public partial class MainWindow : Window
 		{
 			try
 			{
-				UpdateNotificationVisibility();
+				// WebView2版では通知更新を送信
+				SendNotificationUpdate();
 			}
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "通知表示の更新中にエラーが発生しました。");
 			}
 		});
-	}
-
-	private void UpdateNotificationVisibility()
-	{
-		if (NotificationModel.Notifications.Count > 0)
-		{
-			notificationListBox.Visibility = Visibility.Visible;
-		}
-		else
-		{
-			notificationListBox.Visibility = Visibility.Collapsed;
-		}
 	}
 
 	public static BitmapSource? GetIcon(string iconFilePath)
@@ -300,131 +663,8 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void ListBox_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		try
-		{
-			HandlePreviewMouseLeftButtonDown(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ListBox_OnPreviewMouseLeftButtonDown時にエラーが発生しました。");
-		}
-	}
-
-	private void HandlePreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-	{
-		_startPoint = e.GetPosition(null);
-		_draggedItem = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
-		_dragMode = false;
-	}
-
-	private void ListBox_OnPreviewMouseMove(object sender, MouseEventArgs e)
-	{
-		try
-		{
-			HandlePreviewMouseMove(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ListBox_OnPreviewMouseMove時にエラーが発生しました。");
-		}
-	}
-
-	private void HandlePreviewMouseMove(object sender, MouseEventArgs e)
-	{
-		if (_draggedItem == null)
-		{
-			return;
-		}
-
-		if (e.LeftButton == MouseButtonState.Pressed)
-		{
-			Point position = e.GetPosition(null);
-			if (Math.Abs(position.X - _startPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
-			    Math.Abs(position.Y - _startPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
-			{
-				_dragMode = true;
-				DataObject data = new DataObject(typeof(IconListBoxItem), _draggedItem);
-				DragDrop.DoDragDrop(listBox, data, DragDropEffects.Move);
-			}
-		}
-	}
-
-	private void ListBox_OnDrop(object sender, DragEventArgs e)
-	{
-		try
-		{
-			HandleDrop(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ドロップ中にエラーが発生しました。");
-		}
-		finally
-		{
-			_dragMode = false;
-			_draggedItem = null;
-		}
-	}
-
-	private void HandleDrop(object sender, DragEventArgs e)
-	{
-		_dragMode = false;
-		_draggedItem = null;
-		
-		if (e.Data.GetDataPresent(typeof(IconListBoxItem)))
-		{
-			IconListBoxItem? droppedData = e.Data.GetData(typeof(IconListBoxItem)) as IconListBoxItem;
-			IconListBoxItem? target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
-
-			if (target == null)
-			{
-				Point position = e.GetPosition(listBox);
-				if (listBox.Items.Count > 0)
-				{
-					if (position.Y > _startPoint.Y)
-					{
-						target = listBox.Items[^1] as IconListBoxItem;
-					}
-					else
-					{
-						target = listBox.Items[0] as IconListBoxItem;
-					}
-				}
-			}
-
-			if (target == null)
-			{
-				return;
-			}
-
-			if (droppedData == null)
-			{
-				return;
-			}
-
-			int removedIdx = listBox.Items.IndexOf(droppedData);
-			int targetIdx = listBox.Items.IndexOf(target);
-
-			if (removedIdx < targetIdx)
-			{
-				listBox.Items.Insert(targetIdx + 1, droppedData);
-				listBox.Items.RemoveAt(removedIdx);
-			}
-			else
-			{
-				int remIdx = removedIdx + 1;
-				if (listBox.Items.Count + 1 > remIdx)
-				{
-					listBox.Items.Insert(targetIdx, droppedData);
-					listBox.Items.RemoveAt(remIdx);
-				}
-			}
-
-			SaveCurrentOrder();
-		}
-	}
+	// WebView2版では従来のListBoxイベントハンドラーは不要
+	// JavaScript側でドラッグ&ドロップを実装
 
 	private void Window_Loaded(object sender, RoutedEventArgs e)
 	{
@@ -482,77 +722,7 @@ public partial class MainWindow : Window
 		NativeMethods.SHAppBarMessage(NativeMethods.ABM_SETPOS, ref barData);
 	}
 
-	private void ListBox_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-	{
-		try
-		{
-			HandleMouseLeftButtonUp(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ListBox_OnMouseLeftButtonUp時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-	{
-		if (!_dragMode)
-		{
-			var target = ((FrameworkElement)e.OriginalSource).DataContext as IconListBoxItem;
-			if (target != null)
-			{
-				if (NativeMethods.IsIconic(target.Handle))
-				{
-					NativeMethods.PostMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_RESTORE), IntPtr.Zero);
-					NativeMethods.SetForegroundWindow(target.Handle);
-				}
-				else
-				{
-					if (NativeMethods.GetForegroundWindow() == target.Handle)
-					{
-						NativeMethods.PostMessage(target.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_MINIMIZE), IntPtr.Zero);
-					}
-					else
-					{
-						NativeMethods.SetForegroundWindow(target.Handle);
-					}
-				}
-			}
-		}
-
-		_draggedItem = null;
-		_dragMode = false;
-	}
-
-	private void ListBox_OnMouseDown(object sender, MouseButtonEventArgs e)
-	{
-		try
-		{
-			HandleMouseDown(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ListBox_OnMouseDown時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleMouseDown(object sender, MouseButtonEventArgs e)
-	{
-		if (e.ChangedButton == MouseButton.Middle && e.ButtonState == MouseButtonState.Pressed)
-		{
-			if (((FrameworkElement)e.OriginalSource).DataContext is IconListBoxItem removeItem)
-			{
-				if (_windowManager?.CountBySameProcess(removeItem.Handle) > 1)
-				{
-					NativeMethods.PostMessage(removeItem.Handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
-				}
-				else
-				{
-					NativeMethods.PostMessage(removeItem.Handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-				}
-			}
-		}
-	}
+	// WebView2版ではマウスイベントもWebView2経由で処理
 
 	private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
 	{
@@ -573,118 +743,9 @@ public partial class MainWindow : Window
 
 	private void SaveCurrentOrder()
 	{
-		try
-		{
-			var orderedPaths = listBox.Items
-				.OfType<IconListBoxItem>()
-				.Where(item => !string.IsNullOrEmpty(item.ModuleFileName))
-				.Select(item => item.ModuleFileName!)
-				.Distinct()
-				.ToList();
-
-			_windowManager?.UpdateApplicationOrder(orderedPaths);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "並び替え順序の保存中にエラーが発生しました。");
-		}
+		// WebView2版では順序保存もWebView2経由で処理
+		Logger.Info("順序保存処理 - WebView2版では未実装");
 	}
 
-	private void RearrangeListBoxItems(List<TaskBarItem> sortedTaskBarItems)
-	{
-		try
-		{
-			var currentItems = listBox.Items.Cast<IconListBoxItem>().ToList();
-			var sortedHandles = sortedTaskBarItems.Select(item => item.Handle).ToHashSet();
-			
-			var orderedItems = new List<IconListBoxItem>();
-			var addedItems = new List<IconListBoxItem>();
-			
-			foreach (var currentItem in currentItems)
-			{
-				if (sortedHandles.Contains(currentItem.Handle))
-				{
-					orderedItems.Add(currentItem);
-				}
-				else
-				{
-					addedItems.Add(currentItem);
-				}
-			}
-			
-			orderedItems.AddRange(addedItems);
-			
-			bool needsReorder = false;
-			if (currentItems.Count != orderedItems.Count)
-			{
-				needsReorder = true;
-			}
-			else
-			{
-				for (int i = 0; i < currentItems.Count; i++)
-				{
-					if (currentItems[i].Handle != orderedItems[i].Handle)
-					{
-						needsReorder = true;
-						break;
-					}
-				}
-			}
-			
-			if (needsReorder)
-			{
-				listBox.Items.Clear();
-				foreach (var item in orderedItems)
-				{
-					listBox.Items.Add(item);
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ListBox項目の並び替え中にエラーが発生しました。");
-		}
-	}
-
-	private void NotificationListBox_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-	{
-		try
-		{
-			HandleNotificationClick(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "NotificationListBox_OnMouseLeftButtonUp時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleNotificationClick(object sender, MouseButtonEventArgs e)
-	{
-		if (((FrameworkElement)e.OriginalSource).DataContext is NotificationItem clickedNotification)
-		{
-			var notificationData = _tabManager?.GetNotificationData(clickedNotification.Id.ToString());
-			if (notificationData != null && _webSocketHandler != null)
-			{
-				// まずChromeウィンドウを最前面に持ってくる
-				if (notificationData.WindowHandle != IntPtr.Zero)
-				{
-					NativeMethods.SetForegroundWindow(notificationData.WindowHandle);
-					Logger.Info($"Chrome window brought to foreground: Handle={notificationData.WindowHandle}");
-				}
-
-				Task.Run(async () =>
-				{
-					await _webSocketHandler.FocusTab(notificationData.TabId, notificationData.WindowId);
-					Logger.Info($"Focus tab requested: TabId={notificationData.TabId}, WindowId={notificationData.WindowId}");
-				});
-
-				// 通知を削除
-				Dispatcher.Invoke(() =>
-				{
-					NotificationModel.Notifications.Remove(clickedNotification);
-					_tabManager?.RemoveNotificationAssociation(clickedNotification.Id.ToString());
-				});
-			}
-		}
-	}
+	// WebView2版では通知クリックもWebView2経由で処理
 }

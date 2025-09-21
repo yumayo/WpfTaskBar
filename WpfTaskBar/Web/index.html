@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タスクバー</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #21252b;
+            color: #bbbbbb;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+            border-right: 1px solid #333841;
+        }
+
+        .taskbar-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        /* タスクリスト */
+        .task-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0;
+            margin: 0;
+            background-color: #21252b;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #bbbbbb;
+            width: 100%;
+            box-sizing: border-box;
+            transition: background-color 0.2s;
+            text-align: left;
+            position: relative;
+        }
+
+        .task-item:hover {
+            background-color: #2c313a;
+        }
+
+        .task-item.foreground {
+            background-color: #3e4451;
+            border-left: 3px solid #007acc;
+        }
+
+        .task-item.foreground::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background-color: #007acc;
+        }
+
+        .task-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+            flex-shrink: 0;
+            background-color: #555;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .task-text {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 280px;
+            font-size: 13px;
+        }
+
+        /* 通知エリア */
+        .notification-area {
+            background-color: #21252b;
+            border-top: 1px solid #333841;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .notification-area.visible {
+            display: block;
+        }
+
+        .notification-item {
+            padding: 12px;
+            border-bottom: 1px solid #2c313a;
+            background-color: #3e4451;
+            margin: 2px;
+            border-radius: 3px;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .notification-message {
+            font-size: 11px;
+            color: #999;
+            line-height: 1.3;
+        }
+
+        .notification-time {
+            font-size: 11px;
+            color: #777;
+        }
+
+        /* 時刻表示エリア */
+        .time-area {
+            background-color: #21252b;
+            padding: 10px;
+            border-top: 1px solid #333841;
+            text-align: center;
+        }
+
+        .attendance-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 0 5px;
+        }
+
+        .attendance-time {
+            padding: 10px;
+            background-color: #2c313a;
+            border-radius: 5px;
+            min-height: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 1;
+            margin: 0 2px;
+            border: 2px solid transparent;
+        }
+
+        .attendance-time.missing {
+            border-color: red;
+        }
+
+        .attendance-label {
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .attendance-value {
+            font-size: 12px;
+        }
+
+        .current-time {
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .current-date {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* コンテキストメニュー */
+        .context-menu {
+            position: fixed;
+            background: #2c313a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 4px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none;
+        }
+
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .context-menu-item:hover {
+            background-color: #3e4451;
+        }
+    </style>
+</head>
+<body>
+    <div class="taskbar-container">
+        <!-- タスクリスト -->
+        <div class="task-list" id="taskList">
+            <!-- タスクアイテムがここに動的に追加されます -->
+        </div>
+
+        <!-- 通知エリア -->
+        <div class="notification-area" id="notificationArea">
+            <!-- 通知がここに動的に追加されます -->
+        </div>
+
+        <!-- 時刻表示エリア -->
+        <div class="time-area">
+            <div class="attendance-section">
+                <div class="attendance-time" id="startTime">
+                    <div class="attendance-label">出勤</div>
+                    <div class="attendance-value" id="startTimeValue">--:--</div>
+                </div>
+                <div class="attendance-time" id="endTime">
+                    <div class="attendance-label">退勤</div>
+                    <div class="attendance-value" id="endTimeValue">--:--</div>
+                </div>
+            </div>
+            <div class="current-time" id="currentTime">--:--:--</div>
+            <div class="current-date" id="currentDate">----/--/--</div>
+        </div>
+    </div>
+
+    <!-- コンテキストメニュー -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="exitApplication()">Exit</div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let tasks = [];
+        let notifications = [];
+        let currentDateTime = {
+            startTime: '',
+            endTime: '',
+            currentTime: '',
+            currentDate: '',
+            isStartTimeMissing: false,
+            isEndTimeMissingAfter19: false
+        };
+
+        // C#との通信用の関数
+        function sendMessageToHost(type, data = null) {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage({
+                    type: type,
+                    data: data,
+                    timestamp: new Date().toISOString()
+                });
+                console.log(`→ C#に送信: ${type}`, data);
+            } else {
+                console.error('❌ WebView2 通信環境が利用できません');
+            }
+        }
+
+        // タスクリストの更新
+        function updateTaskList(taskData) {
+            tasks = taskData || [];
+            const taskList = document.getElementById('taskList');
+
+            // 既存のタスクアイテムをクリア
+            taskList.innerHTML = '';
+
+            // タスクアイテムを追加
+            tasks.forEach(task => {
+                const taskItem = createTaskItem(task);
+                taskList.appendChild(taskItem);
+            });
+        }
+
+        // タスクアイテムの作成
+        function createTaskItem(task) {
+            const item = document.createElement('button');
+            item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
+            item.dataset.handle = task.handle;
+            item.dataset.moduleFileName = task.moduleFileName;
+
+            // アイコン
+            const icon = document.createElement('div');
+            icon.className = 'task-icon';
+            if (task.iconData) {
+                const img = document.createElement('img');
+                img.src = `data:image/png;base64,${task.iconData}`;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                icon.appendChild(img);
+            } else {
+                // デフォルトアイコン（プロセス名の最初の文字）
+                const processName = task.moduleFileName ?
+                    task.moduleFileName.split('\\').pop().split('.')[0] :
+                    task.text.split(' ')[0];
+                icon.textContent = processName.charAt(0).toUpperCase();
+            }
+
+            // テキスト
+            const text = document.createElement('div');
+            text.className = 'task-text';
+            text.textContent = task.text;
+            text.title = task.text; // ツールチップ
+
+            item.appendChild(icon);
+            item.appendChild(text);
+
+            // イベントリスナー
+            item.addEventListener('click', () => {
+                sendMessageToHost('task_click', {
+                    handle: task.handle,
+                    moduleFileName: task.moduleFileName
+                });
+            });
+
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                sendMessageToHost('task_context_menu', {
+                    handle: task.handle,
+                    moduleFileName: task.moduleFileName,
+                    x: e.clientX,
+                    y: e.clientY
+                });
+            });
+
+            // 中クリックでプロセス終了
+            item.addEventListener('mousedown', (e) => {
+                if (e.button === 1) { // 中クリック
+                    e.preventDefault();
+                    sendMessageToHost('task_middle_click', {
+                        handle: task.handle,
+                        moduleFileName: task.moduleFileName
+                    });
+                }
+            });
+
+            return item;
+        }
+
+        // 通知エリアの更新
+        function updateNotifications(notificationData) {
+            notifications = notificationData || [];
+            const notificationArea = document.getElementById('notificationArea');
+
+            if (notifications.length === 0) {
+                notificationArea.classList.remove('visible');
+                return;
+            }
+
+            notificationArea.classList.add('visible');
+            notificationArea.innerHTML = '';
+
+            notifications.forEach(notification => {
+                const notificationItem = createNotificationItem(notification);
+                notificationArea.appendChild(notificationItem);
+            });
+        }
+
+        // 通知アイテムの作成
+        function createNotificationItem(notification) {
+            const item = document.createElement('div');
+            item.className = 'notification-item';
+
+            const title = document.createElement('div');
+            title.className = 'notification-title';
+
+            const titleText = document.createElement('span');
+            titleText.textContent = notification.title;
+
+            const time = document.createElement('span');
+            time.className = 'notification-time';
+            time.textContent = formatTime(new Date(notification.timestamp));
+
+            title.appendChild(titleText);
+            title.appendChild(time);
+
+            const message = document.createElement('div');
+            message.className = 'notification-message';
+            message.textContent = notification.message;
+
+            item.appendChild(title);
+            item.appendChild(message);
+
+            // クリックイベント
+            item.addEventListener('click', () => {
+                sendMessageToHost('notification_click', {
+                    id: notification.id,
+                    windowHandle: notification.windowHandle
+                });
+            });
+
+            return item;
+        }
+
+        // 時刻エリアの更新
+        function updateDateTime(dateTimeData) {
+            currentDateTime = dateTimeData;
+
+            document.getElementById('startTimeValue').textContent = dateTimeData.startTime || '--:--';
+            document.getElementById('endTimeValue').textContent = dateTimeData.endTime || '--:--';
+            document.getElementById('currentTime').textContent = dateTimeData.currentTime || '--:--:--';
+            document.getElementById('currentDate').textContent = dateTimeData.currentDate || '----/--/--';
+
+            // 出勤時刻の警告表示
+            const startTimeElement = document.getElementById('startTime');
+            if (dateTimeData.isStartTimeMissing) {
+                startTimeElement.classList.add('missing');
+            } else {
+                startTimeElement.classList.remove('missing');
+            }
+
+            // 退勤時刻の警告表示
+            const endTimeElement = document.getElementById('endTime');
+            if (dateTimeData.isEndTimeMissingAfter19) {
+                endTimeElement.classList.add('missing');
+            } else {
+                endTimeElement.classList.remove('missing');
+            }
+        }
+
+        // 時刻フォーマット関数
+        function formatTime(date) {
+            return date.toLocaleTimeString('ja-JP', {
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Exit機能
+        function exitApplication() {
+            sendMessageToHost('exit_application');
+        }
+
+        // コンテキストメニューの制御
+        document.addEventListener('contextmenu', (e) => {
+            if (e.target.closest('.task-item')) {
+                return; // タスクアイテムのコンテキストメニューは別途処理
+            }
+
+            e.preventDefault();
+            const contextMenu = document.getElementById('contextMenu');
+            contextMenu.style.left = e.clientX + 'px';
+            contextMenu.style.top = e.clientY + 'px';
+            contextMenu.style.display = 'block';
+        });
+
+        document.addEventListener('click', () => {
+            document.getElementById('contextMenu').style.display = 'none';
+        });
+
+        // C#からのメッセージを受信
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.addEventListener('message', function(event) {
+                console.log('RAW メッセージ受信:', event);
+                console.log('event.data:', event.data);
+                console.log('event.data type:', typeof event.data);
+
+                let data;
+                try {
+                    // event.dataがJSONの文字列の場合はパースする
+                    if (typeof event.data === 'string') {
+                        data = JSON.parse(event.data);
+                    } else {
+                        data = event.data;
+                    }
+                } catch (error) {
+                    console.error('❌ JSONパースエラー:', error);
+                    console.error('受信データ:', event.data);
+                    return;
+                }
+
+                console.log('parsed data:', data);
+                console.log('data.type:', data ? data.type : 'data is null/undefined');
+
+                if (!data) {
+                    console.error('❌ 受信データがnullまたはundefinedです');
+                    return;
+                }
+
+                console.log('← C#から受信:', data.type);
+
+                switch (data.type) {
+                    case 'taskbar_update':
+                        updateTaskList(data.tasks);
+                        break;
+                    case 'notification_update':
+                        updateNotifications(data.notifications);
+                        break;
+                    case 'datetime_update':
+                        updateDateTime(data.dateTime);
+                        break;
+                    case 'init':
+                        console.log('初期化メッセージ受信:', data.message);
+                        // 初期データをリクエスト
+                        sendMessageToHost('request_initial_data');
+                        break;
+                    default:
+                        console.log('未知のメッセージタイプ:', data.type);
+                        break;
+                }
+            });
+
+            console.log('✅ WebView2 通信環境が利用可能です');
+        } else {
+            console.log('⚠️ WebView2 通信環境を待機中...');
+        }
+
+        // 初期化完了をC#に通知
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                if (window.chrome && window.chrome.webview) {
+                    sendMessageToHost('webview_loaded');
+                }
+            }, 100);
+        });
+
+        // 定期的にデータを更新
+        setInterval(() => {
+            sendMessageToHost('request_datetime_update');
+        }, 1000); // 1秒ごとに時刻を更新
+    </script>
+</body>
+</html>
