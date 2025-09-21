@@ -24,7 +24,6 @@ public partial class MainWindow : Window
 	private ChromeTabManager? _tabManager;
 
 	private Point _startPoint;
-	private IconListBoxItem? _draggedItem;
 	private readonly DateTimeItem? _dateTimeItem;
 	private bool _dragMode;
 

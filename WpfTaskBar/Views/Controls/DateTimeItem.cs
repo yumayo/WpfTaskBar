@@ -3,43 +3,15 @@ using System.Runtime.CompilerServices;
 
 namespace WpfTaskBar;
 
-public class DateTimeItem : INotifyPropertyChanged
+public class DateTimeItem
 {
-	private string _date = "";
-	public string Date
-	{
-		get => _date;
-		set => SetField(ref _date, value);
-	}
+	public string Date { get; set; }
 	
-	private string _time = "";
-	public string Time
-	{
-		get => _time;
-		set => SetField(ref _time, value);
-	}
+	public string Time { get; set; }
 
-	private string _startTime = "";
-	public string StartTime
-	{
-		get => _startTime;
-		set
-		{
-			SetField(ref _startTime, value);
-			OnPropertyChanged(nameof(IsStartTimeMissing));
-		}
-	}
+	public string StartTime { get; set; }
 
-	private string _endTime = "";
-	public string EndTime
-	{
-		get => _endTime;
-		set
-		{
-			SetField(ref _endTime, value);
-			OnPropertyChanged(nameof(IsEndTimeMissingAfter19)); // 追加
-		}
-	}
+	public string EndTime { get; set; }
 
 	private DateTime _updateDate;
 
@@ -63,24 +35,7 @@ public class DateTimeItem : INotifyPropertyChanged
 		_updateDate = now;
 	}
 
-	public event PropertyChangedEventHandler? PropertyChanged;
+	public bool IsStartTimeMissing => string.IsNullOrEmpty(StartTime);
 
-	protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-	{
-		PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-	}
-
-	protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-	{
-		if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-		field = value;
-		OnPropertyChanged(propertyName);
-		return true;
-	}
-
-	public bool IsStartTimeMissing =>
-		string.IsNullOrEmpty(StartTime);
-
-	public bool IsEndTimeMissingAfter19 =>
-		string.IsNullOrEmpty(EndTime) && DateTime.Now.Hour >= 19;
+	public bool IsEndTimeMissingAfter19 => string.IsNullOrEmpty(EndTime) && DateTime.Now.Hour >= 19;
 }
