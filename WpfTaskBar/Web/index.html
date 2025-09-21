@@ -590,7 +590,7 @@
             });
         }
 
-        // タスクの順序を変更
+        // タスクの順序を変更（同種アプリケーションの一括移動対応）
         function reorderTasks(draggedHandle, targetHandle, dropAbove) {
             const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
             const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
@@ -598,6 +598,65 @@
             if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
                 return;
             }
+
+            const draggedTask = tasks[draggedIndex];
+            const targetTask = tasks[targetIndex];
+
+            // 同種アプリケーション（同じmoduleFileName）のタスクを全て取得
+            const draggedModuleName = draggedTask.moduleFileName;
+            const targetModuleName = targetTask.moduleFileName;
+
+            // 異なるアプリケーション間での移動の場合のみ一括移動を実行
+            if (draggedModuleName !== targetModuleName) {
+                reorderTasksWithSameApp(draggedHandle, targetHandle, dropAbove);
+            } else {
+                // 同じアプリケーション内での移動は従来通り
+                reorderSingleTask(draggedHandle, targetHandle, dropAbove);
+            }
+
+            // UIを更新
+            updateTaskListOrder();
+        }
+
+        // 同種アプリケーションの一括移動
+        function reorderTasksWithSameApp(draggedHandle, targetHandle, dropAbove) {
+            const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
+            const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
+            const draggedTask = tasks[draggedIndex];
+            const targetTask = tasks[targetIndex];
+
+            // 同じmoduleFileNameを持つタスクを全て取得（元の順序を保持）
+            const sameAppTasks = tasks.filter(task => task.moduleFileName === draggedTask.moduleFileName);
+
+            // 他のアプリケーションのタスクだけを残したリストを作成
+            const otherTasks = tasks.filter(task => task.moduleFileName !== draggedTask.moduleFileName);
+
+            // ターゲットタスクの新しい位置を計算
+            let targetNewIndex = otherTasks.findIndex(t => t.handle === targetHandle);
+
+            // ドロップ位置に応じて挿入位置を調整
+            let insertIndex = targetNewIndex;
+            if (targetNewIndex !== -1) {
+                if (!dropAbove) {
+                    insertIndex = targetNewIndex + 1;
+                }
+            } else {
+                // ターゲットが見つからない場合は最後に追加
+                insertIndex = otherTasks.length;
+            }
+
+            // 新しいタスクリストを構築
+            const newTasks = [...otherTasks];
+            newTasks.splice(insertIndex, 0, ...sameAppTasks);
+
+            // tasksを更新
+            tasks = newTasks;
+        }
+
+        // 単一タスクの移動（同じアプリケーション内での移動用）
+        function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
+            const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
+            const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
 
             // 配列から要素を取り出し
             const draggedTask = tasks.splice(draggedIndex, 1)[0];
@@ -618,9 +677,6 @@
                 // 要素の下にドロップする場合は+1
                 tasks.splice(newIndex + 1, 0, draggedTask);
             }
-
-            // UIを更新
-            updateTaskListOrder();
         }
 
         // タスクリストの順序のみを更新（データの再取得なし）

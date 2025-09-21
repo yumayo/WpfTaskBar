@@ -426,9 +426,9 @@ public partial class MainWindow : Window
 					WriteIndented = false
 				});
 
-				Logger.Info($"WebView2にメッセージ送信準備: {json}");
+				// Logger.Info($"WebView2にメッセージ送信準備: {json}");
 				webView.CoreWebView2.PostWebMessageAsString(json);
-				Logger.Info("WebView2にメッセージ送信完了");
+				// Logger.Info("WebView2にメッセージ送信完了");
 			}
 			else
 			{
@@ -580,7 +580,7 @@ public partial class MainWindow : Window
 			};
 
 			SendMessageToWebView(taskBarData);
-			Logger.Info($"タスクバー更新をWebView2に送信: {currentTasks.Count}件");
+			// Logger.Info($"タスクバー更新をWebView2に送信: {currentTasks.Count}件");
 
 			// 時刻情報も更新
 			_dateTimeItem?.Update();
