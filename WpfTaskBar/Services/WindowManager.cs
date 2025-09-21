@@ -100,6 +100,23 @@ public class WindowManager : IDisposable
 					TaskBarItems.Remove(taskBarItem);
 					removedTaskBarItems.Add(taskBarItem);
 				}
+				else
+				{
+					// 既存のアイテムのIsForegroundプロパティを更新
+					var existingItem = TaskBarItems.First(x => x.Handle == windowHandle);
+					var processName = UwpUtility.GetProcessName(windowHandle) ?? "";
+					var updatedItem = new TaskBarItem
+					{
+						Handle = windowHandle,
+						ModuleFileName = processName,
+						Title = GetWindowText(windowHandle),
+						IsForeground = windowHandle == foregroundHwnd
+					};
+
+					// 既存のアイテムを新しいアイテムで置き換え
+					var index = TaskBarItems.IndexOf(existingItem);
+					TaskBarItems[index] = updatedItem;
+				}
 			}
 			else
 			{
