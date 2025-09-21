@@ -6,7 +6,9 @@ namespace WpfTaskBar;
 public class ApplicationOrderService
 {
     private readonly string _relationsFilePath;
+    private readonly string _windowOrderFilePath;
     private Dictionary<string, HashSet<string>> _aboveRelations = new();
+    private Dictionary<string, List<string>> _windowOrderByApplication = new();
 
     public ApplicationOrderService()
     {
@@ -14,7 +16,9 @@ public class ApplicationOrderService
         var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
         Directory.CreateDirectory(appFolder);
         _relationsFilePath = Path.Combine(appFolder, "application_relations.json");
+        _windowOrderFilePath = Path.Combine(appFolder, "window_order.json");
         LoadRelations();
+        LoadWindowOrder();
     }
 
     public void UpdateOrderFromList(IEnumerable<string> orderedPaths)
@@ -45,11 +49,32 @@ public class ApplicationOrderService
         SaveRelations();
     }
 
+    public void UpdateWindowOrder(IEnumerable<(string Handle, string ModuleFileName)> orderedWindows)
+    {
+        var windowsByApp = orderedWindows
+            .Where(w => !string.IsNullOrEmpty(w.Handle) && !string.IsNullOrEmpty(w.ModuleFileName))
+            .GroupBy(w => w.ModuleFileName)
+            .ToDictionary(g => g.Key, g => g.Select(w => w.Handle).ToList());
+
+        foreach (var kvp in windowsByApp)
+        {
+            _windowOrderByApplication[kvp.Key] = kvp.Value;
+        }
+
+        SaveWindowOrder();
+    }
+
     public List<T> SortByRelations<T>(IEnumerable<T> items, Func<T, string> getExecutablePath)
     {
         var itemList = items.ToList();
+        return SortByRelations(itemList, getExecutablePath, item => item.GetType().GetProperty("Handle")?.GetValue(item)?.ToString() ?? "");
+    }
+
+    public List<T> SortByRelations<T>(IEnumerable<T> items, Func<T, string> getExecutablePath, Func<T, string> getHandle)
+    {
+        var itemList = items.ToList();
         var pathToItems = new Dictionary<string, List<T>>();
-        
+
         foreach (var item in itemList)
         {
             var path = getExecutablePath(item);
@@ -62,19 +87,46 @@ public class ApplicationOrderService
                 pathToItems[path].Add(item);
             }
         }
-        
+
         var paths = pathToItems.Keys.ToList();
         var sortedPaths = TopologicalSort(paths);
         var result = new List<T>();
-        
+
         foreach (var path in sortedPaths)
         {
             if (pathToItems.ContainsKey(path))
             {
-                result.AddRange(pathToItems[path]);
+                var itemsForPath = pathToItems[path];
+
+                // 同一アプリケーション内でのウィンドウ順序を適用
+                if (_windowOrderByApplication.ContainsKey(path))
+                {
+                    var savedOrder = _windowOrderByApplication[path];
+                    var orderedItems = new List<T>();
+                    var remainingItems = new List<T>(itemsForPath);
+
+                    // 保存された順序に従って並び替え
+                    foreach (var savedHandle in savedOrder)
+                    {
+                        var matchingItem = remainingItems.FirstOrDefault(item => getHandle(item) == savedHandle);
+                        if (matchingItem != null)
+                        {
+                            orderedItems.Add(matchingItem);
+                            remainingItems.Remove(matchingItem);
+                        }
+                    }
+
+                    // 保存された順序にない新しいアイテムを追加
+                    orderedItems.AddRange(remainingItems);
+                    result.AddRange(orderedItems);
+                }
+                else
+                {
+                    result.AddRange(itemsForPath);
+                }
             }
         }
-        
+
         return result;
     }
 
@@ -183,6 +235,44 @@ public class ApplicationOrderService
         {
             Logger.Error(ex, "相対的位置関係の読み込み");
             _aboveRelations = new Dictionary<string, HashSet<string>>();
+        }
+    }
+
+    private void SaveWindowOrder()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_windowOrderByApplication, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+            File.WriteAllText(_windowOrderFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "ウィンドウ順序の保存");
+        }
+    }
+
+    private void LoadWindowOrder()
+    {
+        try
+        {
+            if (File.Exists(_windowOrderFilePath))
+            {
+                var json = File.ReadAllText(_windowOrderFilePath);
+                var data = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json);
+
+                if (data != null)
+                {
+                    _windowOrderByApplication = data;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "ウィンドウ順序の読み込み");
+            _windowOrderByApplication = new Dictionary<string, List<string>>();
         }
     }
 }

@@ -68,6 +68,15 @@
             background-color: #007acc;
         }
 
+        .task-item.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .task-item.drag-over {
+            border-top: 2px solid #007acc;
+        }
+
         .task-icon {
             width: 24px;
             height: 24px;
@@ -242,6 +251,8 @@
         // グローバル変数
         let tasks = [];
         let notifications = [];
+        let draggedTask = null;
+        let draggedElement = null;
         let currentDateTime = {
             startTime: '',
             endTime: '',
@@ -315,6 +326,7 @@
             item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
             item.dataset.handle = task.handle;
             item.dataset.moduleFileName = task.moduleFileName;
+            item.draggable = true; // ドラッグ可能にする
 
             // アイコン
             const icon = document.createElement('div');
@@ -342,8 +354,15 @@
             item.appendChild(icon);
             item.appendChild(text);
 
+            // ドラッグ&ドロップイベントリスナー
+            setupDragAndDrop(item, task);
+
             // イベントリスナー
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                // ドラッグ中のクリックは無視
+                if (item.classList.contains('dragging')) {
+                    return;
+                }
                 sendMessageToHost('task_click', {
                     handle: task.handle,
                     moduleFileName: task.moduleFileName
@@ -462,6 +481,113 @@
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
+            });
+        }
+
+        // ドラッグ&ドロップの設定
+        function setupDragAndDrop(item, task) {
+            // ドラッグ開始
+            item.addEventListener('dragstart', (e) => {
+                draggedTask = task;
+                draggedElement = item;
+                item.classList.add('dragging');
+
+                // ドラッグデータを設定
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', task.handle);
+
+                // 少し遅延してスタイルを適用（ドラッグ画像に影響しないよう）
+                setTimeout(() => {
+                    item.style.opacity = '0.5';
+                }, 0);
+            });
+
+            // ドラッグ終了
+            item.addEventListener('dragend', (e) => {
+                item.classList.remove('dragging');
+                item.style.opacity = '';
+
+                // 全ての要素からdrag-overクラスを除去
+                document.querySelectorAll('.task-item').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+
+                draggedTask = null;
+                draggedElement = null;
+            });
+
+            // ドラッグオーバー（他の要素の上を通過）
+            item.addEventListener('dragover', (e) => {
+                if (draggedElement && draggedElement !== item) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            });
+
+            // ドラッグエンター（要素に入る）
+            item.addEventListener('dragenter', (e) => {
+                if (draggedElement && draggedElement !== item) {
+                    e.preventDefault();
+                    item.classList.add('drag-over');
+                }
+            });
+
+            // ドラッグリーブ（要素から出る）
+            item.addEventListener('dragleave', (e) => {
+                // 子要素に移動した場合は除外
+                if (!item.contains(e.relatedTarget)) {
+                    item.classList.remove('drag-over');
+                }
+            });
+
+            // ドロップ
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                item.classList.remove('drag-over');
+
+                if (draggedTask && draggedElement && draggedElement !== item) {
+                    // ドロップされた位置を取得
+                    const dropTargetHandle = item.dataset.handle;
+                    const draggedHandle = draggedTask.handle;
+
+                    // タスクの順序を変更
+                    reorderTasks(draggedHandle, dropTargetHandle);
+
+                    // C#側に順序変更を通知
+                    sendMessageToHost('task_reorder', {
+                        draggedHandle: draggedHandle,
+                        targetHandle: dropTargetHandle,
+                        newOrder: tasks.map(t => t.handle)
+                    });
+                }
+            });
+        }
+
+        // タスクの順序を変更
+        function reorderTasks(draggedHandle, targetHandle) {
+            const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
+            const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
+
+            if (draggedIndex === -1 || targetIndex === -1) {
+                return;
+            }
+
+            // 配列から要素を取り出して新しい位置に挿入
+            const draggedTask = tasks.splice(draggedIndex, 1)[0];
+            tasks.splice(targetIndex, 0, draggedTask);
+
+            // UIを更新
+            updateTaskListOrder();
+        }
+
+        // タスクリストの順序のみを更新（データの再取得なし）
+        function updateTaskListOrder() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
+
+            tasks.forEach(task => {
+                const taskItem = createTaskItem(task);
+                taskList.appendChild(taskItem);
             });
         }
 

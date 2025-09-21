@@ -142,6 +142,10 @@ public partial class MainWindow : Window
 							HandleNotificationClick(root);
 							break;
 
+						case "task_reorder":
+							HandleTaskReorder(root);
+							break;
+
 						case "exit_application":
 							Application.Current.Shutdown();
 							break;
@@ -252,9 +256,33 @@ public partial class MainWindow : Window
 				var handleString = handleElement.GetString();
 				if (IntPtr.TryParse(handleString, out var handle))
 				{
-					// ウィンドウをアクティブにする
-					NativeMethods.SetForegroundWindow(handle);
-					Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+					// ウィンドウが最小化されているかチェック
+					if (NativeMethods.IsIconic(handle))
+					{
+						// 最小化されたウィンドウを復元してアクティブにする
+						NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
+						NativeMethods.SetForegroundWindow(handle);
+						Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
+					}
+					else
+					{
+						// 現在のフォアグラウンドウィンドウを取得
+						var foregroundWindow = NativeMethods.GetForegroundWindow();
+
+						// クリックされたウィンドウが既にアクティブな場合は最小化
+						if (handle == foregroundWindow)
+						{
+							// ウィンドウを最小化
+							NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+							Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+						}
+						else
+						{
+							// ウィンドウをアクティブにする
+							NativeMethods.SetForegroundWindow(handle);
+							Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+						}
+					}
 				}
 			}
 		}
@@ -313,6 +341,79 @@ public partial class MainWindow : Window
 			Logger.Error(ex, "通知クリック処理時にエラーが発生しました。");
 		}
 	}
+
+	private void HandleTaskReorder(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("newOrder", out var newOrderElement))
+			{
+				var newOrderHandles = new List<string>();
+				foreach (var item in newOrderElement.EnumerateArray())
+				{
+					var handleString = item.GetString();
+					if (!string.IsNullOrEmpty(handleString))
+					{
+						newOrderHandles.Add(handleString);
+					}
+				}
+
+				if (newOrderHandles.Count > 0 && _windowManager != null)
+				{
+					// アプリケーション順序とウィンドウ順序の両方を更新
+					var moduleFileNames = new List<string>();
+					var processedModules = new HashSet<string>();
+					var orderedWindows = new List<(string Handle, string ModuleFileName)>();
+
+					foreach (var handleString in newOrderHandles)
+					{
+						if (IntPtr.TryParse(handleString, out var handle))
+						{
+							// WindowManagerのTaskBarItemsから該当するアイテムを検索
+							var taskBarItem = _windowManager.TaskBarItems.FirstOrDefault(item => item.Handle == handle);
+							if (taskBarItem != null && !string.IsNullOrEmpty(taskBarItem.ModuleFileName))
+							{
+								// 個別ウィンドウの順序を記録
+								orderedWindows.Add((handleString, taskBarItem.ModuleFileName));
+
+								// アプリケーション順序用に、同一ModuleFileNameは一度だけ追加（重複排除）
+								if (!processedModules.Contains(taskBarItem.ModuleFileName))
+								{
+									moduleFileNames.Add(taskBarItem.ModuleFileName);
+									processedModules.Add(taskBarItem.ModuleFileName);
+								}
+							}
+						}
+					}
+
+					// アプリケーション間の順序を更新
+					if (moduleFileNames.Count > 0)
+					{
+						_windowManager.UpdateApplicationOrder(moduleFileNames);
+						Logger.Info($"アプリケーション順序を更新しました: {string.Join(", ", moduleFileNames)}");
+					}
+
+					// 個別ウィンドウの順序を更新
+					if (orderedWindows.Count > 0)
+					{
+						_windowManager.UpdateWindowOrder(orderedWindows);
+						Logger.Info($"ウィンドウ順序を更新しました: {orderedWindows.Count}件");
+					}
+
+					if (moduleFileNames.Count == 0 && orderedWindows.Count == 0)
+					{
+						Logger.Warning("タスクの順序更新: 更新対象が見つかりませんでした");
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "タスク順序変更処理時にエラーが発生しました。");
+		}
+	}
+
 
 	private void SendMessageToWebView(object data)
 	{

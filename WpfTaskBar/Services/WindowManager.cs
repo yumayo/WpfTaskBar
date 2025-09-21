@@ -197,12 +197,21 @@ public class WindowManager : IDisposable
 		_orderService.UpdateOrderFromList(orderedExecutablePaths);
 	}
 
+	public void UpdateWindowOrder(IEnumerable<(string Handle, string ModuleFileName)> orderedWindows)
+	{
+		_orderService.UpdateWindowOrder(orderedWindows);
+	}
+
 	public List<T> SortItemsByOrder<T>(IEnumerable<T> items) where T : class
 	{
 		return _orderService.SortByRelations(items, item =>
 		{
 			var property = item.GetType().GetProperty("ModuleFileName");
 			return property?.GetValue(item) as string ?? string.Empty;
+		}, item =>
+		{
+			var property = item.GetType().GetProperty("Handle");
+			return property?.GetValue(item)?.ToString() ?? string.Empty;
 		});
 	}
 }
