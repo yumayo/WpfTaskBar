@@ -599,13 +599,12 @@ public partial class MainWindow : Window
 
 		if (_windowManager != null)
 		{
-			// WindowManagerから現在のタスクリストを取得
+			// WindowManagerから現在の全てのタスクリストを取得（重複を避けるため）
 			var allItems = new List<IconListBoxItem>();
 
-			// 新しく追加されたアイテム
-			foreach (var taskBarItem in e.AddedTaskBarItems)
+			// WindowManagerのTaskBarItemsから全ての現在のアイテムを取得
+			foreach (var taskBarItem in _windowManager.TaskBarItems)
 			{
-				var iconData = GetIconAsBase64(taskBarItem.ModuleFileName);
 				allItems.Add(new IconListBoxItem
 				{
 					Handle = taskBarItem.Handle,
@@ -613,20 +612,6 @@ public partial class MainWindow : Window
 					Text = taskBarItem.Title,
 					IsForeground = taskBarItem.IsForeground,
 					ModuleFileName = taskBarItem.ModuleFileName,
-				});
-			}
-
-			// 更新されたアイテムも含める
-			foreach (var updateItem in e.UpdateTaskBarItems)
-			{
-				var iconData = GetIconAsBase64(updateItem.ModuleFileName);
-				allItems.Add(new IconListBoxItem
-				{
-					Handle = updateItem.Handle,
-					Icon = updateItem.ModuleFileName != null ? GetIcon(updateItem.ModuleFileName) : null,
-					Text = updateItem.Title,
-					IsForeground = updateItem.IsForeground,
-					ModuleFileName = updateItem.ModuleFileName,
 				});
 			}
 
