@@ -73,8 +73,12 @@
             transform: scale(0.95);
         }
 
-        .task-item.drag-over {
+        .task-item.drag-over-above {
             border-top: 2px solid #007acc;
+        }
+
+        .task-item.drag-over-below {
+            border-bottom: 2px solid #007acc;
         }
 
         .task-icon {
@@ -509,7 +513,7 @@
 
                 // 全ての要素からdrag-overクラスを除去
                 document.querySelectorAll('.task-item').forEach(el => {
-                    el.classList.remove('drag-over');
+                    el.classList.remove('drag-over-above', 'drag-over-below');
                 });
 
                 draggedTask = null;
@@ -521,6 +525,22 @@
                 if (draggedElement && draggedElement !== item) {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
+
+                    // マウスの位置から上半分か下半分かを判定
+                    const rect = item.getBoundingClientRect();
+                    const mouseY = e.clientY;
+                    const itemCenter = rect.top + rect.height / 2;
+                    const isAbove = mouseY < itemCenter;
+
+                    // 既存のクラスを削除
+                    item.classList.remove('drag-over-above', 'drag-over-below');
+
+                    // 適切なクラスを追加
+                    if (isAbove) {
+                        item.classList.add('drag-over-above');
+                    } else {
+                        item.classList.add('drag-over-below');
+                    }
                 }
             });
 
@@ -528,7 +548,7 @@
             item.addEventListener('dragenter', (e) => {
                 if (draggedElement && draggedElement !== item) {
                     e.preventDefault();
-                    item.classList.add('drag-over');
+                    // dragoverで位置判定を行うためここでは何もしない
                 }
             });
 
@@ -536,27 +556,34 @@
             item.addEventListener('dragleave', (e) => {
                 // 子要素に移動した場合は除外
                 if (!item.contains(e.relatedTarget)) {
-                    item.classList.remove('drag-over');
+                    item.classList.remove('drag-over-above', 'drag-over-below');
                 }
             });
 
             // ドロップ
             item.addEventListener('drop', (e) => {
                 e.preventDefault();
-                item.classList.remove('drag-over');
+                item.classList.remove('drag-over-above', 'drag-over-below');
 
                 if (draggedTask && draggedElement && draggedElement !== item) {
                     // ドロップされた位置を取得
                     const dropTargetHandle = item.dataset.handle;
                     const draggedHandle = draggedTask.handle;
 
+                    // マウスの位置から上半分か下半分かを判定
+                    const rect = item.getBoundingClientRect();
+                    const mouseY = e.clientY;
+                    const itemCenter = rect.top + rect.height / 2;
+                    const dropAbove = mouseY < itemCenter;
+
                     // タスクの順序を変更
-                    reorderTasks(draggedHandle, dropTargetHandle);
+                    reorderTasks(draggedHandle, dropTargetHandle, dropAbove);
 
                     // C#側に順序変更を通知
                     sendMessageToHost('task_reorder', {
                         draggedHandle: draggedHandle,
                         targetHandle: dropTargetHandle,
+                        dropAbove: dropAbove,
                         newOrder: tasks.map(t => t.handle)
                     });
                 }
@@ -564,17 +591,33 @@
         }
 
         // タスクの順序を変更
-        function reorderTasks(draggedHandle, targetHandle) {
+        function reorderTasks(draggedHandle, targetHandle, dropAbove) {
             const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
             const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
 
-            if (draggedIndex === -1 || targetIndex === -1) {
+            if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
                 return;
             }
 
-            // 配列から要素を取り出して新しい位置に挿入
+            // 配列から要素を取り出し
             const draggedTask = tasks.splice(draggedIndex, 1)[0];
-            tasks.splice(targetIndex, 0, draggedTask);
+
+            // 新しいインデックスを計算
+            let newIndex = targetIndex;
+
+            // ドラッグ元がターゲットより前にあった場合、ターゲットのインデックスが1つ減る
+            if (draggedIndex < targetIndex) {
+                newIndex = targetIndex - 1;
+            }
+
+            // ドロップ位置に応じてインデックスを調整
+            if (dropAbove) {
+                // 要素の上にドロップする場合はそのまま
+                tasks.splice(newIndex, 0, draggedTask);
+            } else {
+                // 要素の下にドロップする場合は+1
+                tasks.splice(newIndex + 1, 0, draggedTask);
+            }
 
             // UIを更新
             updateTaskListOrder();
