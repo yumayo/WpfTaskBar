@@ -267,7 +267,14 @@
 
         // タスクリストの更新
         function updateTaskList(taskData) {
-            tasks = taskData || [];
+            const newTasks = taskData || [];
+
+            // 変更がない場合は処理をスキップ
+            if (areTasksEqual(tasks, newTasks)) {
+                return;
+            }
+
+            tasks = newTasks;
             const taskList = document.getElementById('taskList');
 
             // 既存のタスクアイテムをクリア
@@ -278,6 +285,28 @@
                 const taskItem = createTaskItem(task);
                 taskList.appendChild(taskItem);
             });
+        }
+
+        // タスクリストの比較関数
+        function areTasksEqual(oldTasks, newTasks) {
+            if (oldTasks.length !== newTasks.length) {
+                return false;
+            }
+
+            for (let i = 0; i < oldTasks.length; i++) {
+                const oldTask = oldTasks[i];
+                const newTask = newTasks[i];
+
+                if (oldTask.handle !== newTask.handle ||
+                    oldTask.text !== newTask.text ||
+                    oldTask.moduleFileName !== newTask.moduleFileName ||
+                    oldTask.isForeground !== newTask.isForeground ||
+                    oldTask.iconData !== newTask.iconData) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         // タスクアイテムの作成
@@ -461,9 +490,9 @@
         // C#からのメッセージを受信
         if (window.chrome && window.chrome.webview) {
             window.chrome.webview.addEventListener('message', function(event) {
-                console.log('RAW メッセージ受信:', event);
-                console.log('event.data:', event.data);
-                console.log('event.data type:', typeof event.data);
+                // console.log('RAW メッセージ受信:', event);
+                // console.log('event.data:', event.data);
+                // console.log('event.data type:', typeof event.data);
 
                 let data;
                 try {
@@ -479,15 +508,15 @@
                     return;
                 }
 
-                console.log('parsed data:', data);
-                console.log('data.type:', data ? data.type : 'data is null/undefined');
+                // console.log('parsed data:', data);
+                // console.log('data.type:', data ? data.type : 'data is null/undefined');
 
                 if (!data) {
                     console.error('❌ 受信データがnullまたはundefinedです');
                     return;
                 }
 
-                console.log('← C#から受信:', data.type);
+                // console.log('← C#から受信:', data.type);
 
                 switch (data.type) {
                     case 'taskbar_update':
@@ -501,8 +530,6 @@
                         break;
                     case 'init':
                         console.log('初期化メッセージ受信:', data.message);
-                        // 初期データをリクエスト
-                        sendMessageToHost('request_initial_data');
                         break;
                     default:
                         console.log('未知のメッセージタイプ:', data.type);

@@ -122,10 +122,6 @@ public partial class MainWindow : Window
 							SendInitialData();
 							break;
 
-						case "request_initial_data":
-							SendInitialData();
-							break;
-
 						case "request_datetime_update":
 							SendDateTimeUpdate();
 							break;
