@@ -96,8 +96,6 @@ class WindowManager {
     async updateTaskBarWindows() {
         try {
             const updateTaskBarItems = [];
-            const addedTaskBarItems = [];
-            const removedTaskBarItems = [];
 
             // フォアグラウンドウィンドウの取得
             const foregroundHwnd = await this.requestForegroundWindow();
@@ -136,19 +134,8 @@ class WindowManager {
                     if (isTaskBarWindow) {
                         const newTaskBarItem = await this.createTaskBarItem(windowHandle, foregroundHwnd);
                         this.taskBarItems.push(newTaskBarItem);
-                        addedTaskBarItems.push(newTaskBarItem);
                     }
                 }
-            }
-
-            // 存在しなくなったウィンドウハンドルの削除
-            const removedByHandle = this.taskBarItems.filter(item =>
-                !this.windowHandles.includes(item.handle)
-            );
-
-            for (const removedItem of removedByHandle) {
-                this.taskBarItems = this.taskBarItems.filter(item => item.handle !== removedItem.handle);
-                removedTaskBarItems.push(removedItem);
             }
 
             // 全てのアイテムを更新（プロセス名などの最新情報を取得）
@@ -157,19 +144,8 @@ class WindowManager {
                 updateTaskBarItems.push(updatedItem);
             }
 
-            // アプリケーション順序サービスによるソート
-            const sortedUpdateTaskBarItems = await this.sortItemsByOrder(updateTaskBarItems);
-            const sortedAddedTaskBarItems = await this.sortItemsByOrder(addedTaskBarItems);
-
-            // イベント発火
-            if (addedTaskBarItems.length > 0 || removedTaskBarItems.length > 0 || updateTaskBarItems.length > 0) {
-                const eventArgs = {
-                    updateTaskBarItems: sortedUpdateTaskBarItems,
-                    addedTaskBarItems: sortedAddedTaskBarItems,
-                    removedTaskBarItems: removedTaskBarItems
-                };
-                updateTaskList(updateTaskBarItems);
-            }
+            // タスクバー一覧を更新する
+            updateTaskList(updateTaskBarItems);
 
         } catch (error) {
             console.error('Error in updateTaskBarWindows:', error);
@@ -336,7 +312,7 @@ class WindowManager {
             return await this.requestProcessId(hwnd);
         } catch (error) {
             console.error('Error getting process ID:', error);
-            return hwnd; // フォールバック
+            return null;
         }
     }
 
@@ -352,16 +328,6 @@ class WindowManager {
         sendMessageToHost('update_window_order', {
             orderedWindows: orderedWindows
         });
-    }
-
-    // アイテムのソート
-    async sortItemsByOrder(items) {
-        try {
-            return await this.requestSortByOrder(items);
-        } catch (error) {
-            console.error('Error sorting items:', error);
-            return items; // フォールバック：ソートせずにそのまま返す
-        }
     }
 
     // 仮想デスクトップ判定の要求
@@ -429,39 +395,6 @@ class WindowManager {
 
             window.chrome.webview.addEventListener('message', responseHandler);
             sendMessageToHost('request_process_id', { windowHandle: windowHandle });
-        });
-    }
-
-    // ソート要求
-    async requestSortByOrder(items) {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve(items); // タイムアウト時はソートせずに返す
-            }, 2000);
-
-            const responseHandler = (event) => {
-                try {
-                    let data;
-                    if (typeof event.data === 'string') {
-                        data = JSON.parse(event.data);
-                    } else {
-                        data = event.data;
-                    }
-
-                    if (data && data.type === 'sort_by_order_response') {
-                        clearTimeout(timeout);
-                        window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.sortedItems);
-                    }
-                } catch (error) {
-                    clearTimeout(timeout);
-                    window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve(items);
-                }
-            };
-
-            window.chrome.webview.addEventListener('message', responseHandler);
-            sendMessageToHost('request_sort_by_order', { items: items });
         });
     }
 }

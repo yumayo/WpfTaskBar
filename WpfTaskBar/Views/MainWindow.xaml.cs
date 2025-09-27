@@ -136,10 +136,6 @@ public partial class MainWindow : Window
 							HandleRequestProcessId(root);
 							break;
 
-						case "request_sort_by_order":
-							HandleRequestSortByOrder(root);
-							break;
-
 						case "update_application_order":
 							HandleUpdateApplicationOrder(root);
 							break;
@@ -585,59 +581,6 @@ public partial class MainWindow : Window
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "プロセスID取得時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleRequestSortByOrder(JsonElement root)
-	{
-		try
-		{
-			if (root.TryGetProperty("data", out var dataElement) &&
-			    dataElement.TryGetProperty("items", out var itemsElement))
-			{
-				var items = new List<TaskBarItem>();
-				foreach (var itemElement in itemsElement.EnumerateArray())
-				{
-					if (itemElement.TryGetProperty("handle", out var handleProp) &&
-					    itemElement.TryGetProperty("moduleFileName", out var moduleFileNameProp) &&
-					    itemElement.TryGetProperty("title", out var titleProp) &&
-					    itemElement.TryGetProperty("isForeground", out var isForegroundProp))
-					{
-						var handleString = handleProp.GetString() ?? "";
-						if (IntPtr.TryParse(handleString, out var handle))
-						{
-							items.Add(new TaskBarItem
-							{
-								Handle = handle,
-								ModuleFileName = moduleFileNameProp.GetString() ?? "",
-								Title = titleProp.GetString() ?? "",
-								IsForeground = isForegroundProp.GetBoolean()
-							});
-						}
-					}
-				}
-
-				// ソートはJavaScript側で行うため、そのまま返す
-			var sortedItems = items;
-
-				var response = new
-				{
-					type = "sort_by_order_response",
-					sortedItems = sortedItems.Select(item => new
-					{
-						handle = item.Handle.ToString(),
-						moduleFileName = item.ModuleFileName,
-						title = item.Title,
-						isForeground = item.IsForeground
-					}).ToArray()
-				};
-
-				SendMessageToWebView(response);
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ソート処理時にエラーが発生しました。");
 		}
 	}
 
