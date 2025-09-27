@@ -259,14 +259,77 @@
         let notifications = [];
         let draggedTask = null;
         let draggedElement = null;
-        let currentDateTime = {
-            startTime: '',
-            endTime: '',
-            currentTime: '',
-            currentDate: '',
-            isStartTimeMissing: false,
-            isEndTimeMissingAfter19: false
+
+        // 勤怠記録管理
+        let timeRecord = {
+            clockInDate: null,
+            clockOutDate: null,
+            lastUpdateDate: null
         };
+
+        // TimeRecordController APIへのリクエスト関数
+        async function clockIn() {
+            try {
+                const response = await fetch('/clock-in', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    timeRecord.clockInDate = new Date(result.clock_in_date);
+                    updateDateTime();
+                    console.log('出勤時刻を記録しました:', timeRecord.clockInDate);
+                }
+            } catch (error) {
+                console.error('出勤記録エラー:', error);
+            }
+        }
+
+        async function clockOut() {
+            try {
+                const response = await fetch('/clock-out', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    timeRecord.clockOutDate = new Date(result.clock_out_date);
+                    updateDateTime();
+                    console.log('退勤時刻を記録しました:', timeRecord.clockOutDate);
+                }
+            } catch (error) {
+                console.error('退勤記録エラー:', error);
+            }
+        }
+
+        async function clearTimeRecord() {
+            try {
+                const response = await fetch('/clear', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    timeRecord.clockInDate = null;
+                    timeRecord.clockOutDate = null;
+                    updateDateTime();
+                    console.log('勤怠記録をクリアしました');
+                }
+            } catch (error) {
+                console.error('勤怠記録クリアエラー:', error);
+            }
+        }
 
         // WindowManagerインスタンス（windowManager.jsで宣言済み）
 
@@ -458,29 +521,79 @@
         }
 
         // 時刻エリアの更新
-        function updateDateTime(dateTimeData) {
-            currentDateTime = dateTimeData;
+        function updateDateTime() {
+            // 勤怠時刻の表示
+            document.getElementById('startTimeValue').textContent = timeRecord.clockInDate ?
+                timeRecord.clockInDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--';
+            document.getElementById('endTimeValue').textContent = timeRecord.clockOutDate ?
+                timeRecord.clockOutDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--';
 
-            document.getElementById('startTimeValue').textContent = dateTimeData.startTime || '--:--';
-            document.getElementById('endTimeValue').textContent = dateTimeData.endTime || '--:--';
-            document.getElementById('currentTime').textContent = dateTimeData.currentTime || '--:--:--';
-            document.getElementById('currentDate').textContent = dateTimeData.currentDate || '----/--/--';
+            // 現在時刻と日付はJavaScript側で直接取得
+            updateCurrentTime();
 
+            // 日付変更チェック（午前4時を基準）
+            checkDateChange();
+
+            // 警告表示の更新
+            updateWarnings();
+        }
+
+        // 日付変更チェック（DateTimeItem.csの機能を移植）
+        function checkDateChange() {
+            const now = new Date();
+            if (timeRecord.lastUpdateDate) {
+                // 現在が午前4時以降で、前回更新時が午前4時前の場合、勤怠をリセット
+                if (now.getHours() >= 4 && timeRecord.lastUpdateDate.getHours() < 4) {
+                    timeRecord.clockInDate = null;
+                    timeRecord.clockOutDate = null;
+                    console.log('日付が更新されました。出勤・退勤時刻をリセットします。');
+                }
+            }
+            timeRecord.lastUpdateDate = now;
+        }
+
+        // 警告表示の更新
+        function updateWarnings() {
             // 出勤時刻の警告表示
             const startTimeElement = document.getElementById('startTime');
-            if (dateTimeData.isStartTimeMissing) {
+            const isStartTimeMissing = !timeRecord.clockInDate;
+            if (isStartTimeMissing) {
                 startTimeElement.classList.add('missing');
             } else {
                 startTimeElement.classList.remove('missing');
             }
 
-            // 退勤時刻の警告表示
+            // 退勤時刻の警告表示（19時以降で退勤していない場合）
             const endTimeElement = document.getElementById('endTime');
-            if (dateTimeData.isEndTimeMissingAfter19) {
+            const now = new Date();
+            const isEndTimeMissingAfter19 = !timeRecord.clockOutDate && now.getHours() >= 19;
+            if (isEndTimeMissingAfter19) {
                 endTimeElement.classList.add('missing');
             } else {
                 endTimeElement.classList.remove('missing');
             }
+        }
+
+        // 現在時刻を更新する関数
+        function updateCurrentTime() {
+            const now = new Date();
+
+            // 現在時刻（HH:MM:SS形式）
+            const currentTime = now.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            // 現在日付（YYYY/MM/DD形式）
+            const currentDate = now.toLocaleDateString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+
+            document.getElementById('currentTime').textContent = currentTime;
+            document.getElementById('currentDate').textContent = currentDate;
         }
 
         // 時刻フォーマット関数
@@ -760,9 +873,6 @@
                     case 'notification_update':
                         updateNotifications(data.notifications);
                         break;
-                    case 'datetime_update':
-                        updateDateTime(data.dateTime);
-                        break;
                     case 'init':
                         console.log('初期化メッセージ受信:', data.message);
                         break;
@@ -851,10 +961,13 @@
             }
         }
 
-        // 定期的にデータを更新
+        // 定期的に時刻情報を更新
         setInterval(() => {
-            sendMessageToHost('request_datetime_update');
-        }, 1000); // 1秒ごとに時刻を更新
+            updateDateTime();
+        }, 1000); // 1秒ごとに時刻情報を更新
+
+        // 初回の時刻表示
+        updateDateTime();
     </script>
 </body>
 </html>

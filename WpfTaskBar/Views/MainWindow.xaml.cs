@@ -24,7 +24,6 @@ public partial class MainWindow : Window
 	private ChromeTabManager? _tabManager;
 
 	private Point _startPoint;
-	private readonly DateTimeItem? _dateTimeItem;
 	private bool _dragMode;
 
 	public MainWindow()
@@ -35,9 +34,6 @@ public partial class MainWindow : Window
 
 		try
 		{
-			_dateTimeItem = new DateTimeItem();
-			_dateTimeItem.Update();
-
 			// 通知リストのイベントハンドラーを設定
 			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
 
@@ -121,9 +117,6 @@ public partial class MainWindow : Window
 							SendInitialData();
 							break;
 
-						case "request_datetime_update":
-							SendDateTimeUpdate();
-							break;
 
 						// WindowManager関連のNativeCallsを追加
 						case "request_window_handles":
@@ -217,8 +210,6 @@ public partial class MainWindow : Window
 			};
 			SendMessageToWebView(initData);
 
-			// 現在の時刻情報を送信
-			SendDateTimeUpdate();
 
 			// 通知情報を送信
 			SendNotificationUpdate();
@@ -231,35 +222,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void SendDateTimeUpdate()
-	{
-		try
-		{
-			if (_dateTimeItem == null) return;
-
-			_dateTimeItem.Update();
-
-			var dateTimeData = new
-			{
-				type = "datetime_update",
-				dateTime = new
-				{
-					startTime = _dateTimeItem.StartTime,
-					endTime = _dateTimeItem.EndTime,
-					currentTime = _dateTimeItem.Time,
-					currentDate = _dateTimeItem.Date,
-					isStartTimeMissing = _dateTimeItem.IsStartTimeMissing,
-					isEndTimeMissingAfter19 = _dateTimeItem.IsEndTimeMissingAfter19
-				}
-			};
-
-			SendMessageToWebView(dateTimeData);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "日時更新送信時にエラーが発生しました。");
-		}
-	}
 
 	private void SendNotificationUpdate()
 	{
@@ -979,9 +941,6 @@ public partial class MainWindow : Window
 			SendMessageToWebView(taskBarData);
 			// Logger.Info($"タスクバー更新をWebView2に送信: {currentTasks.Count}件");
 
-			// 時刻情報も更新
-			_dateTimeItem?.Update();
-			SendDateTimeUpdate();
 		}
 		catch (Exception ex)
 		{
