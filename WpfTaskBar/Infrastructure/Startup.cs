@@ -24,7 +24,7 @@ namespace WpfTaskBar
             // サービスを追加
             services.AddSingleton<ChromeTabManager>();
             services.AddSingleton<WebSocketHandler>();
-            services.AddSingleton<WindowManager>();
+            // WindowManagerはJavaScript側で管理するため削除
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

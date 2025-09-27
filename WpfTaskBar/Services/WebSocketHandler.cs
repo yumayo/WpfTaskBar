@@ -346,8 +346,8 @@ namespace WpfTaskBar
                     }
                 }
 
-                // フォールバック：WindowManagerから最初のChromeウィンドウを取得
-                var chromeWindows = GetChromeWindowsFromWindowManager();
+                // フォールバック：プロセス一覧から最初のChromeウィンドウを取得
+                var chromeWindows = GetChromeWindowsFromProcessList();
                 if (chromeWindows.Any())
                 {
                     var firstChrome = chromeWindows.First();
@@ -364,14 +364,14 @@ namespace WpfTaskBar
             }
         }
 
-        private List<IntPtr> GetChromeWindowsFromWindowManager()
+        private List<IntPtr> GetChromeWindowsFromProcessList()
         {
             try
             {
-                // WindowManagerが利用できない場合のフォールバック
+                // プロセス一覧からChromeウィンドウを取得
                 var chromeHandles = new List<IntPtr>();
                 var processes = Process.GetProcessesByName("chrome");
-                
+
                 foreach (var process in processes)
                 {
                     if (process.MainWindowHandle != IntPtr.Zero)
@@ -379,12 +379,12 @@ namespace WpfTaskBar
                         chromeHandles.Add(process.MainWindowHandle);
                     }
                 }
-                
+
                 return chromeHandles;
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error getting Chrome windows from WindowManager");
+                Logger.Error(ex, "Error getting Chrome windows from process list");
                 return new List<IntPtr>();
             }
         }

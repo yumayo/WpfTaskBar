@@ -7,6 +7,7 @@ using System.Collections.Specialized;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System.Text;
 using System.Text.Json;
 using System.IO;
 using Point = System.Windows.Point;
@@ -19,7 +20,6 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class MainWindow : Window
 {
-	private WindowManager? _windowManager;
 	private WebSocketHandler? _webSocketHandler;
 	private ChromeTabManager? _tabManager;
 
@@ -361,52 +361,10 @@ public partial class MainWindow : Window
 					}
 				}
 
-				if (newOrderHandles.Count > 0 && _windowManager != null)
+				if (newOrderHandles.Count > 0)
 				{
-					// アプリケーション順序とウィンドウ順序の両方を更新
-					var moduleFileNames = new List<string>();
-					var processedModules = new HashSet<string>();
-					var orderedWindows = new List<(string Handle, string ModuleFileName)>();
-
-					foreach (var handleString in newOrderHandles)
-					{
-						if (IntPtr.TryParse(handleString, out var handle))
-						{
-							// WindowManagerのTaskBarItemsから該当するアイテムを検索
-							var taskBarItem = _windowManager.TaskBarItems.FirstOrDefault(item => item.Handle == handle);
-							if (taskBarItem != null && !string.IsNullOrEmpty(taskBarItem.ModuleFileName))
-							{
-								// 個別ウィンドウの順序を記録
-								orderedWindows.Add((handleString, taskBarItem.ModuleFileName));
-
-								// アプリケーション順序用に、同一ModuleFileNameは一度だけ追加（重複排除）
-								if (!processedModules.Contains(taskBarItem.ModuleFileName))
-								{
-									moduleFileNames.Add(taskBarItem.ModuleFileName);
-									processedModules.Add(taskBarItem.ModuleFileName);
-								}
-							}
-						}
-					}
-
-					// アプリケーション間の順序を更新
-					if (moduleFileNames.Count > 0)
-					{
-						_windowManager.UpdateApplicationOrder(moduleFileNames);
-						Logger.Info($"アプリケーション順序を更新しました: {string.Join(", ", moduleFileNames)}");
-					}
-
-					// 個別ウィンドウの順序を更新
-					if (orderedWindows.Count > 0)
-					{
-						_windowManager.UpdateWindowOrder(orderedWindows);
-						Logger.Info($"ウィンドウ順序を更新しました: {orderedWindows.Count}件");
-					}
-
-					if (moduleFileNames.Count == 0 && orderedWindows.Count == 0)
-					{
-						Logger.Warning("タスクの順序更新: 更新対象が見つかりませんでした");
-					}
+					// 順序管理はJavaScript側で行うため、ここでは単純にログ出力のみ
+					Logger.Info($"タスクバー順序更新要求を受信: {newOrderHandles.Count}件のハンドル");
 				}
 			}
 		}
@@ -507,7 +465,9 @@ public partial class MainWindow : Window
 				if (IntPtr.TryParse(handleString, out var hwnd))
 				{
 					var processName = UwpUtility.GetProcessName(hwnd) ?? "";
-					var title = WindowManager.GetWindowText(hwnd);
+					var sb = new StringBuilder(255);
+					NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
+					var title = sb.ToString();
 					var iconData = GetIconAsBase64(processName);
 
 					Logger.Info($"ウィンドウ情報取得: {title}, プロセス: {processName}, アイコンデータ: {(iconData != null ? iconData.Length.ToString() : "null")}文字");
@@ -626,8 +586,8 @@ public partial class MainWindow : Window
 					.Where(path => !string.IsNullOrEmpty(path))
 					.ToList();
 
-				_windowManager?.UpdateApplicationOrder(orderedPaths);
-				Logger.Info($"アプリケーション順序を更新しました: {orderedPaths.Count}個");
+				// 順序管理はJavaScript側で行うため削除
+				Logger.Info($"アプリケーション順序更新要求: {orderedPaths.Count}個");
 			}
 		}
 		catch (Exception ex)
@@ -723,7 +683,8 @@ public partial class MainWindow : Window
 					}
 				}
 
-				var sortedItems = _windowManager?.SortItemsByOrder(items) ?? items;
+				// ソートはJavaScript側で行うため、そのまま返す
+			var sortedItems = items;
 
 				var response = new
 				{
@@ -766,8 +727,8 @@ public partial class MainWindow : Window
 					}
 				}
 
-				_windowManager?.UpdateWindowOrder(orderedWindows);
-				Logger.Info($"ウィンドウ順序を更新しました: {orderedWindows.Count}個");
+				// 順序管理はJavaScript側で行うため削除
+				Logger.Info($"ウィンドウ順序更新要求: {orderedWindows.Count}個");
 			}
 		}
 		catch (Exception ex)
@@ -853,15 +814,13 @@ public partial class MainWindow : Window
 			Logger.Info("Starting MainWindow service initialization");
 
 			// DIコンテナからサービスを取得
-			_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
 			_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
 			_tabManager = App.ServiceProvider.GetRequiredService<ChromeTabManager>();
 
 			Logger.Info("Services obtained from DI container");
 
-			// WindowManagerの初期化（Web版では自動起動しない）
-			// C#のWindowManagerはNativeCallsのみで、WebView2のJavaScript側WindowManagerが主導権を持つ
-			Logger.Info("WindowManager initialized for WebView2 native calls only");
+			// WindowManagerはJavaScript側で管理されるため、C#側では初期化しない
+			Logger.Info("WindowManager removed - managed by JavaScript side");
 
 			Logger.Info("MainWindow services initialized successfully from DI container");
 		}
@@ -909,84 +868,17 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void WindowManagerOnWindowListChanged(object sender, TaskBarWindowEventArgs e)
-	{
-		Dispatcher.Invoke(() =>
-		{
-			try
-			{
-				UpdateTaskBarList(e);
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "タスクバーの更新中にエラーが発生しました。");
-			}
-		});
-	}
+	// WindowManagerOnWindowListChangedメソッドは削除 - JavaScript側で管理
 
-	private void UpdateTaskBarList(TaskBarWindowEventArgs e)
-	{
-		try
-		{
-			// WindowManagerからタスクバー情報を取得
-			var currentTasks = GetCurrentTaskBarItems(e);
+	// UpdateTaskBarListメソッドは削除 - JavaScript側で管理
 
-			// WebView2にタスクバー更新を送信
-			var taskBarData = new
-			{
-				type = "taskbar_update",
-				tasks = currentTasks
-			};
-
-			SendMessageToWebView(taskBarData);
-			// Logger.Info($"タスクバー更新をWebView2に送信: {currentTasks.Count}件");
-
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "タスクバーリスト更新時にエラーが発生しました。");
-		}
-	}
-
-	private List<object> GetCurrentTaskBarItems(TaskBarWindowEventArgs e)
+	private List<object> GetCurrentTaskBarItems()
 	{
 		var tasks = new List<object>();
 
-		if (_windowManager != null)
-		{
-			// WindowManagerから現在の全てのタスクリストを取得（重複を避けるため）
-			var allItems = new List<IconListBoxItem>();
-
-			// WindowManagerのTaskBarItemsから全ての現在のアイテムを取得
-			foreach (var taskBarItem in _windowManager.TaskBarItems)
-			{
-				allItems.Add(new IconListBoxItem
-				{
-					Handle = taskBarItem.Handle,
-					Icon = taskBarItem.ModuleFileName != null ? GetIcon(taskBarItem.ModuleFileName) : null,
-					Text = taskBarItem.Title,
-					IsForeground = taskBarItem.IsForeground,
-					ModuleFileName = taskBarItem.ModuleFileName,
-				});
-			}
-
-			// ソート
-			var sortedItems = _windowManager.SortItemsByOrder(allItems);
-
-			// WebView2用の形式に変換
-			foreach (var item in sortedItems)
-			{
-				var iconData = GetIconAsBase64(item.ModuleFileName);
-				tasks.Add(new
-				{
-					handle = item.Handle.ToString(),
-					text = item.Text,
-					isForeground = item.IsForeground,
-					moduleFileName = item.ModuleFileName,
-					iconData = iconData
-				});
-			}
-		}
+		// WindowManagerが削除されたため、JavaScript側でタスクバー管理を行う
+		// このメソッドは使用されなくなったが、互換性のため空のリストを返す
+		Logger.Info("GetCurrentTaskBarItems: WindowManager削除により空のリストを返します");
 
 		return tasks;
 	}
@@ -1006,7 +898,7 @@ public partial class MainWindow : Window
 	private void HandleMainWindowClosed(object? sender, EventArgs e)
 	{
 		// WebView2版では通知管理も変更
-		_windowManager?.Stop();
+		// WindowManager削除により不要
 		Logger.Close();
 	}
 
