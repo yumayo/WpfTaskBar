@@ -58,10 +58,7 @@ class WindowManager {
     // C#側にウィンドウハンドル一覧を要求
     async requestWindowHandles() {
         return new Promise((resolve, reject) => {
-            // タイムアウト設定
-            const timeout = setTimeout(() => {
-                reject(new Error('Window handles request timeout'));
-            }, 5000);
+            const timeout = setTimeout(() => reject(new Error('requestWindowHandles timeout')), 1000);
 
             // レスポンス受信用の一時的なリスナー
             const responseHandler = (event) => {
@@ -155,9 +152,7 @@ class WindowManager {
     // フォアグラウンドウィンドウの取得
     async requestForegroundWindow() {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve(null); // タイムアウト時はnullを返す
-            }, 1000);
+            const timeout = setTimeout(() => reject(new Error('requestForegroundWindow timeout')), 1000);
 
             const responseHandler = (event) => {
                 try {
@@ -176,7 +171,7 @@ class WindowManager {
                 } catch (error) {
                     clearTimeout(timeout);
                     window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve(null);
+                    reject(error);
                 }
             };
 
@@ -188,9 +183,7 @@ class WindowManager {
     // タスクバーウィンドウかどうかの判定
     async requestIsTaskBarWindow(windowHandle) {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve(false); // タイムアウト時はfalseを返す
-            }, 1000);
+            const timeout = setTimeout(() => reject(new Error('requestIsTaskBarWindow timeout')), 1000);
 
             const responseHandler = (event) => {
                 try {
@@ -201,8 +194,7 @@ class WindowManager {
                         data = event.data;
                     }
 
-                    if (data && data.type === 'is_taskbar_window_response' &&
-                        data.windowHandle === windowHandle) {
+                    if (data && data.type === 'is_taskbar_window_response' && data.windowHandle === windowHandle) {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
                         resolve(data.isTaskBarWindow);
@@ -210,7 +202,7 @@ class WindowManager {
                 } catch (error) {
                     clearTimeout(timeout);
                     window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve(false);
+                    reject(error);
                 }
             };
 
@@ -222,9 +214,7 @@ class WindowManager {
     // タスクバーアイテムの作成
     async createTaskBarItem(windowHandle, foregroundHwnd) {
         try {
-            // ウィンドウ情報をC#側から取得
             const windowInfo = await this.requestWindowInfo(windowHandle);
-            // console.log(`createTaskBarItem: ${windowInfo?.title}, iconData length: ${windowInfo?.iconData?.length || 0}`);
 
             return {
                 handle: windowHandle,
@@ -248,13 +238,7 @@ class WindowManager {
     // ウィンドウ情報の取得
     async requestWindowInfo(windowHandle) {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve({
-                    moduleFileName: '',
-                    title: '',
-                    iconData: null
-                });
-            }, 1000);
+            const timeout = setTimeout(() => reject(new Error('requestWindowInfo timeout')), 1000);
 
             const responseHandler = (event) => {
                 try {
@@ -278,11 +262,7 @@ class WindowManager {
                 } catch (error) {
                     clearTimeout(timeout);
                     window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve({
-                        moduleFileName: '',
-                        title: '',
-                        iconData: null
-                    });
+                    reject(error);
                 }
             };
 
@@ -333,9 +313,7 @@ class WindowManager {
     // 仮想デスクトップ判定の要求
     async requestIsWindowOnCurrentVirtualDesktop(windowHandle) {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve(true); // タイムアウト時はtrueを返す（安全側に倒す）
-            }, 1000);
+            const timeout = setTimeout(() => reject(new Error('requestIsWindowOnCurrentVirtualDesktop timeout')), 1000);
 
             const responseHandler = (event) => {
                 try {
@@ -355,7 +333,7 @@ class WindowManager {
                 } catch (error) {
                     clearTimeout(timeout);
                     window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve(true);
+                    reject(error);
                 }
             };
 
@@ -367,9 +345,7 @@ class WindowManager {
     // プロセスIDの要求
     async requestProcessId(windowHandle) {
         return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                resolve(windowHandle); // タイムアウト時はハンドル値を返す
-            }, 1000);
+            const timeout = setTimeout(() => reject(new Error('requestProcessId timeout')), 1000);
 
             const responseHandler = (event) => {
                 try {
@@ -389,7 +365,7 @@ class WindowManager {
                 } catch (error) {
                     clearTimeout(timeout);
                     window.chrome.webview.removeEventListener('message', responseHandler);
-                    resolve(windowHandle);
+                    reject(error);
                 }
             };
 
