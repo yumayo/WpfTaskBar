@@ -697,13 +697,6 @@
                     // タスクの順序を変更
                     reorderTasks(draggedHandle, dropTargetHandle, dropAbove);
 
-                    // C#側に順序変更を通知
-                    sendMessageToHost('task_reorder', {
-                        draggedHandle: draggedHandle,
-                        targetHandle: dropTargetHandle,
-                        dropAbove: dropAbove,
-                        newOrder: tasks.map(t => t.handle)
-                    });
                 }
             });
         }

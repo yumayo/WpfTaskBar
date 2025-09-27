@@ -171,9 +171,6 @@ public partial class MainWindow : Window
 							HandleNotificationClick(root);
 							break;
 
-						case "task_reorder":
-							HandleTaskReorder(root);
-							break;
 
 						case "exit_application":
 							Application.Current.Shutdown();
@@ -344,35 +341,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void HandleTaskReorder(JsonElement root)
-	{
-		try
-		{
-			if (root.TryGetProperty("data", out var dataElement) &&
-			    dataElement.TryGetProperty("newOrder", out var newOrderElement))
-			{
-				var newOrderHandles = new List<string>();
-				foreach (var item in newOrderElement.EnumerateArray())
-				{
-					var handleString = item.GetString();
-					if (!string.IsNullOrEmpty(handleString))
-					{
-						newOrderHandles.Add(handleString);
-					}
-				}
-
-				if (newOrderHandles.Count > 0)
-				{
-					// 順序管理はJavaScript側で行うため、ここでは単純にログ出力のみ
-					Logger.Info($"タスクバー順序更新要求を受信: {newOrderHandles.Count}件のハンドル");
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "タスク順序変更処理時にエラーが発生しました。");
-		}
-	}
 
 	// WindowManager用のNativeCallハンドラー群
 	private void HandleRequestWindowHandles()
