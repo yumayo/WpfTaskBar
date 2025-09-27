@@ -11,5 +11,5 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Title="MainWindow" Height="450" Width="800">
-    <wv2:WebView2 Name="webView" NavigationCompleted="WebView_NavigationCompleted" />
+    <wv2:WebView2 Name="webView" />
 </Window>

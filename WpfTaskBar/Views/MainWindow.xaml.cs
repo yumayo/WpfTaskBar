@@ -112,13 +112,6 @@ public partial class MainWindow : Window
 
 					switch (messageType)
 					{
-						case "webview_loaded":
-							Logger.Info("WebView2が正常に読み込まれました");
-							SendInitialData();
-							break;
-
-
-						// WindowManager関連のNativeCallsを追加
 						case "request_window_handles":
 							HandleRequestWindowHandles();
 							break;
@@ -192,33 +185,6 @@ public partial class MainWindow : Window
 			Logger.Error(ex, "WebView2メッセージ処理時にエラーが発生しました。");
 		}
 	}
-
-	private void SendInitialData()
-	{
-		try
-		{
-			// 初期化データを送信
-			var initData = new
-			{
-				type = "init",
-				message = "タスクバー初期化完了",
-				version = "2.0.0",
-				timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-			};
-			SendMessageToWebView(initData);
-
-
-			// 通知情報を送信
-			SendNotificationUpdate();
-
-			Logger.Info("初期データをWebView2に送信しました");
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "初期データ送信時にエラーが発生しました。");
-		}
-	}
-
 
 	private void SendNotificationUpdate()
 	{
@@ -732,43 +698,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
-	{
-		try
-		{
-			if (e.IsSuccess)
-			{
-				Logger.Info("WebView2のナビゲーションが完了しました。");
-
-				// 少し待ってからJavaScriptが準備完了するのを待つ
-				Task.Delay(500).ContinueWith(_ =>
-				{
-					Dispatcher.Invoke(() =>
-					{
-						// 初期データを送信
-						var initData = new
-						{
-							type = "init",
-							message = "C# MainWindowからの初期化メッセージ",
-							version = "1.0.0",
-							timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-						};
-						SendMessageToWebView(initData);
-						Logger.Info("初期データ送信完了");
-					});
-				});
-			}
-			else
-			{
-				Logger.Error(null, $"WebView2のナビゲーションに失敗しました: {e.WebErrorStatus}");
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "WebView2ナビゲーション完了処理時にエラーが発生しました。");
-		}
-	}
-
 	public void InitializeServices()
 	{
 		if (App.ServiceProvider == null)
@@ -835,8 +764,6 @@ public partial class MainWindow : Window
 			Logger.Error(ex, "通知表示時にエラーが発生しました。");
 		}
 	}
-
-	// WindowManagerOnWindowListChangedメソッドは削除 - JavaScript側で管理
 
 	// UpdateTaskBarListメソッドは削除 - JavaScript側で管理
 

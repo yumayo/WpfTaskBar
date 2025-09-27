@@ -7,28 +7,6 @@ class WindowManager {
         this.taskBarItems = [];
         this.isRunning = false;
         this.updateInterval = null;
-        this.listeners = new Map();
-
-        // イベントリスナー
-        this.windowListChangedListeners = [];
-    }
-
-    // イベントリスナーの追加
-    addEventListener(eventType, listener) {
-        if (eventType === 'windowListChanged') {
-            this.windowListChangedListeners.push(listener);
-        }
-    }
-
-    // イベントの発火
-    fireWindowListChanged(eventArgs) {
-        this.windowListChangedListeners.forEach(listener => {
-            try {
-                listener(this, eventArgs);
-            } catch (error) {
-                console.error('WindowListChanged listener error:', error);
-            }
-        });
     }
 
     // 開始
@@ -110,8 +88,7 @@ class WindowManager {
             // イベントリスナー追加
             window.chrome.webview.addEventListener('message', responseHandler);
 
-            // C#にリクエスト送信
-            this.sendMessageToHost('request_window_handles');
+            sendMessageToHost('request_window_handles');
         });
     }
 
@@ -174,19 +151,9 @@ class WindowManager {
                 removedTaskBarItems.push(removedItem);
             }
 
-            // デバッグログ出力
-            // for (const taskBarItem of addedTaskBarItems) {
-            //     console.log(`追加(${taskBarItem.handle.toString().padStart(10)}) ${taskBarItem.title}`);
-            // }
-
-            // for (const taskBarItem of removedTaskBarItems) {
-            //     console.log(`削除(${taskBarItem.handle.toString().padStart(10)}) ${taskBarItem.title}`);
-            // }
-
             // 全てのアイテムを更新（プロセス名などの最新情報を取得）
             for (const taskBarWindow of this.taskBarItems) {
                 const updatedItem = await this.createTaskBarItem(taskBarWindow.handle, foregroundHwnd);
-                // console.log(`更新アイテム: ${updatedItem.title}, iconData: ${!!updatedItem.iconData ? '有り' : '無し'}`);
                 updateTaskBarItems.push(updatedItem);
             }
 
@@ -201,8 +168,7 @@ class WindowManager {
                     addedTaskBarItems: sortedAddedTaskBarItems,
                     removedTaskBarItems: removedTaskBarItems
                 };
-
-                this.fireWindowListChanged(eventArgs);
+                updateTaskList(updateTaskBarItems);
             }
 
         } catch (error) {
@@ -239,7 +205,7 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_foreground_window');
+            sendMessageToHost('request_foreground_window');
         });
     }
 
@@ -273,7 +239,7 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_is_taskbar_window', { windowHandle: windowHandle });
+            sendMessageToHost('request_is_taskbar_window', { windowHandle: windowHandle });
         });
     }
 
@@ -345,23 +311,8 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_window_info', { windowHandle: windowHandle });
+            sendMessageToHost('request_window_info', { windowHandle: windowHandle });
         });
-    }
-
-    // C#との通信用メソッド
-    sendMessageToHost(type, data = null) {
-        if (window.chrome && window.chrome.webview) {
-            const message = {
-                type: type,
-                data: data,
-                timestamp: new Date().toISOString()
-            };
-            window.chrome.webview.postMessage(message);
-            // console.log(`→ C#に送信: ${type}`, data);
-        } else {
-            console.error('❌ WebView2 通信環境が利用できません');
-        }
     }
 
     // ウィンドウ数をプロセス別に取得
@@ -391,14 +342,14 @@ class WindowManager {
 
     // アプリケーション順序の更新
     updateApplicationOrder(orderedExecutablePaths) {
-        this.sendMessageToHost('update_application_order', {
+        sendMessageToHost('update_application_order', {
             orderedExecutablePaths: orderedExecutablePaths
         });
     }
 
     // ウィンドウ順序の更新
     updateWindowOrder(orderedWindows) {
-        this.sendMessageToHost('update_window_order', {
+        sendMessageToHost('update_window_order', {
             orderedWindows: orderedWindows
         });
     }
@@ -443,7 +394,7 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_is_window_on_current_virtual_desktop', { windowHandle: windowHandle });
+            sendMessageToHost('request_is_window_on_current_virtual_desktop', { windowHandle: windowHandle });
         });
     }
 
@@ -477,7 +428,7 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_process_id', { windowHandle: windowHandle });
+            sendMessageToHost('request_process_id', { windowHandle: windowHandle });
         });
     }
 
@@ -510,27 +461,10 @@ class WindowManager {
             };
 
             window.chrome.webview.addEventListener('message', responseHandler);
-            this.sendMessageToHost('request_sort_by_order', { items: items });
+            sendMessageToHost('request_sort_by_order', { items: items });
         });
     }
 }
 
-// グローバルインスタンス
-let windowManager = null;
-
-// WindowManagerのファクトリ関数
-function createWindowManager() {
-    if (!windowManager) {
-        windowManager = new WindowManager();
-    }
-    return windowManager;
-}
-
-// エクスポート（モジュール形式でない場合）
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { WindowManager, createWindowManager };
-} else {
-    // グローバルスコープに公開
-    window.WindowManager = WindowManager;
-    window.createWindowManager = createWindowManager;
-}
+const windowManager = new WindowManager();
+windowManager.start();
