@@ -248,9 +248,11 @@
 
     <!-- コンテキストメニュー -->
     <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="openDevTools()">開発者ツール</div>
         <div class="context-menu-item" onclick="exitApplication()">Exit</div>
     </div>
 
+    <script src="windowManager.js"></script>
     <script>
         // グローバル変数
         let tasks = [];
@@ -265,6 +267,8 @@
             isStartTimeMissing: false,
             isEndTimeMissingAfter19: false
         };
+
+        // WindowManagerインスタンス（windowManager.jsで宣言済み）
 
         // C#との通信用の関数
         function sendMessageToHost(type, data = null) {
@@ -341,19 +345,20 @@
                 img.style.width = '100%';
                 img.style.height = '100%';
                 icon.appendChild(img);
+                console.log('iconData exists')
             } else {
                 // デフォルトアイコン（プロセス名の最初の文字）
                 const processName = task.moduleFileName ?
                     task.moduleFileName.split('\\').pop().split('.')[0] :
-                    task.text.split(' ')[0];
+                    (task.title || 'Unknown').split(' ')[0];
                 icon.textContent = processName.charAt(0).toUpperCase();
             }
 
             // テキスト
             const text = document.createElement('div');
             text.className = 'task-text';
-            text.textContent = task.text;
-            text.title = task.text; // ツールチップ
+            text.textContent = task.title || 'Unknown';
+            text.title = task.title || 'Unknown'; // ツールチップ
 
             item.appendChild(icon);
             item.appendChild(text);
@@ -695,6 +700,11 @@
             sendMessageToHost('exit_application');
         }
 
+        // 開発者ツールを開く機能
+        function openDevTools() {
+            sendMessageToHost('open_dev_tools');
+        }
+
         // コンテキストメニューの制御
         document.addEventListener('contextmenu', (e) => {
             if (e.target.closest('.task-item')) {
@@ -756,8 +766,20 @@
                     case 'init':
                         console.log('初期化メッセージ受信:', data.message);
                         break;
+                    case 'window_handles_response':
+                        handleWindowHandlesResponse(data);
+                        break;
+                    case 'foreground_window_response':
+                        handleForegroundWindowResponse(data);
+                        break;
+                    case 'is_taskbar_window_response':
+                        handleIsTaskBarWindowResponse(data);
+                        break;
+                    case 'window_info_response':
+                        handleWindowInfoResponse(data);
+                        break;
                     default:
-                        console.log('未知のメッセージタイプ:', data.type);
+                        // console.log('未知のメッセージタイプ:', data.type);
                         break;
                 }
             });
@@ -771,10 +793,63 @@
         window.addEventListener('load', function() {
             setTimeout(() => {
                 if (window.chrome && window.chrome.webview) {
+                    // WindowManagerを初期化
+                    windowManager = createWindowManager();
+
+                    // WindowManagerのイベントリスナーを設定
+                    windowManager.addEventListener('windowListChanged', (sender, eventArgs) => {
+                        // タスクバー情報を更新（iconDataも含めて）
+                        // console.log('WindowListChanged イベント受信:', eventArgs.updateTaskBarItems.length, '個のアイテム');
+
+                        // iconDataが含まれているかチェック
+                        // eventArgs.updateTaskBarItems.forEach((item, index) => {
+                        //     console.log(`タスク${index}: ${item.title}, iconData: ${!!item.iconData}`);
+                        // });
+
+                        const allTasks = [...eventArgs.updateTaskBarItems];
+                        updateTaskList(allTasks);
+                    });
+
+                    // WindowManagerを開始
+                    windowManager.start();
+
                     sendMessageToHost('webview_loaded');
                 }
             }, 100);
         });
+
+        // C#からの応答メッセージ処理関数群
+        function handleWindowHandlesResponse(data) {
+            // console.log('ウィンドウハンドル一覧を受信:', data.windowHandles);
+            // windowManager.jsで使用されることを想定
+            if (window.windowManager && window.windowManager.handleWindowHandlesResponse) {
+                window.windowManager.handleWindowHandlesResponse(data.windowHandles);
+            }
+        }
+
+        function handleForegroundWindowResponse(data) {
+            // console.log('フォアグラウンドウィンドウを受信:', data.foregroundWindow);
+            // windowManager.jsで使用されることを想定
+            if (window.windowManager && window.windowManager.handleForegroundWindowResponse) {
+                window.windowManager.handleForegroundWindowResponse(data.foregroundWindow);
+            }
+        }
+
+        function handleIsTaskBarWindowResponse(data) {
+            // console.log('タスクバーウィンドウ判定結果を受信:', data.windowHandle, data.isTaskBarWindow);
+            // windowManager.jsで使用されることを想定
+            if (window.windowManager && window.windowManager.handleIsTaskBarWindowResponse) {
+                window.windowManager.handleIsTaskBarWindowResponse(data.windowHandle, data.isTaskBarWindow);
+            }
+        }
+
+        function handleWindowInfoResponse(data) {
+            // console.log('ウィンドウ情報を受信:', data.windowHandle, data.moduleFileName, data.title, 'iconData:', !!data.iconData);
+            // windowManager.jsで使用されることを想定
+            if (window.windowManager && window.windowManager.handleWindowInfoResponse) {
+                window.windowManager.handleWindowInfoResponse(data.windowHandle, data.moduleFileName, data.title, data.iconData);
+            }
+        }
 
         // 定期的にデータを更新
         setInterval(() => {

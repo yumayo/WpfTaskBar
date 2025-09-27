@@ -125,6 +125,43 @@ public partial class MainWindow : Window
 							SendDateTimeUpdate();
 							break;
 
+						// WindowManager関連のNativeCallsを追加
+						case "request_window_handles":
+							HandleRequestWindowHandles();
+							break;
+
+						case "request_foreground_window":
+							HandleRequestForegroundWindow();
+							break;
+
+						case "request_is_taskbar_window":
+							HandleRequestIsTaskBarWindow(root);
+							break;
+
+						case "request_window_info":
+							HandleRequestWindowInfo(root);
+							break;
+
+						case "request_is_window_on_current_virtual_desktop":
+							HandleRequestIsWindowOnCurrentVirtualDesktop(root);
+							break;
+
+						case "request_process_id":
+							HandleRequestProcessId(root);
+							break;
+
+						case "request_sort_by_order":
+							HandleRequestSortByOrder(root);
+							break;
+
+						case "update_application_order":
+							HandleUpdateApplicationOrder(root);
+							break;
+
+						case "update_window_order":
+							HandleUpdateWindowOrder(root);
+							break;
+
 						case "task_click":
 							HandleTaskClick(root);
 							break;
@@ -147,6 +184,10 @@ public partial class MainWindow : Window
 
 						case "exit_application":
 							Application.Current.Shutdown();
+							break;
+
+						case "open_dev_tools":
+							HandleOpenDevTools();
 							break;
 
 						default:
@@ -413,6 +454,365 @@ public partial class MainWindow : Window
 		}
 	}
 
+	// WindowManager用のNativeCallハンドラー群
+	private void HandleRequestWindowHandles()
+	{
+		try
+		{
+			var windowHandles = new List<string>();
+			NativeMethods.EnumWindows((hwnd, lParam) =>
+			{
+				windowHandles.Add(hwnd.ToString());
+				return true;
+			}, 0);
+
+			var response = new
+			{
+				type = "window_handles_response",
+				windowHandles = windowHandles
+			};
+
+			SendMessageToWebView(response);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ウィンドウハンドル取得時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestForegroundWindow()
+	{
+		try
+		{
+			var foregroundWindow = NativeMethods.GetForegroundWindow();
+			var response = new
+			{
+				type = "foreground_window_response",
+				foregroundWindow = foregroundWindow.ToString()
+			};
+
+			SendMessageToWebView(response);
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "フォアグラウンドウィンドウ取得時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestIsTaskBarWindow(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("windowHandle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var hwnd))
+				{
+					var isTaskBarWindow = NativeMethodUtility.IsTaskBarWindow(hwnd);
+
+					// 現在の仮想デスクトップにあるウィンドウのみを対象とする
+					if (isTaskBarWindow && !VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd))
+					{
+						isTaskBarWindow = false;
+					}
+
+					var response = new
+					{
+						type = "is_taskbar_window_response",
+						windowHandle = handleString,
+						isTaskBarWindow = isTaskBarWindow
+					};
+
+					SendMessageToWebView(response);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "タスクバーウィンドウ判定時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestWindowInfo(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("windowHandle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var hwnd))
+				{
+					var processName = UwpUtility.GetProcessName(hwnd) ?? "";
+					var title = WindowManager.GetWindowText(hwnd);
+					var iconData = GetIconAsBase64(processName);
+
+					Logger.Info($"ウィンドウ情報取得: {title}, プロセス: {processName}, アイコンデータ: {(iconData != null ? iconData.Length.ToString() : "null")}文字");
+
+					var response = new
+					{
+						type = "window_info_response",
+						windowHandle = handleString,
+						moduleFileName = processName,
+						title = title,
+						iconData = iconData
+					};
+
+					SendMessageToWebView(response);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ウィンドウ情報取得時にエラーが発生しました。");
+		}
+	}
+
+	private string? GetIconAsBase64(string? moduleFileName)
+	{
+		if (string.IsNullOrEmpty(moduleFileName))
+		{
+			Logger.Info($"GetIconAsBase64: moduleFileNameが空のため null を返します");
+			return null;
+		}
+
+		try
+		{
+			Logger.Info($"GetIconAsBase64: アイコン取得開始 {moduleFileName}");
+			var icon = GetIcon(moduleFileName);
+			if (icon == null)
+			{
+				Logger.Info($"GetIconAsBase64: アイコン取得失敗 {moduleFileName}");
+				return null;
+			}
+
+			// BitmapSourceをBase64に変換
+			var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+			encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(icon));
+
+			using var stream = new System.IO.MemoryStream();
+			encoder.Save(stream);
+			var base64String = Convert.ToBase64String(stream.ToArray());
+			Logger.Info($"GetIconAsBase64: Base64変換成功 {moduleFileName} ({base64String.Length}文字)");
+			return base64String;
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, $"アイコンの変換に失敗しました: {moduleFileName}");
+			return null;
+		}
+	}
+
+	public static BitmapSource? GetIcon(string iconFilePath)
+	{
+		try
+		{
+			System.Drawing.Icon? icon;
+			if (iconFilePath.ToUpper().EndsWith("EXE"))
+			{
+				icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
+			}
+			else
+			{
+				icon = IconUtility.ConvertPngToIcon(iconFilePath);
+			}
+			return icon != null ? GetIcon(icon) : null;
+		}
+		catch (System.ComponentModel.Win32Exception ex)
+		{
+			if (ex.Message.Contains("アクセスが拒否されました"))
+			{
+				return null;
+			}
+			throw;
+		}
+		catch (Exception e)
+		{
+			Console.WriteLine(e);
+			return null;
+		}
+	}
+
+	public static BitmapSource? GetIcon(System.Drawing.Icon icon)
+	{
+		using (var bitmap = icon.ToBitmap())
+		{
+			var hBitmap = bitmap.GetHbitmap();
+			try
+			{
+				var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+				bitmapSource.Freeze();
+				return bitmapSource;
+			}
+			finally
+			{
+				NativeMethods.DeleteObject(hBitmap);
+			}
+		}
+	}
+
+	private void HandleUpdateApplicationOrder(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("orderedExecutablePaths", out var pathsElement))
+			{
+				var orderedPaths = pathsElement.EnumerateArray()
+					.Select(item => item.GetString() ?? "")
+					.Where(path => !string.IsNullOrEmpty(path))
+					.ToList();
+
+				_windowManager?.UpdateApplicationOrder(orderedPaths);
+				Logger.Info($"アプリケーション順序を更新しました: {orderedPaths.Count}個");
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "アプリケーション順序更新時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestIsWindowOnCurrentVirtualDesktop(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("windowHandle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var hwnd))
+				{
+					var isOnCurrentVirtualDesktop = VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd);
+
+					var response = new
+					{
+						type = "is_window_on_current_virtual_desktop_response",
+						windowHandle = handleString,
+						isOnCurrentVirtualDesktop = isOnCurrentVirtualDesktop
+					};
+
+					SendMessageToWebView(response);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "仮想デスクトップ判定時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestProcessId(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("windowHandle", out var handleElement))
+			{
+				var handleString = handleElement.GetString();
+				if (IntPtr.TryParse(handleString, out var hwnd))
+				{
+					var processId = UwpUtility.GetProcessId(hwnd);
+
+					var response = new
+					{
+						type = "process_id_response",
+						windowHandle = handleString,
+						processId = processId.ToString()
+					};
+
+					SendMessageToWebView(response);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "プロセスID取得時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleRequestSortByOrder(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("items", out var itemsElement))
+			{
+				var items = new List<TaskBarItem>();
+				foreach (var itemElement in itemsElement.EnumerateArray())
+				{
+					if (itemElement.TryGetProperty("handle", out var handleProp) &&
+					    itemElement.TryGetProperty("moduleFileName", out var moduleFileNameProp) &&
+					    itemElement.TryGetProperty("title", out var titleProp) &&
+					    itemElement.TryGetProperty("isForeground", out var isForegroundProp))
+					{
+						var handleString = handleProp.GetString() ?? "";
+						if (IntPtr.TryParse(handleString, out var handle))
+						{
+							items.Add(new TaskBarItem
+							{
+								Handle = handle,
+								ModuleFileName = moduleFileNameProp.GetString() ?? "",
+								Title = titleProp.GetString() ?? "",
+								IsForeground = isForegroundProp.GetBoolean()
+							});
+						}
+					}
+				}
+
+				var sortedItems = _windowManager?.SortItemsByOrder(items) ?? items;
+
+				var response = new
+				{
+					type = "sort_by_order_response",
+					sortedItems = sortedItems.Select(item => new
+					{
+						handle = item.Handle.ToString(),
+						moduleFileName = item.ModuleFileName,
+						title = item.Title,
+						isForeground = item.IsForeground
+					}).ToArray()
+				};
+
+				SendMessageToWebView(response);
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ソート処理時にエラーが発生しました。");
+		}
+	}
+
+	private void HandleUpdateWindowOrder(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("data", out var dataElement) &&
+			    dataElement.TryGetProperty("orderedWindows", out var windowsElement))
+			{
+				var orderedWindows = new List<(string Handle, string ModuleFileName)>();
+
+				foreach (var windowElement in windowsElement.EnumerateArray())
+				{
+					if (windowElement.TryGetProperty("handle", out var handleProp) &&
+					    windowElement.TryGetProperty("moduleFileName", out var moduleFileNameProp))
+					{
+						var handle = handleProp.GetString() ?? "";
+						var moduleFileName = moduleFileNameProp.GetString() ?? "";
+						orderedWindows.Add((handle, moduleFileName));
+					}
+				}
+
+				_windowManager?.UpdateWindowOrder(orderedWindows);
+				Logger.Info($"ウィンドウ順序を更新しました: {orderedWindows.Count}個");
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "ウィンドウ順序更新時にエラーが発生しました。");
+		}
+	}
 
 	private void SendMessageToWebView(object data)
 	{
@@ -489,21 +889,18 @@ public partial class MainWindow : Window
 		try
 		{
 			Logger.Info("Starting MainWindow service initialization");
-			
+
 			// DIコンテナからサービスを取得
 			_windowManager = App.ServiceProvider.GetRequiredService<WindowManager>();
 			_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
 			_tabManager = App.ServiceProvider.GetRequiredService<ChromeTabManager>();
-			
+
 			Logger.Info("Services obtained from DI container");
-			
-			// WindowManagerの初期化
-			_windowManager.WindowListChanged += WindowManagerOnWindowListChanged;
-			Logger.Info("WindowManager event handler attached");
-			
-			_windowManager.Start();
-			Logger.Info("WindowManager started");
-			
+
+			// WindowManagerの初期化（Web版では自動起動しない）
+			// C#のWindowManagerはNativeCallsのみで、WebView2のJavaScript側WindowManagerが主導権を持つ
+			Logger.Info("WindowManager initialized for WebView2 native calls only");
+
 			Logger.Info("MainWindow services initialized successfully from DI container");
 		}
 		catch (Exception ex)
@@ -635,32 +1032,6 @@ public partial class MainWindow : Window
 		return tasks;
 	}
 
-	private string? GetIconAsBase64(string? moduleFileName)
-	{
-		if (string.IsNullOrEmpty(moduleFileName))
-			return null;
-
-		try
-		{
-			var icon = GetIcon(moduleFileName);
-			if (icon == null)
-				return null;
-
-			// BitmapSourceをBase64に変換
-			var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-			encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(icon));
-
-			using var stream = new System.IO.MemoryStream();
-			encoder.Save(stream);
-			return Convert.ToBase64String(stream.ToArray());
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, $"アイコンの変換に失敗しました: {moduleFileName}");
-			return null;
-		}
-	}
-
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
 		try
@@ -694,54 +1065,6 @@ public partial class MainWindow : Window
 				Logger.Error(ex, "通知表示の更新中にエラーが発生しました。");
 			}
 		});
-	}
-
-	public static BitmapSource? GetIcon(string iconFilePath)
-	{
-		try
-		{
-			System.Drawing.Icon? icon;
-			if (iconFilePath.ToUpper().EndsWith("EXE"))
-			{
-				icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
-			}
-			else
-			{
-				icon = IconUtility.ConvertPngToIcon(iconFilePath);
-			}
-			return icon != null ? GetIcon(icon) : null;
-		}
-		catch (System.ComponentModel.Win32Exception ex)
-		{
-			if (ex.Message.Contains("アクセスが拒否されました"))
-			{
-				return null;
-			}
-			throw;
-		}
-		catch (Exception e)
-		{
-			Console.WriteLine(e);
-			return null;
-		}
-	}
-
-	public static BitmapSource? GetIcon(System.Drawing.Icon icon)
-	{
-		using (var bitmap = icon.ToBitmap())
-		{
-			var hBitmap = bitmap.GetHbitmap();
-			try
-			{
-				var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-				bitmapSource.Freeze();
-				return bitmapSource;
-			}
-			finally
-			{
-				NativeMethods.DeleteObject(hBitmap);
-			}
-		}
 	}
 
 	// WebView2版では従来のListBoxイベントハンドラーは不要
@@ -820,6 +1143,26 @@ public partial class MainWindow : Window
 	private void HandleExitMenuItemClick(object sender, RoutedEventArgs e)
 	{
 		Application.Current.Shutdown();
+	}
+
+	private void HandleOpenDevTools()
+	{
+		try
+		{
+			if (webView?.CoreWebView2 != null)
+			{
+				webView.CoreWebView2.OpenDevToolsWindow();
+				Logger.Info("開発者ツールを開きました");
+			}
+			else
+			{
+				Logger.Warning("WebView2が初期化されていないため、開発者ツールを開けませんでした");
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.Error(ex, "開発者ツールを開く際にエラーが発生しました");
+		}
 	}
 
 	private void SaveCurrentOrder()
