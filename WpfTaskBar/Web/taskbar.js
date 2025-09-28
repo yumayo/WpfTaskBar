@@ -90,6 +90,18 @@ function createTaskItem(task) {
         if (item.classList.contains('dragging')) {
             return;
         }
+        
+        // 全てのタスクアイテムから foreground クラスを削除
+        document.querySelectorAll('.task-item').forEach(taskItem => {
+            taskItem.classList.remove('foreground');
+        });
+        
+        // クリックされたアイテムに foreground クラスを追加
+        item.classList.add('foreground');
+
+        // NOTE: あえて dataset.isForegroundは設定してません。なぜなら非同期でタスク一覧が更新されているため、クリックした後に一瞬戻ってしまうからです。
+        //       ここでisForegroundを設定しないことで、早期リターンで描画は更新されないようになっています。
+        
         sendMessageToHost('task_click', {
             handle: task.handle,
             moduleFileName: task.moduleFileName
