@@ -242,6 +242,9 @@ function reorderTasks(draggedHandle, targetHandle, dropAbove) {
 
     // UIを更新
     updateTaskListOrder();
+
+    window.applicationOrder.updateOrderFromList(tasks.map(task => task.moduleFileName))
+    window.applicationOrder.updateWindowOrder(tasks.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName })))
 }
 
 // 同種アプリケーションの一括移動
