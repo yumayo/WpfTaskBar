@@ -97,3 +97,33 @@ updateDateTime();
 
 // 定期的に時刻情報を更新
 setInterval(() => updateDateTime(), 100);
+
+window.chrome?.webview?.addEventListener('message', function(event) {
+    let data;
+
+    if (typeof event.data === 'string') {
+        data = JSON.parse(event.data);
+    } else {
+        data = event.data;
+    }
+
+    if (!data) {
+        return;
+    }
+    
+    if (data.type === 'clock_in_update') {
+        console.log('clock_in_update');
+        timeRecord.clockInDate = new Date(data.date);
+    }
+
+    if (data.type === 'clock_out_update') {
+        console.log('clock_out_update');
+        timeRecord.clockOutDate = new Date(data.date);
+    }
+
+    if (data.type === 'clock_clear') {
+        console.log('clock_clear');
+        timeRecord.clockInDate = null;
+        timeRecord.clockOutDate = null;
+    }
+});

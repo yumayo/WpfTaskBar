@@ -2,7 +2,9 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Collections.Specialized;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Window = System.Windows.Window;
 
 namespace WpfTaskBar;
@@ -12,6 +14,7 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class MainWindow : Window
 {
+	private IHost? _host;
 	private WebSocketHandler? _webSocketHandler;
 	private ChromeTabManager? _tabManager;
 	private WebView2? _webView2;
@@ -53,7 +56,13 @@ public partial class MainWindow : Window
 		// まずサービスを初期化
 		Logger.Info("MainWindow loaded, initializing services...");
 		InitializeServices();
+		
+		// タスクバーの領域を確保する。
+		SetTaskBarRect();
+	}
 
+	private void SetTaskBarRect()
+	{
 		int height = (int)SystemParameters.PrimaryScreenHeight;
 		int width = (int)SystemParameters.PrimaryScreenWidth;
 
@@ -94,38 +103,34 @@ public partial class MainWindow : Window
 
 	public void InitializeServices()
 	{
-		if (App.ServiceProvider == null)
+		Logger.Info("Starting MainWindow service initialization");
+
+		Logger.Info("Starting REST API server...");
+		
+		var builder = Host.CreateDefaultBuilder();
+		builder.ConfigureWebHostDefaults(webBuilder =>
 		{
-			Logger.Info("ServiceProvider not yet available, services will be initialized later");
-			return;
-		}
+			webBuilder.UseUrls("http://0.0.0.0:5000");
+			webBuilder.UseStartup<Startup>();
+		});
+		
+		_host = builder.Build();
+		_host.StartAsync();
+		Logger.Info("REST API server started");
 
-		try
-		{
-			Logger.Info("Starting MainWindow service initialization");
+		// DIコンテナからサービスを取得
+		_webSocketHandler = _host.Services.GetRequiredService<WebSocketHandler>();
+		_tabManager = _host.Services.GetRequiredService<ChromeTabManager>();
+		_webView2 = _host.Services.GetRequiredService<WebView2>();
 
-			// DIコンテナからサービスを取得
-			_webSocketHandler = App.ServiceProvider.GetRequiredService<WebSocketHandler>();
-			_tabManager = App.ServiceProvider.GetRequiredService<ChromeTabManager>();
+		_webView2.Initialize(App.Current.Dispatcher, webView);
 
-			Logger.Info("Services obtained from DI container");
+		Logger.Info("Services obtained from DI container");
 
-			_webView2 = new WebView2(webView);
-
-			Application.Current.Dispatcher.Invoke(async () =>
-			{
-				await _webView2.Initialize();
-			});
-			
-			// 通知リストのイベントハンドラーを設定
-			NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
-			
-			Logger.Info("MainWindow services initialized successfully from DI container");
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "Failed to initialize services from DI container");
-		}
+		// 通知リストのイベントハンドラーを設定
+		NotificationModel.Notifications.CollectionChanged += OnNotificationsChanged;
+		
+		Logger.Info("MainWindow services initialized successfully from DI container");
 	}
 
 	public void ShowNotification(NotificationData notification)
@@ -166,8 +171,14 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void MainWindow_OnClosed(object? sender, EventArgs e)
+	private async void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
+		if (_host != null)
+		{
+			await _host.StopAsync();
+			_host.Dispose();
+		}
+		
 		Logger.Close();
 	}
 

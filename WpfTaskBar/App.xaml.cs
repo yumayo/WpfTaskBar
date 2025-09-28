@@ -10,10 +10,7 @@ namespace WpfTaskBar;
 /// </summary>
 public partial class App
 {
-	private IHost? _host;
-	public static IServiceProvider? ServiceProvider { get; private set; }
-
-	protected override async void OnStartup(StartupEventArgs e)
+	protected override void OnStartup(StartupEventArgs e)
 	{
 		ConsoleManager.Setup();
 
@@ -26,44 +23,6 @@ public partial class App
 
 		base.OnStartup(e);
 		Logger.Info("WPF base.OnStartup completed");
-
-		// REST APIサーバーを起動
-		Logger.Info("Starting REST API server...");
-		_host = CreateHostBuilder(e.Args).Build();
-		await _host.StartAsync();
-		Logger.Info("REST API server started");
-
-		// 静的ServiceProviderを設定
-		ServiceProvider = _host.Services;
-		Logger.Info("Static ServiceProvider set");
-
-		Logger.Info("Application startup completed - MainWindow services will be initialized when MainWindow is loaded");
-	}
-
-	protected override async void OnExit(ExitEventArgs e)
-	{
-		// REST APIサーバーを停止
-		if (_host != null)
-		{
-			await _host.StopAsync();
-			_host.Dispose();
-		}
-
-		// 静的ServiceProviderをクリア
-		ServiceProvider = null;
-
-		base.OnExit(e);
-	}
-
-	private static IHostBuilder CreateHostBuilder(string[] args)
-	{
-		var builder = Host.CreateDefaultBuilder(args);
-		builder.ConfigureWebHostDefaults(webBuilder =>
-		{
-			webBuilder.UseUrls("http://0.0.0.0:5000");
-			webBuilder.UseStartup<Startup>();
-		});
-		return builder;
 	}
 
 	private void SetupGlobalExceptionHandlers()

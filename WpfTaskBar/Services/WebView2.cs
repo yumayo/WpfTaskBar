@@ -4,21 +4,21 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 
 namespace WpfTaskBar
 {
 	public class WebView2
 	{
-		private readonly Microsoft.Web.WebView2.Wpf.WebView2 _webView2;
+		private Dispatcher _dispatcher;
+		private Microsoft.Web.WebView2.Wpf.WebView2 _webView2;
 
-		public WebView2(Microsoft.Web.WebView2.Wpf.WebView2 webView2)
+		public async Task Initialize(Dispatcher dispatcher, Microsoft.Web.WebView2.Wpf.WebView2 webView2)
 		{
+			_dispatcher = dispatcher;
 			_webView2 = webView2;
-		}
 
-		public async Task Initialize()
-		{
 			try
 			{
 				// WebView2環境を初期化
@@ -46,28 +46,25 @@ namespace WpfTaskBar
 
 		public void SendMessageToWebView(object data)
 		{
-			try
+			_dispatcher.Invoke(() =>
 			{
 				if (_webView2.CoreWebView2 != null)
 				{
-					var json = JsonSerializer.Serialize(data,
-						new JsonSerializerOptions
-						{
-							PropertyNamingPolicy = null, // CamelCaseを削除
-							WriteIndented = false
-						});
+					var options = new JsonSerializerOptions
+					{
+						PropertyNamingPolicy = null, // CamelCaseを削除
+						WriteIndented = false
+					};
 
-					_webView2!.CoreWebView2.PostWebMessageAsString(json);
+					var json = JsonSerializer.Serialize(data, options);
+
+					_webView2.CoreWebView2.PostWebMessageAsString(json);
 				}
 				else
 				{
 					Logger.Error(null, "WebView2が初期化されていません。メッセージ送信をスキップします。");
 				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "WebView2へのメッセージ送信時にエラーが発生しました。");
-			}
+			});
 		}
 
 		private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -95,8 +92,6 @@ namespace WpfTaskBar
 					Logger.Error(ex, "メッセージの取得に失敗しました");
 					return;
 				}
-
-				Logger.Info($"WebView2からメッセージ受信: {messageJson}");
 
 				if (!string.IsNullOrEmpty(messageJson))
 				{
@@ -354,8 +349,6 @@ namespace WpfTaskBar
 						var title = sb.ToString();
 						var iconData = GetIconAsBase64(processName);
 
-						Logger.Info($"ウィンドウ情報取得: {title}, プロセス: {processName}, アイコンデータ: {(iconData != null ? iconData.Length.ToString() : "null")}文字");
-
 						var response = new
 						{
 							type = "window_info_response",
@@ -379,13 +372,11 @@ namespace WpfTaskBar
 		{
 			if (string.IsNullOrEmpty(moduleFileName))
 			{
-				Logger.Info($"GetIconAsBase64: moduleFileNameが空のため null を返します");
 				return null;
 			}
 
 			try
 			{
-				Logger.Info($"GetIconAsBase64: アイコン取得開始 {moduleFileName}");
 				var icon = GetIcon(moduleFileName);
 				if (icon == null)
 				{
@@ -400,7 +391,6 @@ namespace WpfTaskBar
 				using var stream = new MemoryStream();
 				encoder.Save(stream);
 				var base64String = Convert.ToBase64String(stream.ToArray());
-				Logger.Info($"GetIconAsBase64: Base64変換成功 {moduleFileName} ({base64String.Length}文字)");
 				return base64String;
 			}
 			catch (Exception ex)
@@ -564,7 +554,6 @@ namespace WpfTaskBar
 						filename,
 						success = true
 					});
-					Logger.Info($"ファイル書き込み成功: {filename}");
 				}
 			}
 			catch (Exception ex)
@@ -627,7 +616,6 @@ namespace WpfTaskBar
 						success = true,
 						data
 					});
-					Logger.Info($"ファイル読み込み成功: {filename}");
 				}
 			}
 			catch (Exception ex)
