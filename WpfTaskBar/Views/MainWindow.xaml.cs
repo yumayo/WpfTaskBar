@@ -28,27 +28,18 @@ public partial class MainWindow : Window
 
 	private void SendNotificationUpdate()
 	{
-		try
+		_webView2!.SendMessageToWebView(new
 		{
-			var notificationData = new
+			type = "notification_update",
+			notifications = NotificationModel.Notifications.Select(n => new
 			{
-				type = "notification_update",
-				notifications = NotificationModel.Notifications.Select(n => new
-				{
-					id = n.Id.ToString(),
-					title = n.Title,
-					message = n.Message,
-					timestamp = n.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss"),
-					windowHandle = IntPtr.Zero // 必要に応じて設定
-				}).ToArray()
-			};
-
-			_webView2!.SendMessageToWebView(notificationData);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "通知更新送信時にエラーが発生しました。");
-		}
+				id = n.Id.ToString(),
+				title = n.Title,
+				message = n.Message,
+				timestamp = n.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss"),
+				windowHandle = 0
+			}).ToArray()
+		});
 	}
 
 	private void Window_Loaded(object sender, RoutedEventArgs e)

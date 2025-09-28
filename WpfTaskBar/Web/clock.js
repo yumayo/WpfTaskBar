@@ -112,17 +112,14 @@ window.chrome?.webview?.addEventListener('message', function(event) {
     }
     
     if (data.type === 'clock_in_update') {
-        console.log('clock_in_update');
         timeRecord.clockInDate = new Date(data.date);
     }
 
     if (data.type === 'clock_out_update') {
-        console.log('clock_out_update');
         timeRecord.clockOutDate = new Date(data.date);
     }
 
     if (data.type === 'clock_clear') {
-        console.log('clock_clear');
         timeRecord.clockInDate = null;
         timeRecord.clockOutDate = null;
     }

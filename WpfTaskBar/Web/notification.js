@@ -63,8 +63,13 @@ window.chrome?.webview?.addEventListener('message', function(event) {
     } else {
         data = event.data;
     }
+    
+    if (!data) {
+        return;
+    }
 
-    if (data && data.type === 'notification_update') {
+    if (data.type === 'notification_update') {
+        console.log('notification_update');
         updateNotifications(data.notifications);
     }
 });
