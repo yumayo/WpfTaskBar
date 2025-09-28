@@ -160,6 +160,13 @@ public partial class MainWindow : Window
 							HandleNotificationClick(root);
 							break;
 
+						case "file_write_request":
+							HandleFileWriteRequest(root);
+							break;
+
+						case "file_read_request":
+							HandleFileReadRequest(root);
+							break;
 
 						case "exit_application":
 							Application.Current.Shutdown();
@@ -860,5 +867,152 @@ public partial class MainWindow : Window
 		Logger.Info("順序保存処理 - WebView2版では未実装");
 	}
 
-	// WebView2版では通知クリックもWebView2経由で処理
+
+	private bool IsValidFilename(string filename)
+	{
+		if (string.IsNullOrWhiteSpace(filename))
+		{
+			return false;
+		}
+
+		// パストラバーサル攻撃の防止
+		if (filename.Contains(".."))
+		{
+			return false;
+		}
+
+		// 無効な文字をチェック
+		var invalidChars = Path.GetInvalidFileNameChars();
+		if (filename.Any(c => invalidChars.Contains(c)))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	private void HandleFileWriteRequest(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("filename", out var filenameElement) &&
+			    root.TryGetProperty("data", out var dataElement))
+			{
+				var filename = filenameElement.GetString();
+				var data = dataElement.GetString();
+
+				// ファイル名の安全性をチェック
+				if (!IsValidFilename(filename))
+				{
+					SendMessageToWebView(new
+					{
+						type = "file_write_response",
+						filename = filename,
+						success = false,
+						error = "Invalid filename"
+					});
+					Logger.Warning($"ファイル書き込み拒否: 無効なファイル名 {filename}");
+					return;
+				}
+
+				var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+				var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
+				Directory.CreateDirectory(appFolder);
+				var filePath = Path.Combine(appFolder, filename);
+
+				File.WriteAllText(filePath, data);
+
+				SendMessageToWebView(new
+				{
+					type = "file_write_response",
+					filename = filename,
+					success = true
+				});
+				Logger.Info($"ファイル書き込み成功: {filename}");
+			}
+		}
+		catch (Exception ex)
+		{
+			var filename = "";
+			if (root.TryGetProperty("filename", out var filenameElement))
+			{
+				filename = filenameElement.GetString() ?? "";
+			}
+
+			var response = new
+			{
+				type = "file_write_response",
+				filename = filename,
+				success = false,
+				error = ex.Message
+			};
+
+			SendMessageToWebView(response);
+			Logger.Error(ex, $"ファイル書き込み時にエラーが発生しました: {filename}");
+		}
+	}
+
+	private void HandleFileReadRequest(JsonElement root)
+	{
+		try
+		{
+			if (root.TryGetProperty("filename", out var filenameElement))
+			{
+				var filename = filenameElement.GetString();
+				
+				if (!IsValidFilename(filename))
+				{
+					SendMessageToWebView(new
+					{
+						type = "file_read_response",
+						filename = filename,
+						success = false,
+						error = "Invalid filename",
+						data = ""
+					});
+					Logger.Warning($"ファイル読み込み拒否: 無効なファイル名 {filename}");
+					return;
+				}
+
+				var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+				var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
+				var filePath = Path.Combine(appFolder, filename);
+
+				string data = "";
+				if (File.Exists(filePath))
+				{
+					data = File.ReadAllText(filePath);
+				}
+
+				SendMessageToWebView(new
+				{
+					type = "file_read_response",
+					filename = filename,
+					success = true,
+					data = data
+				});
+				Logger.Info($"ファイル読み込み成功: {filename}");
+			}
+		}
+		catch (Exception ex)
+		{
+			var filename = "";
+			if (root.TryGetProperty("filename", out var filenameElement))
+			{
+				filename = filenameElement.GetString() ?? "";
+			}
+
+			var response = new
+			{
+				type = "file_read_response",
+				filename = filename,
+				success = false,
+				error = ex.Message,
+				data = ""
+			};
+
+			SendMessageToWebView(response);
+			Logger.Error(ex, $"ファイル読み込み時にエラーが発生しました: {filename}");
+		}
+	}
 }

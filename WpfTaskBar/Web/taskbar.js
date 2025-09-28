@@ -1,11 +1,10 @@
-// グローバル変数
 let tasks = [];
 let draggedTask = null;
 let draggedElement = null;
 
 // タスクリストの更新
-function updateTaskList(taskData) {
-    const newTasks = taskData || [];
+function updateTaskList(newTasks) {
+    newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => task.handle)
 
     // 変更がない場合は処理をスキップ
     if (areTasksEqual(tasks, newTasks)) {
@@ -13,6 +12,7 @@ function updateTaskList(taskData) {
     }
 
     tasks = newTasks;
+
     const taskList = document.getElementById('taskList');
 
     // 既存のタスクアイテムをクリア
