@@ -23,6 +23,7 @@ function updateNotifications(notificationData) {
 function createNotificationItem(notification) {
     const item = document.createElement('div');
     item.className = 'notification-item';
+    item.style.userSelect = 'none';
 
     const title = document.createElement('div');
     title.className = 'notification-title';
@@ -43,6 +44,15 @@ function createNotificationItem(notification) {
 
     item.appendChild(title);
     item.appendChild(message);
+
+    // マウスイベント
+    item.addEventListener('mouseenter', () => {
+        item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+    });
+
+    item.addEventListener('mouseleave', () => {
+        item.style.backgroundColor = '';
+    });
 
     // クリックイベント
     item.addEventListener('click', () => {
