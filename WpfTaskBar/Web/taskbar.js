@@ -121,6 +121,63 @@ function createTaskItem(task) {
     return item;
 }
 
+// アプリケーショングループの開始・終了インデックスを取得
+function getApplicationGroupRange(targetModuleName) {
+    let startIndex = -1;
+    let endIndex = -1;
+
+    for (let i = 0; i < tasks.length; i++) {
+        if (tasks[i].moduleFileName === targetModuleName) {
+            if (startIndex === -1) {
+                startIndex = i;
+            }
+            endIndex = i;
+        }
+    }
+
+    return { startIndex, endIndex };
+}
+
+// アプリケーショングループ全体でのマウス位置判定
+function isDropAboveApplicationGroup(targetModuleName, mouseY) {
+
+    const { firstElement, lastElement } = getItems(targetModuleName)
+
+    if (!firstElement || !lastElement) {
+        return null;
+    }
+
+    // グループ全体の境界を計算
+    const firstRect = firstElement.getBoundingClientRect();
+    const lastRect = lastElement.getBoundingClientRect();
+
+    const groupTop = firstRect.top;
+    const groupBottom = lastRect.bottom;
+    const groupCenter = groupTop + (groupBottom - groupTop) / 2;
+
+    return mouseY < groupCenter;
+}
+
+// アプリケーショングループの開始・終了インデックスを取得
+function getItems(targetModuleName) {
+    const { startIndex, endIndex } = getApplicationGroupRange(targetModuleName)
+
+    if (startIndex === -1 || endIndex === -1) {
+        return null
+    }
+
+    // グループ内のすべての要素を取得
+    const taskElements = document.querySelectorAll('.task-item');
+    const firstElement = taskElements[startIndex];
+    const lastElement = taskElements[endIndex];
+
+    if (!firstElement || !lastElement) {
+        return null;
+    }
+
+    return { firstElement, lastElement }
+}
+
 // ドラッグ&ドロップの設定
 function setupDragAndDrop(item, task) {
     // ドラッグ開始
@@ -159,20 +216,48 @@ function setupDragAndDrop(item, task) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
 
-            // マウスの位置から上半分か下半分かを判定
-            const rect = item.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const itemCenter = rect.top + rect.height / 2;
-            const isAbove = mouseY < itemCenter;
+            const draggedModuleName = draggedElement.dataset.moduleFileName;
+            const targetModuleName = item.dataset.moduleFileName;
 
-            // 既存のクラスを削除
-            item.classList.remove('drag-over-above', 'drag-over-below');
+            // 異なるアプリケーション
+            if (draggedModuleName !== targetModuleName) {
+                const mouseY = e.clientY;
+                const { firstElement, lastElement } = getItems(targetModuleName)
 
-            // 適切なクラスを追加
-            if (isAbove) {
-                item.classList.add('drag-over-above');
+                if (!firstElement || !lastElement) {
+                    return null;
+                }
+
+                const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
+                if (isAbove !== null) {
+
+                    // 既存のクラスを削除
+                    firstElement.classList.remove('drag-over-above', 'drag-over-below');
+                    lastElement.classList.remove('drag-over-above', 'drag-over-below');
+
+                    // 適切なクラスを追加
+                    if (isAbove) {
+                        firstElement.classList.add('drag-over-above');
+                    } else {
+                        lastElement.classList.add('drag-over-below');
+                    }
+                }
             } else {
-                item.classList.add('drag-over-below');
+                // マウスの位置から上半分か下半分かを判定
+                const rect = item.getBoundingClientRect();
+                const mouseY = e.clientY;
+                const itemCenter = rect.top + rect.height / 2;
+                const isAbove = mouseY < itemCenter;
+
+                // 既存のクラスを削除
+                item.classList.remove('drag-over-above', 'drag-over-below');
+
+                // 適切なクラスを追加
+                if (isAbove) {
+                    item.classList.add('drag-over-above');
+                } else {
+                    item.classList.add('drag-over-below');
+                }
             }
         }
     });
@@ -199,19 +284,53 @@ function setupDragAndDrop(item, task) {
         item.classList.remove('drag-over-above', 'drag-over-below');
 
         if (draggedTask && draggedElement && draggedElement !== item) {
-            // ドロップされた位置を取得
-            const dropTargetHandle = item.dataset.handle;
-            const draggedHandle = draggedTask.handle;
 
-            // マウスの位置から上半分か下半分かを判定
-            const rect = item.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const itemCenter = rect.top + rect.height / 2;
-            const dropAbove = mouseY < itemCenter;
+            const draggedModuleName = draggedElement.dataset.moduleFileName;
+            const targetModuleName = item.dataset.moduleFileName;
 
-            // タスクの順序を変更
-            reorderTasks(draggedHandle, dropTargetHandle, dropAbove);
+            // 異なるアプリケーション
+            if (draggedModuleName !== targetModuleName) {
+                const mouseY = e.clientY;
+                const { firstElement, lastElement } = getItems(targetModuleName)
 
+                if (!firstElement || !lastElement) {
+                    return null;
+                }
+
+                const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
+                if (isAbove !== null) {
+
+                    // 既存のクラスを削除
+                    firstElement.classList.remove('drag-over-above', 'drag-over-below');
+                    lastElement.classList.remove('drag-over-above', 'drag-over-below');
+
+                    // 適切なクラスを追加
+                    if (isAbove) {
+                        firstElement.classList.add('drag-over-above');
+                    } else {
+                        lastElement.classList.add('drag-over-below');
+                    }
+
+                    const dropTargetHandle = isAbove ? firstElement.dataset.handle : lastElement.dataset.handle
+                    const draggedHandle = draggedTask.handle;
+
+                    // タスクの順序を変更
+                    reorderTasks(draggedHandle, dropTargetHandle, isAbove);
+                }
+            } else {
+                // マウスの位置から上半分か下半分かを判定
+                const rect = item.getBoundingClientRect();
+                const mouseY = e.clientY;
+                const itemCenter = rect.top + rect.height / 2;
+                const isAbove = mouseY < itemCenter;
+
+                // ドロップされた位置を取得
+                const dropTargetHandle = item.dataset.handle;
+                const draggedHandle = draggedTask.handle;
+
+                // タスクの順序を変更
+                reorderTasks(draggedHandle, dropTargetHandle, isAbove);
+            }
         }
     });
 }
