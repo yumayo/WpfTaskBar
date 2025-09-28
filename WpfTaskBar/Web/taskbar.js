@@ -49,7 +49,7 @@ function areTasksEqual(oldTasks, newTasks) {
 
 // タスクアイテムの作成
 function createTaskItem(task) {
-    const item = document.createElement('button');
+    const item = document.createElement('div');
     item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
     item.dataset.handle = task.handle;
     item.dataset.moduleFileName = task.moduleFileName;
