@@ -5,51 +5,33 @@ class WindowManager {
     constructor() {
         this.windowHandles = [];
         this.taskBarItems = [];
-        this.isRunning = false;
-        this.updateInterval = null;
     }
 
     // 開始
     start() {
         console.log('WindowManager.start() called');
-        this.isRunning = true;
         this.updateTaskWindows();
         console.log('WindowManager started');
     }
 
-    // 停止
-    stop() {
-        console.log('WindowManager.stop() called');
-        this.isRunning = false;
-        if (this.updateInterval) {
-            clearTimeout(this.updateInterval);
-            this.updateInterval = null;
-        }
-        console.log('WindowManager stopped');
-    }
-
     // ウィンドウリストの更新ループ
     async updateTaskWindows() {
-        if (!this.isRunning) {
-            return;
-        }
-
         try {
             // C#側にウィンドウハンドル一覧の取得を要求
             const windowHandles = await this.requestWindowHandles();
             this.windowHandles = windowHandles || [];
 
             // タスクバーウィンドウの更新
-            this.updateTaskBarWindows();
+            await this.updateTaskBarWindows();
 
             // 100ms後に再実行
-            this.updateInterval = setTimeout(() => {
+            setTimeout(() => {
                 this.updateTaskWindows();
             }, 100);
         } catch (error) {
             console.error('Error in WindowManager.updateTaskWindows():', error);
             // エラーが発生した場合も継続
-            this.updateInterval = setTimeout(() => {
+            setTimeout(() => {
                 this.updateTaskWindows();
             }, 100);
         }
@@ -271,45 +253,6 @@ class WindowManager {
         });
     }
 
-    // ウィンドウ数をプロセス別に取得
-    async countBySameProcess(hwnd) {
-        try {
-            // 同じプロセスIDを持つタスクバーアイテムの数を返す
-            const targetProcessId = await this.getProcessIdFromHandle(hwnd);
-            const counts = await Promise.all(
-                this.taskBarItems.map(item => this.getProcessIdFromHandle(item.handle))
-            );
-            return counts.filter(processId => processId === targetProcessId).length;
-        } catch (error) {
-            console.error('Error counting by same process:', error);
-            return 0;
-        }
-    }
-
-    // プロセスIDの取得
-    async getProcessIdFromHandle(hwnd) {
-        try {
-            return await this.requestProcessId(hwnd);
-        } catch (error) {
-            console.error('Error getting process ID:', error);
-            return null;
-        }
-    }
-
-    // アプリケーション順序の更新
-    updateApplicationOrder(orderedExecutablePaths) {
-        sendMessageToHost('update_application_order', {
-            orderedExecutablePaths: orderedExecutablePaths
-        });
-    }
-
-    // ウィンドウ順序の更新
-    updateWindowOrder(orderedWindows) {
-        sendMessageToHost('update_window_order', {
-            orderedWindows: orderedWindows
-        });
-    }
-
     // 仮想デスクトップ判定の要求
     async requestIsWindowOnCurrentVirtualDesktop(windowHandle) {
         return new Promise((resolve, reject) => {
@@ -339,38 +282,6 @@ class WindowManager {
 
             window.chrome.webview.addEventListener('message', responseHandler);
             sendMessageToHost('request_is_window_on_current_virtual_desktop', { windowHandle: windowHandle });
-        });
-    }
-
-    // プロセスIDの要求
-    async requestProcessId(windowHandle) {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('requestProcessId timeout')), 1000);
-
-            const responseHandler = (event) => {
-                try {
-                    let data;
-                    if (typeof event.data === 'string') {
-                        data = JSON.parse(event.data);
-                    } else {
-                        data = event.data;
-                    }
-
-                    if (data && data.type === 'process_id_response' &&
-                        data.windowHandle === windowHandle) {
-                        clearTimeout(timeout);
-                        window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.processId);
-                    }
-                } catch (error) {
-                    clearTimeout(timeout);
-                    window.chrome.webview.removeEventListener('message', responseHandler);
-                    reject(error);
-                }
-            };
-
-            window.chrome.webview.addEventListener('message', responseHandler);
-            sendMessageToHost('request_process_id', { windowHandle: windowHandle });
         });
     }
 }

@@ -1,15 +1,13 @@
 class ApplicationOrder {
     constructor() {
-        this.aboveRelations = new Map(); // Map<string, Set<string>>
-        this.windowOrderByApplication = new Map(); // Map<string, string[]>
-        this.isInitialized = false;
+        this.aboveRelations = new Map();
+        this.windowOrderByApplication = new Map();
     }
 
     async setup() {
         try {
             await this.loadRelations();
             await this.loadWindowOrder();
-            this.isInitialized = true;
             console.log('ApplicationOrder initialized');
         } catch (error) {
             console.error('ApplicationOrder initialization failed:', error);
@@ -70,6 +68,7 @@ class ApplicationOrder {
 
     /**
      * 関係に基づいてアイテムをソートする
+     * @template T
      * @param {T[]} items - ソートするアイテム配列
      * @param {function(T): string} getExecutablePath - 実行可能ファイルパスを取得する関数
      * @param {function(T): string} getHandle - ハンドルを取得する関数（オプション）

@@ -1,16 +1,13 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Collections.Specialized;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.Wpf;
 using System.Text;
 using System.Text.Json;
 using System.IO;
-using Point = System.Windows.Point;
 using Window = System.Windows.Window;
 
 namespace WpfTaskBar;
@@ -22,9 +19,6 @@ public partial class MainWindow : Window
 {
 	private WebSocketHandler? _webSocketHandler;
 	private ChromeTabManager? _tabManager;
-
-	private Point _startPoint;
-	private bool _dragMode;
 
 	public MainWindow()
 	{
@@ -132,28 +126,12 @@ public partial class MainWindow : Window
 							HandleRequestIsWindowOnCurrentVirtualDesktop(root);
 							break;
 
-						case "request_process_id":
-							HandleRequestProcessId(root);
-							break;
-
-						case "update_application_order":
-							HandleUpdateApplicationOrder(root);
-							break;
-
-						case "update_window_order":
-							HandleUpdateWindowOrder(root);
-							break;
-
 						case "task_click":
 							HandleTaskClick(root);
 							break;
 
 						case "task_middle_click":
 							HandleTaskMiddleClick(root);
-							break;
-
-						case "task_context_menu":
-							HandleTaskContextMenu(root);
 							break;
 
 						case "notification_click":
@@ -282,12 +260,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void HandleTaskContextMenu(JsonElement root)
-	{
-		// 今回は基本的なコンテキストメニューのログのみ
-		Logger.Info("タスクのコンテキストメニューが要求されました");
-	}
-
 	private void HandleNotificationClick(JsonElement root)
 	{
 		try
@@ -310,8 +282,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-
-	// WindowManager用のNativeCallハンドラー群
 	private void HandleRequestWindowHandles()
 	{
 		try
@@ -326,7 +296,7 @@ public partial class MainWindow : Window
 			var response = new
 			{
 				type = "window_handles_response",
-				windowHandles = windowHandles
+				windowHandles
 			};
 
 			SendMessageToWebView(response);
@@ -374,14 +344,12 @@ public partial class MainWindow : Window
 						isTaskBarWindow = false;
 					}
 
-					var response = new
+					SendMessageToWebView(new
 					{
 						type = "is_taskbar_window_response",
 						windowHandle = handleString,
-						isTaskBarWindow = isTaskBarWindow
-					};
-
-					SendMessageToWebView(response);
+						isTaskBarWindow
+					});
 				}
 			}
 		}
@@ -414,8 +382,8 @@ public partial class MainWindow : Window
 						type = "window_info_response",
 						windowHandle = handleString,
 						moduleFileName = processName,
-						title = title,
-						iconData = iconData
+						title,
+						iconData
 					};
 
 					SendMessageToWebView(response);
@@ -511,28 +479,6 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void HandleUpdateApplicationOrder(JsonElement root)
-	{
-		try
-		{
-			if (root.TryGetProperty("data", out var dataElement) &&
-			    dataElement.TryGetProperty("orderedExecutablePaths", out var pathsElement))
-			{
-				var orderedPaths = pathsElement.EnumerateArray()
-					.Select(item => item.GetString() ?? "")
-					.Where(path => !string.IsNullOrEmpty(path))
-					.ToList();
-
-				// 順序管理はJavaScript側で行うため削除
-				Logger.Info($"アプリケーション順序更新要求: {orderedPaths.Count}個");
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "アプリケーション順序更新時にエラーが発生しました。");
-		}
-	}
-
 	private void HandleRequestIsWindowOnCurrentVirtualDesktop(JsonElement root)
 	{
 		try
@@ -544,80 +490,18 @@ public partial class MainWindow : Window
 				if (IntPtr.TryParse(handleString, out var hwnd))
 				{
 					var isOnCurrentVirtualDesktop = VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd);
-
-					var response = new
+					SendMessageToWebView(new
 					{
 						type = "is_window_on_current_virtual_desktop_response",
 						windowHandle = handleString,
-						isOnCurrentVirtualDesktop = isOnCurrentVirtualDesktop
-					};
-
-					SendMessageToWebView(response);
+						isOnCurrentVirtualDesktop
+					});
 				}
 			}
 		}
 		catch (Exception ex)
 		{
 			Logger.Error(ex, "仮想デスクトップ判定時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleRequestProcessId(JsonElement root)
-	{
-		try
-		{
-			if (root.TryGetProperty("data", out var dataElement) &&
-			    dataElement.TryGetProperty("windowHandle", out var handleElement))
-			{
-				var handleString = handleElement.GetString();
-				if (IntPtr.TryParse(handleString, out var hwnd))
-				{
-					var processId = UwpUtility.GetProcessId(hwnd);
-
-					var response = new
-					{
-						type = "process_id_response",
-						windowHandle = handleString,
-						processId = processId.ToString()
-					};
-
-					SendMessageToWebView(response);
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "プロセスID取得時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleUpdateWindowOrder(JsonElement root)
-	{
-		try
-		{
-			if (root.TryGetProperty("data", out var dataElement) &&
-			    dataElement.TryGetProperty("orderedWindows", out var windowsElement))
-			{
-				var orderedWindows = new List<(string Handle, string ModuleFileName)>();
-
-				foreach (var windowElement in windowsElement.EnumerateArray())
-				{
-					if (windowElement.TryGetProperty("handle", out var handleProp) &&
-					    windowElement.TryGetProperty("moduleFileName", out var moduleFileNameProp))
-					{
-						var handle = handleProp.GetString() ?? "";
-						var moduleFileName = moduleFileNameProp.GetString() ?? "";
-						orderedWindows.Add((handle, moduleFileName));
-					}
-				}
-
-				// 順序管理はJavaScript側で行うため削除
-				Logger.Info($"ウィンドウ順序更新要求: {orderedWindows.Count}個");
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ウィンドウ順序更新時にエラーが発生しました。");
 		}
 	}
 
@@ -730,20 +614,6 @@ public partial class MainWindow : Window
 
 	private void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
-		try
-		{
-			HandleMainWindowClosed(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ウィンドウクローズ時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleMainWindowClosed(object? sender, EventArgs e)
-	{
-		// WebView2版では通知管理も変更
-		// WindowManager削除により不要
 		Logger.Close();
 	}
 
@@ -753,7 +623,6 @@ public partial class MainWindow : Window
 		{
 			try
 			{
-				// WebView2版では通知更新を送信
 				SendNotificationUpdate();
 			}
 			catch (Exception ex)
@@ -763,22 +632,7 @@ public partial class MainWindow : Window
 		});
 	}
 
-	// WebView2版では従来のListBoxイベントハンドラーは不要
-	// JavaScript側でドラッグ&ドロップを実装
-
 	private void Window_Loaded(object sender, RoutedEventArgs e)
-	{
-		try
-		{
-			HandleWindowLoaded(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "Window_Loaded時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleWindowLoaded(object sender, RoutedEventArgs e)
 	{
 		// まずサービスを初期化
 		Logger.Info("MainWindow loaded, initializing services...");
@@ -822,25 +676,6 @@ public partial class MainWindow : Window
 		NativeMethods.SHAppBarMessage(NativeMethods.ABM_SETPOS, ref barData);
 	}
 
-	// WebView2版ではマウスイベントもWebView2経由で処理
-
-	private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
-	{
-		try
-		{
-			HandleExitMenuItemClick(sender, e);
-		}
-		catch (Exception ex)
-		{
-			Logger.Error(ex, "ExitMenuItem_Click時にエラーが発生しました。");
-		}
-	}
-
-	private void HandleExitMenuItemClick(object sender, RoutedEventArgs e)
-	{
-		Application.Current.Shutdown();
-	}
-
 	private void HandleOpenDevTools()
 	{
 		try
@@ -861,14 +696,7 @@ public partial class MainWindow : Window
 		}
 	}
 
-	private void SaveCurrentOrder()
-	{
-		// WebView2版では順序保存もWebView2経由で処理
-		Logger.Info("順序保存処理 - WebView2版では未実装");
-	}
-
-
-	private bool IsValidFilename(string filename)
+	private bool IsValidFilename(string? filename)
 	{
 		if (string.IsNullOrWhiteSpace(filename))
 		{
@@ -902,12 +730,12 @@ public partial class MainWindow : Window
 				var data = dataElement.GetString();
 
 				// ファイル名の安全性をチェック
-				if (!IsValidFilename(filename))
+				if (string.IsNullOrEmpty(filename) || !IsValidFilename(filename))
 				{
 					SendMessageToWebView(new
 					{
 						type = "file_write_response",
-						filename = filename,
+						filename,
 						success = false,
 						error = "Invalid filename"
 					});
@@ -925,7 +753,7 @@ public partial class MainWindow : Window
 				SendMessageToWebView(new
 				{
 					type = "file_write_response",
-					filename = filename,
+					filename,
 					success = true
 				});
 				Logger.Info($"ファイル書き込み成功: {filename}");
@@ -942,7 +770,7 @@ public partial class MainWindow : Window
 			var response = new
 			{
 				type = "file_write_response",
-				filename = filename,
+				filename,
 				success = false,
 				error = ex.Message
 			};
@@ -960,12 +788,12 @@ public partial class MainWindow : Window
 			{
 				var filename = filenameElement.GetString();
 				
-				if (!IsValidFilename(filename))
+				if (string.IsNullOrEmpty(filename) || !IsValidFilename(filename))
 				{
 					SendMessageToWebView(new
 					{
 						type = "file_read_response",
-						filename = filename,
+						filename,
 						success = false,
 						error = "Invalid filename",
 						data = ""
@@ -987,9 +815,9 @@ public partial class MainWindow : Window
 				SendMessageToWebView(new
 				{
 					type = "file_read_response",
-					filename = filename,
+					filename,
 					success = true,
-					data = data
+					data
 				});
 				Logger.Info($"ファイル読み込み成功: {filename}");
 			}
@@ -1002,16 +830,14 @@ public partial class MainWindow : Window
 				filename = filenameElement.GetString() ?? "";
 			}
 
-			var response = new
+			SendMessageToWebView(new
 			{
 				type = "file_read_response",
-				filename = filename,
+				filename,
 				success = false,
 				error = ex.Message,
 				data = ""
-			};
-
-			SendMessageToWebView(response);
+			});
 			Logger.Error(ex, $"ファイル読み込み時にエラーが発生しました: {filename}");
 		}
 	}

@@ -108,16 +108,6 @@ function createTaskItem(task) {
         });
     });
 
-    item.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        sendMessageToHost('task_context_menu', {
-            handle: task.handle,
-            moduleFileName: task.moduleFileName,
-            x: e.clientX,
-            y: e.clientY
-        });
-    });
-
     // 中クリックでプロセス終了
     item.addEventListener('mousedown', (e) => {
         if (e.button === 1) { // 中クリック

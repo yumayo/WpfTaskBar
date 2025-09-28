@@ -1,4 +1,4 @@
-const notifications = [];
+let notifications = [];
 
 // 通知エリアの更新
 function updateNotifications(notificationData) {
@@ -57,28 +57,14 @@ function createNotificationItem(notification) {
 
 window.chrome?.webview?.addEventListener('message', function(event) {
     let data;
-    try {
-        if (typeof event.data === 'string') {
-            data = JSON.parse(event.data);
-        } else {
-            data = event.data;
-        }
-    } catch (error) {
-        console.error('❌ JSONパースエラー:', error);
-        console.error('受信データ:', event.data);
-        return;
+
+    if (typeof event.data === 'string') {
+        data = JSON.parse(event.data);
+    } else {
+        data = event.data;
     }
 
-    if (!data) {
-        console.error('❌ 受信データがnullまたはundefinedです');
-        return;
-    }
-
-    switch (data.type) {
-        case 'notification_update':
-            updateNotifications(data.notifications);
-            break;
-        default:
-            break;
+    if (data && data.type === 'notification_update') {
+        updateNotifications(data.notifications);
     }
 });
