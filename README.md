@@ -43,3 +43,11 @@ iオプションは対話シェルで、.bashrcを読み込んでくれます。
 ```sh
 docker compose up -d --build && docker compose exec ai bash -i -c "claude -c"
 ```
+
+# ビルド
+
+```sh
+rm -rf dist
+dotnet build WpfTaskBar --configuration Release -o dist
+(cd dist && zip -r ../WpfTaskBar_v0.1.zip .)
+```
