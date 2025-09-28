@@ -64,7 +64,6 @@ function createTaskItem(task) {
         img.style.width = '100%';
         img.style.height = '100%';
         icon.appendChild(img);
-        console.log('iconData exists')
     } else {
         // デフォルトアイコン（プロセス名の最初の文字）
         const processName = task.moduleFileName ?
