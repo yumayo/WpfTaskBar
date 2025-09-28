@@ -36,7 +36,7 @@ function areTasksEqual(oldTasks, newTasks) {
         const newTask = newTasks[i];
 
         if (oldTask.handle !== newTask.handle ||
-            oldTask.text !== newTask.text ||
+            oldTask.title !== newTask.title ||
             oldTask.moduleFileName !== newTask.moduleFileName ||
             oldTask.isForeground !== newTask.isForeground ||
             oldTask.iconData !== newTask.iconData) {
