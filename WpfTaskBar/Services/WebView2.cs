@@ -221,9 +221,35 @@ namespace WpfTaskBar
 					var handleString = handleElement.GetString();
 					if (IntPtr.TryParse(handleString, out var handle))
 					{
-						// プロセスを終了する
-						NativeMethods.PostMessage(handle, 0x0010, IntPtr.Zero, IntPtr.Zero); // WM_CLOSE
-						Logger.Info($"プロセス終了メッセージを送信: {handle}");
+						// handleのプロセスIDを取得
+						NativeMethods.GetWindowThreadProcessId(handle, out var targetProcessId);
+
+						// 全ウィンドウのhandleを一旦配列に格納
+						var allHandles = new List<IntPtr>();
+						NativeMethods.EnumWindows((hwnd, lParam) =>
+						{
+							allHandles.Add(hwnd);
+							return true;
+						}, 0);
+
+						// タスクバーに表示されているウィンドウのみ抽出
+						var taskbarHandles = allHandles.Where(NativeMethodUtility.IsTaskBarWindow).ToList();
+
+						var sameProcessCount = taskbarHandles.Count(h => {
+							NativeMethods.GetWindowThreadProcessId(h, out var processId);
+							return processId == targetProcessId;
+						});
+
+						if (sameProcessCount > 1)
+						{
+							NativeMethods.PostMessage(handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
+						}
+						else
+						{
+							// プロセスを終了する
+							NativeMethods.PostMessage(handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+							Logger.Info($"プロセス終了メッセージを送信: {handle}");
+						}
 					}
 				}
 			}
