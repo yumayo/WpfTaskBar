@@ -51,5 +51,6 @@ rm -rf dist
 dotnet build WpfTaskBar --configuration Release -o dist
 (cd dist && zip -r ../WpfTaskBar_v0.1.zip .)
 git tag v0.1
+git push origin master
 git push origin --tags
 ```
