@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:24.04
 
 RUN apt-get update -y
 RUN apt-get upgrade -y
@@ -18,8 +18,6 @@ RUN apt-get install -y ipset
 RUN apt-get install -y dnsutils
 RUN apt-get install -y jq
 RUN apt-get install -y iproute2
-RUN apt-get install -y aggregate
-RUN apt-get install -y dotnet-sdk-8.0
 
 # ubuntuユーザーにパスワードを設定
 RUN echo "ubuntu:ubuntu" | chpasswd
@@ -36,9 +34,9 @@ USER ubuntu
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 
 RUN bash -c "source $HOME/.nvm/nvm.sh && \
-nvm install node && \
-nvm use node && \
-nvm alias default node && \
+nvm install 24 && \
+nvm use 24 && \
+nvm alias default 24 && \
 npm install -g npm \
 "
 
@@ -61,7 +59,7 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
   chmod 0440 /etc/sudoers.d/ubuntu-firewall
 USER ubuntu
 
-WORKDIR /var/app
+WORKDIR /workspace
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]
