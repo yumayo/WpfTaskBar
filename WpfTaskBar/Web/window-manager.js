@@ -74,8 +74,6 @@ class WindowManager {
     // タスクバーウィンドウの更新処理
     async updateTaskBarWindows() {
         try {
-            const updateTaskBarItems = [];
-
             // フォアグラウンドウィンドウの取得
             const foregroundHwnd = await this.requestForegroundWindow();
 
@@ -101,30 +99,47 @@ class WindowManager {
                         // タスクバー管理外になったため削除
                         // または異なる仮想デスクトップに移動されたため削除
                         this.taskBarItems = this.taskBarItems.filter(item => item.handle !== windowHandle);
-                        removedTaskBarItems.push(existingTaskBarItem);
                     } else {
                         // 既存アイテムの更新（IsForegroundプロパティを更新）
-                        const updatedItem = await this.createTaskBarItem(windowHandle, foregroundHwnd);
-                        const index = this.taskBarItems.findIndex(item => item.handle === windowHandle);
-                        this.taskBarItems[index] = updatedItem;
+                        const updatedItemOrItems = await this.createTaskBarItem(windowHandle, foregroundHwnd);
+                        // createTaskBarItemがChromeタブの配列を返す場合がある
+                        if (Array.isArray(updatedItemOrItems)) {
+                            for (let updatedItem of updatedItemOrItems) {
+                                const index = this.taskBarItems.findIndex(item => item.handle === updatedItem.handle && item.tabId === updatedItem.tabId && item.windowId === updatedItem.windowId);
+                                if (index >= 0) {
+                                    this.taskBarItems[index] = updatedItem;
+                                } else {
+                                    this.taskBarItems.push(updatedItem);
+                                }
+                            }
+                        } else {
+                            const index = this.taskBarItems.findIndex(item => item.handle === updatedItemOrItems.handle);
+                            this.taskBarItems[index] = updatedItemOrItems;
+                        }
                     }
                 } else {
                     // 新しいアイテム
                     if (isTaskBarWindow) {
-                        const newTaskBarItem = await this.createTaskBarItem(windowHandle, foregroundHwnd);
-                        this.taskBarItems.push(newTaskBarItem);
+                        const newItemOrItems = await this.createTaskBarItem(windowHandle, foregroundHwnd);
+                        // createTaskBarItemがChromeタブの配列を返す場合がある
+                        if (Array.isArray(newItemOrItems)) {
+                            for (let newItem of newItemOrItems) {
+                                const index = this.taskBarItems.findIndex(item => item.handle === newItem.handle && item.tabId === newItem.tabId && item.windowId === newItem.windowId);
+                                if (index >= 0) {
+                                    this.taskBarItems[index] = newItem;
+                                } else {
+                                    this.taskBarItems.push(newItem);
+                                }
+                            }
+                        } else {
+                            this.taskBarItems.push(newItemOrItems);
+                        }
                     }
                 }
             }
 
-            // 全てのアイテムを更新（プロセス名などの最新情報を取得）
-            for (const taskBarWindow of this.taskBarItems) {
-                const updatedItem = await this.createTaskBarItem(taskBarWindow.handle, foregroundHwnd);
-                updateTaskBarItems.push(updatedItem);
-            }
-
             // タスクバー一覧を更新する
-            updateTaskList(updateTaskBarItems);
+            updateTaskList(this.taskBarItems);
 
         } catch (error) {
             console.error('Error in updateTaskBarWindows:', error);
@@ -198,13 +213,33 @@ class WindowManager {
         try {
             const windowInfo = await this.requestWindowInfo(windowHandle);
 
-            return {
-                handle: windowHandle,
-                moduleFileName: windowInfo?.moduleFileName || '',
-                title: windowInfo?.title || '',
-                isForeground: windowHandle === foregroundHwnd,
-                iconData: windowInfo?.iconData || null
-            };
+            // Chromeウィンドウで、タブ情報がある場合は各タブをタスクバーアイテムにする
+            if (windowInfo?.chromeTabs?.length > 0) {
+                // 各タブを個別のタスクバーアイテムとして返す
+                return windowInfo.chromeTabs.map(tab => ({
+                    handle: windowHandle,
+                    moduleFileName: windowInfo.moduleFileName,
+                    title: tab.title || 'Untitled',
+                    // Chromeウィンドウがフォアグラウンドで、かつタブがアクティブな場合のみハイライト
+                    isForeground: windowHandle === foregroundHwnd && tab.isActive,
+                    iconData: tab.iconData || null,
+                    // Chromeタブ専用のプロパティ
+                    isChrome: true,
+                    tabId: tab.tabId,
+                    windowId: tab.windowId,
+                    url: tab.url
+                }));
+            } else {
+                // 通常のウィンドウの場合
+                return {
+                    handle: windowHandle,
+                    moduleFileName: windowInfo?.moduleFileName || '',
+                    title: windowInfo?.title || '',
+                    isForeground: windowHandle === foregroundHwnd,
+                    iconData: windowInfo?.iconData || null,
+                    isChrome: false
+                };
+            }
         } catch (error) {
             console.error('Error creating TaskBarItem:', error);
             return {
@@ -212,7 +247,8 @@ class WindowManager {
                 moduleFileName: '',
                 title: '',
                 isForeground: false,
-                iconData: null
+                iconData: null,
+                isChrome: false
             };
         }
     }
@@ -235,11 +271,7 @@ class WindowManager {
                         data.windowHandle === windowHandle) {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve({
-                            moduleFileName: data.moduleFileName,
-                            title: data.title,
-                            iconData: data.iconData
-                        });
+                        resolve(data);
                     }
                 } catch (error) {
                     clearTimeout(timeout);

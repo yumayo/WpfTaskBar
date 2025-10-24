@@ -13,6 +13,15 @@ namespace WpfTaskBar
 	{
 		private Dispatcher _dispatcher;
 		private Microsoft.Web.WebView2.Wpf.WebView2 _webView2;
+		private ChromeTabManager _chromeTabManager;
+		private WebSocketHandler _webSocketHandler;
+		private readonly Dictionary<string, string?> _faviconCache = new Dictionary<string, string?>();
+
+		public WebView2(ChromeTabManager chromeTabManager, WebSocketHandler webSocketHandler)
+		{
+			_chromeTabManager = chromeTabManager;
+			_webSocketHandler = webSocketHandler;
+		}
 
 		public async Task Initialize(Dispatcher dispatcher, Microsoft.Web.WebView2.Wpf.WebView2 webView2)
 		{
@@ -169,37 +178,54 @@ namespace WpfTaskBar
 		{
 			try
 			{
-				if (root.TryGetProperty("data", out var dataElement) &&
-				    dataElement.TryGetProperty("handle", out var handleElement))
+				if (root.TryGetProperty("data", out var dataElement))
 				{
-					var handleString = handleElement.GetString();
-					if (IntPtr.TryParse(handleString, out var handle))
+					// Chromeタブのクリックかどうかをチェック
+					if (dataElement.TryGetProperty("tabId", out var tabIdElement) &&
+					    dataElement.TryGetProperty("windowId", out var windowIdElement))
 					{
-						// ウィンドウが最小化されているかチェック
-						if (NativeMethods.IsIconic(handle))
-						{
-							// 最小化されたウィンドウを復元してアクティブにする
-							NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
-							NativeMethods.SetForegroundWindow(handle);
-							Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
-						}
-						else
-						{
-							// 現在のフォアグラウンドウィンドウを取得
-							var foregroundWindow = NativeMethods.GetForegroundWindow();
+						var tabId = tabIdElement.GetInt32();
+						var windowId = windowIdElement.GetInt32();
 
-							// クリックされたウィンドウが既にアクティブな場合は最小化
-							if (handle == foregroundWindow)
+						// WebSocketHandlerを通じてChromeタブをアクティブにする
+						_ = _webSocketHandler.FocusTab(tabId, windowId);
+						Logger.Info($"Chrome tab focus requested: TabId={tabId}, WindowId={windowId}");
+
+						return;
+					}
+
+					// 通常のウィンドウのクリック処理
+					if (dataElement.TryGetProperty("handle", out var handleElement))
+					{
+						var handleString = handleElement.GetString();
+						if (IntPtr.TryParse(handleString, out var handle))
+						{
+							// ウィンドウが最小化されているかチェック
+							if (NativeMethods.IsIconic(handle))
 							{
-								// ウィンドウを最小化
-								NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
-								Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+								// 最小化されたウィンドウを復元してアクティブにする
+								NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
+								NativeMethods.SetForegroundWindow(handle);
+								Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
 							}
 							else
 							{
-								// ウィンドウをアクティブにする
-								NativeMethods.SetForegroundWindow(handle);
-								Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+								// 現在のフォアグラウンドウィンドウを取得
+								var foregroundWindow = NativeMethods.GetForegroundWindow();
+
+								// クリックされたウィンドウが既にアクティブな場合は最小化
+								if (handle == foregroundWindow)
+								{
+									// ウィンドウを最小化
+									NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+									Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+								}
+								else
+								{
+									// ウィンドウをアクティブにする
+									NativeMethods.SetForegroundWindow(handle);
+									Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+								}
 							}
 						}
 					}
@@ -363,6 +389,8 @@ namespace WpfTaskBar
 		{
 			try
 			{
+				Logger.Info($"On HandleRequestWindowInfo {root}");
+
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
@@ -373,24 +401,106 @@ namespace WpfTaskBar
 						var sb = new StringBuilder(255);
 						NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
 						var title = sb.ToString();
+
+						// Chromeプロセスの場合、全タブ情報を返す
+						if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
+						{
+							var allTabs = _chromeTabManager.GetAllTabs().ToList();
+
+							// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
+							// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
+							var chromeTabs = allTabs.Select(tab => new
+							{
+								tabId = tab.TabId,
+								windowId = tab.WindowId,
+								title = tab.Title,
+								url = tab.Url,
+								iconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+								isActive = tab.IsActive
+							}).ToList();
+
+							var response = new
+							{
+								type = "window_info_response",
+								windowHandle = handleString,
+								moduleFileName = processName,
+								title,
+								iconData = (string?)null,
+								chromeTabs = chromeTabs.ToArray()
+							};
+
+							SendMessageToWebView(response);
+							Logger.Info($"Chrome window info with {chromeTabs.Count} tabs returned for handle {hwnd}");
+							return;
+						}
+
+						// Chrome以外の通常のウィンドウ
 						var iconData = GetIconAsBase64(processName);
 
-						var response = new
+						var normalResponse = new
 						{
 							type = "window_info_response",
 							windowHandle = handleString,
 							moduleFileName = processName,
 							title,
-							iconData
+							iconData,
+							chromeTabs = (object[]?)null
 						};
 
-						SendMessageToWebView(response);
+						SendMessageToWebView(normalResponse);
 					}
 				}
 			}
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ウィンドウ情報取得時にエラーが発生しました。");
+			}
+		}
+
+		private string? ConvertFaviconUrlToBase64(string faviconUrl)
+		{
+			try
+			{
+				// キャッシュに存在する場合はキャッシュから返す
+				if (_faviconCache.TryGetValue(faviconUrl, out var cachedBase64))
+				{
+					return cachedBase64;
+				}
+
+				string? base64Result = null;
+
+				// data:image形式のURLの場合、既にBase64エンコードされているため、そのまま返す
+				if (faviconUrl.StartsWith("data:image"))
+				{
+					// data:image/png;base64,... の形式からBase64部分のみを抽出
+					var base64Index = faviconUrl.IndexOf("base64,");
+					if (base64Index >= 0)
+					{
+						base64Result = faviconUrl.Substring(base64Index + 7);
+					}
+				}
+				else
+				{
+					// それ以外の場合はHTTPからダウンロード
+					using var httpClient = new System.Net.Http.HttpClient();
+					httpClient.Timeout = TimeSpan.FromSeconds(5);
+					var imageBytes = httpClient.GetByteArrayAsync(faviconUrl).Result;
+					base64Result = Convert.ToBase64String(imageBytes);
+				}
+
+				// 結果をキャッシュに保存
+				_faviconCache[faviconUrl] = base64Result;
+
+				return base64Result;
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, $"Favicon URLの変換に失敗しました: {faviconUrl}");
+
+				// エラーの場合もキャッシュに保存（null値として）
+				_faviconCache[faviconUrl] = null;
+
+				return null;
 			}
 		}
 

@@ -16,18 +16,24 @@ export function registerCurrentTabs() {
 // タブ情報を登録
 export function registerTab(tab) {
     if (!getConnectionStatus()) return;
-    
+
+    // faviconUrlをデバッグ
+    console.log('Tab object:', tab);
+    console.log('favIconUrl:', tab.favIconUrl);
+
     const tabInfo = {
         tabId: tab.id,
         windowId: tab.windowId,
         url: tab.url,
-        title: tab.title || 'Untitled'
+        title: tab.title || 'Untitled',
+        faviconUrl: tab.favIconUrl || '',
+        isActive: tab.active || false
     };
-    
+
     sendMessage({
         action: 'registerTab',
         data: tabInfo
     });
-    
+
     console.log('Tab registered:', tabInfo);
 }

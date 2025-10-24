@@ -53,6 +53,11 @@ function createTaskItem(task) {
     item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
     item.dataset.handle = task.handle;
     item.dataset.moduleFileName = task.moduleFileName;
+    // Chromeタブの場合はtabIdとwindowIdも設定
+    if (task.isChrome) {
+        item.dataset.tabId = task.tabId;
+        item.dataset.windowId = task.windowId;
+    }
     item.draggable = true; // ドラッグ可能にする
 
     // アイコン
@@ -90,22 +95,30 @@ function createTaskItem(task) {
         if (item.classList.contains('dragging')) {
             return;
         }
-        
+
         // 全てのタスクアイテムから foreground クラスを削除
         document.querySelectorAll('.task-item').forEach(taskItem => {
             taskItem.classList.remove('foreground');
         });
-        
+
         // クリックされたアイテムに foreground クラスを追加
         item.classList.add('foreground');
 
         // NOTE: あえて dataset.isForegroundは設定してません。なぜなら非同期でタスク一覧が更新されているため、クリックした後に一瞬戻ってしまうからです。
         //       ここでisForegroundを設定しないことで、早期リターンで描画は更新されないようになっています。
-        
-        sendMessageToHost('task_click', {
-            handle: task.handle,
-            moduleFileName: task.moduleFileName
-        });
+
+        // Chromeタブの場合は、tabIdとwindowIdを送信
+        if (task.isChrome) {
+            sendMessageToHost('task_click', {
+                tabId: task.tabId,
+                windowId: task.windowId
+            });
+        } else {
+            sendMessageToHost('task_click', {
+                handle: task.handle,
+                moduleFileName: task.moduleFileName
+            });
+        }
     });
 
     // 中クリックでプロセス終了
@@ -325,39 +338,71 @@ function setupDragAndDrop(item, task) {
                 const itemCenter = rect.top + rect.height / 2;
                 const isAbove = mouseY < itemCenter;
 
-                // ドロップされた位置を取得
-                const dropTargetHandle = item.dataset.handle;
-                const draggedHandle = draggedTask.handle;
-
                 // タスクの順序を変更
-                reorderTasks(draggedHandle, dropTargetHandle, isAbove);
+                reorderTasks(draggedTask, item.dataset, isAbove);
             }
         }
     });
 }
 
 // タスクの順序を変更（同種アプリケーションの一括移動対応）
-function reorderTasks(draggedHandle, targetHandle, dropAbove) {
-    const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
-    const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
+function reorderTasks(draggedTask, targetTask, dropAbove) {
+    // targetTaskがdatasetオブジェクトの場合とtaskオブジェクトの場合を考慮
+    const targetIndex = tasks.findIndex(t => {
+        // handleが一致するかチェック
+        if (t.handle !== targetTask.handle) {
+            return false;
+        }
 
-    if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+        // Chromeタブの場合は、tabIdとwindowIdも一致する必要がある
+        if (t.isChrome && targetTask.tabId && targetTask.windowId) {
+            return t.tabId === parseInt(targetTask.tabId) && t.windowId === parseInt(targetTask.windowId);
+        }
+
+        return true;
+    });
+
+    const draggedIndex = tasks.findIndex(t => {
+        if (typeof draggedTask === 'object' && draggedTask.handle) {
+            // draggedTaskがtaskオブジェクトの場合
+            if (t.handle !== draggedTask.handle) {
+                return false;
+            }
+
+            if (t.isChrome && draggedTask.tabId && draggedTask.windowId) {
+                return t.tabId === draggedTask.tabId && t.windowId === draggedTask.windowId;
+            }
+
+            return true;
+        } else {
+            // draggedTaskがhandleの文字列の場合
+            return t.handle === draggedTask;
+        }
+    });
+
+    if (targetIndex === -1 || draggedIndex === -1 || draggedIndex === targetIndex) {
         return;
     }
 
-    const draggedTask = tasks[draggedIndex];
-    const targetTask = tasks[targetIndex];
+    const targetTaskObj = tasks[targetIndex];
+    const draggedTaskObj = tasks[draggedIndex];
 
     // 同種アプリケーション（同じmoduleFileName）のタスクを全て取得
-    const draggedModuleName = draggedTask.moduleFileName;
-    const targetModuleName = targetTask.moduleFileName;
+    const draggedModuleName = draggedTaskObj.moduleFileName;
+    const targetModuleName = targetTaskObj.moduleFileName;
+
+    // Chromeタブの場合の特別な処理
+    const isBothChrome = draggedTaskObj.isChrome && targetTaskObj.isChrome;
 
     // 異なるアプリケーション間での移動の場合のみ一括移動を実行
     if (draggedModuleName !== targetModuleName) {
-        reorderTasksWithSameApp(draggedHandle, targetHandle, dropAbove);
+        reorderTasksWithSameApp(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
+    } else if (isBothChrome) {
+        // Chromeタブ同士の移動は個別のタブとして扱う（tabIdとwindowIdを使用）
+        reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove);
     } else {
         // 同じアプリケーション内での移動は従来通り
-        reorderSingleTask(draggedHandle, targetHandle, dropAbove);
+        reorderSingleTask(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
     }
 
     // UIを更新
@@ -402,10 +447,11 @@ function reorderTasksWithSameApp(draggedHandle, targetHandle, dropAbove) {
     tasks = newTasks;
 }
 
-// 単一タスクの移動（同じアプリケーション内での移動用）
-function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
-    const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
-    const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
+// 単一タスクの移動（インデックスベース、Chromeタブ用）
+function reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove) {
+    if (draggedIndex === -1 || targetIndex === -1) {
+        return;
+    }
 
     // 配列から要素を取り出し
     const draggedTask = tasks.splice(draggedIndex, 1)[0];
@@ -426,6 +472,16 @@ function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
         // 要素の下にドロップする場合は+1
         tasks.splice(newIndex + 1, 0, draggedTask);
     }
+}
+
+// 単一タスクの移動（同じアプリケーション内での移動用）
+function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
+    // この関数は既にreorderTasks内でdraggedIndexとtargetIndexが計算されているため、
+    // 再度検索する必要があります（グローバル変数を使わないため）
+    const draggedIndex = tasks.findIndex(t => t.handle === draggedHandle);
+    const targetIndex = tasks.findIndex(t => t.handle === targetHandle);
+
+    reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove);
 }
 
 // タスクリストの順序のみを更新（データの再取得なし）

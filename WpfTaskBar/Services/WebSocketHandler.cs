@@ -418,6 +418,8 @@ namespace WpfTaskBar
         public string Url { get; set; } = "";
         public string Title { get; set; } = "";
         public string LastActivity { get; set; } = DateTime.UtcNow.ToString("O");
+        public string FaviconUrl { get; set; } = "";
+        public bool IsActive { get; set; } = false;
     }
 
     public class NotificationData

@@ -1,10 +1,8 @@
-.PHONY: setup-claude run
+.PHONY: initialize
 
-setup-claude:
+initialize:
 	mkdir -p .claude.local
 	[ ! -f .claude.local/.claude.json ] && echo '{}' > .claude.local/.claude.json || true
 	mkdir -p .claude.local/.claude
 
-run:
-	cd WpfTaskBar/Web && npm run build
-	dotnet.exe run --project WpfTaskBar
+DEFAULT_GUAL := initialize
