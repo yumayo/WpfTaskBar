@@ -113,6 +113,9 @@ namespace WpfTaskBar
                     case "sendNotification":
                         HandleSendNotification(webSocketMessage.Data);
                         break;
+                    case "updateTabs":
+                        HandleUpdateTabs(webSocketMessage.Data);
+                        break;
                     case "ping":
                         await SendMessage(webSocket, new WebSocketMessage { Action = "pong", Data = new {} });
                         break;
@@ -190,6 +193,38 @@ namespace WpfTaskBar
             {
                 Logger.Error(ex, "Error handling notification");
             }
+        }
+
+        private void HandleUpdateTabs(object data)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var tabsData = JsonSerializer.Deserialize<TabsUpdateData>(json, JsonOptions);
+                if (tabsData?.Tabs != null)
+                {
+                    foreach (var tab in tabsData.Tabs)
+                    {
+                        _tabManager.RegisterTab(tab);
+                    }
+                    Logger.Info($"Tabs updated: {tabsData.Tabs.Count} tabs registered");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error handling tabs update");
+            }
+        }
+
+        public async Task QueryAllTabs()
+        {
+            var message = new WebSocketMessage
+            {
+                Action = "queryAllTabs",
+                Data = new { }
+            };
+
+            await BroadcastMessage(message);
         }
 
         public async Task FocusTab(int tabId, int windowId)
@@ -453,5 +488,10 @@ namespace WpfTaskBar
         public string TabTitle { get; set; } = "";
         public string Timestamp { get; set; } = "";
         public IntPtr WindowHandle { get; set; } = IntPtr.Zero;
+    }
+
+    public class TabsUpdateData
+    {
+        public List<TabInfo> Tabs { get; set; } = new();
     }
 }

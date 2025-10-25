@@ -37,7 +37,6 @@ export function initializeWebSocket() {
         };
         
         ws.onmessage = (event) => {
-            console.log('WebSocket message received:', event.data);
             try {
                 const message = JSON.parse(event.data);
                 // メッセージコールバックを実行
@@ -88,7 +87,6 @@ export function initializeWebSocket() {
 export function sendMessage(message) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         const jsonMessage = JSON.stringify(message);
-        console.log('Sending WebSocket message:', jsonMessage);
         ws.send(jsonMessage);
     } else {
         console.warn('WebSocket is not connected, message not sent:', message);

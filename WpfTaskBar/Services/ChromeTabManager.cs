@@ -1,11 +1,39 @@
 using System.Collections.Concurrent;
+using System.Timers;
 
 namespace WpfTaskBar
 {
-    public class ChromeTabManager
+    public class ChromeTabManager : IDisposable
     {
         private readonly ConcurrentDictionary<int, TabInfo> _tabs = new();
         private readonly ConcurrentDictionary<string, NotificationData> _notificationTabMap = new();
+        private readonly System.Timers.Timer _updateTimer;
+        private const int UpdateIntervalMs = 100;
+        private WebSocketHandler? _webSocketHandler;
+
+        public ChromeTabManager()
+        {
+            _updateTimer = new System.Timers.Timer(UpdateIntervalMs);
+            _updateTimer.Elapsed += OnUpdateTimerElapsed;
+            _updateTimer.AutoReset = true;
+            _updateTimer.Start();
+            Logger.Info($"ChromeTabManager initialized with {UpdateIntervalMs}ms update interval");
+        }
+
+        public void SetWebSocketHandler(WebSocketHandler webSocketHandler)
+        {
+            _webSocketHandler = webSocketHandler;
+            Logger.Info("WebSocketHandler set in ChromeTabManager");
+        }
+
+        private async void OnUpdateTimerElapsed(object? sender, ElapsedEventArgs e)
+        {
+            // WebSocket経由でChrome拡張機能にタブ情報をクエリ
+            if (_webSocketHandler != null)
+            {
+                await _webSocketHandler.QueryAllTabs();
+            }
+        }
 
         public void RegisterTab(TabInfo tabInfo)
         {
@@ -82,6 +110,13 @@ namespace WpfTaskBar
         public bool HasTab(int tabId)
         {
             return _tabs.ContainsKey(tabId);
+        }
+
+        public void Dispose()
+        {
+            _updateTimer?.Stop();
+            _updateTimer?.Dispose();
+            Logger.Info("ChromeTabManager disposed");
         }
     }
 }

@@ -33,6 +33,11 @@ namespace WpfTaskBar
                 app.UseDeveloperExceptionPage();
             }
 
+            // ChromeTabManagerとWebSocketHandlerを相互に設定
+            var tabManager = app.ApplicationServices.GetRequiredService<ChromeTabManager>();
+            var webSocketHandler = app.ApplicationServices.GetRequiredService<WebSocketHandler>();
+            tabManager.SetWebSocketHandler(webSocketHandler);
+
             app.UseRouting();
             app.UseCors();
 
