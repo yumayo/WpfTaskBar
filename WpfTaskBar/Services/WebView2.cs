@@ -180,21 +180,16 @@ namespace WpfTaskBar
 			{
 				if (root.TryGetProperty("data", out var dataElement))
 				{
-					// Chromeタブのクリックかどうかをチェック
+					// Chromeタブの情報を取得（オプショナル）
+					int? tabId = null;
+					int? windowId = null;
 					if (dataElement.TryGetProperty("tabId", out var tabIdElement) &&
 					    dataElement.TryGetProperty("windowId", out var windowIdElement))
 					{
-						var tabId = tabIdElement.GetInt32();
-						var windowId = windowIdElement.GetInt32();
-
-						// WebSocketHandlerを通じてChromeタブをアクティブにする
-						_ = _webSocketHandler.FocusTab(tabId, windowId);
-						Logger.Info($"Chrome tab focus requested: TabId={tabId}, WindowId={windowId}");
-
-						return;
+						tabId = tabIdElement.GetInt32();
+						windowId = windowIdElement.GetInt32();
 					}
 
-					// 通常のウィンドウのクリック処理
 					if (dataElement.TryGetProperty("handle", out var handleElement))
 					{
 						var handleString = handleElement.GetString();
@@ -213,12 +208,28 @@ namespace WpfTaskBar
 								// 現在のフォアグラウンドウィンドウを取得
 								var foregroundWindow = NativeMethods.GetForegroundWindow();
 
-								// クリックされたウィンドウが既にアクティブな場合は最小化
+								// クリックされたウィンドウが既にアクティブな場合
 								if (handle == foregroundWindow)
 								{
-									// ウィンドウを最小化
-									NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
-									Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+									// Chromeタブの場合は、タブIDも比較する
+									bool shouldMinimize = true;
+									if (tabId.HasValue)
+									{
+										var currentTab = _chromeTabManager.GetAllTabs().FirstOrDefault(t => t.IsActive);
+										// 現在アクティブなタブと異なるタブの場合は最小化しない
+										if (currentTab != null && currentTab.TabId != tabId.Value)
+										{
+											shouldMinimize = false;
+											Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
+										}
+									}
+
+									if (shouldMinimize)
+									{
+										// ウィンドウを最小化
+										NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+										Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+									}
 								}
 								else
 								{
@@ -228,6 +239,13 @@ namespace WpfTaskBar
 								}
 							}
 						}
+					}
+
+					// Chromeタブの場合は、タブもアクティブにする
+					if (tabId.HasValue && windowId.HasValue)
+					{
+						_ = _webSocketHandler.FocusTab(tabId.Value, windowId.Value);
+						Logger.Info($"復元後にChromeタブをアクティブにしました: TabId={tabId.Value}, WindowId={windowId.Value}");
 					}
 				}
 			}

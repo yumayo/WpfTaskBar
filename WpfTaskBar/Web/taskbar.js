@@ -110,6 +110,8 @@ function createTaskItem(task) {
         // Chromeタブの場合は、tabIdとwindowIdを送信
         if (task.isChrome) {
             sendMessageToHost('task_click', {
+                handle: task.handle,
+                moduleFileName: task.moduleFileName,
                 tabId: task.tabId,
                 windowId: task.windowId
             });
