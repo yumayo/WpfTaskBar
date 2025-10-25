@@ -123,14 +123,24 @@ function createTaskItem(task) {
         }
     });
 
-    // 中クリックでプロセス終了
+    // 中クリックでプロセス終了（Chromeの場合はタブを閉じる）
     item.addEventListener('mousedown', (e) => {
         if (e.button === 1) { // 中クリック
             e.preventDefault();
-            sendMessageToHost('task_middle_click', {
-                handle: task.handle,
-                moduleFileName: task.moduleFileName
-            });
+            if (task.isChrome) {
+                sendMessageToHost('task_middle_click', {
+                    handle: task.handle,
+                    moduleFileName: task.moduleFileName,
+                    tabId: task.tabId,
+                    windowId: task.windowId,
+                    isChrome: true
+                });
+            } else {
+                sendMessageToHost('task_middle_click', {
+                    handle: task.handle,
+                    moduleFileName: task.moduleFileName
+                });
+            }
         }
     });
 

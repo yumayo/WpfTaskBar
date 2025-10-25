@@ -243,6 +243,22 @@ namespace WpfTaskBar
             Logger.Info($"Focus tab request sent: TabId={tabId}, WindowId={windowId}");
         }
 
+        public async Task CloseTab(int tabId, int windowId)
+        {
+            var message = new WebSocketMessage
+            {
+                Action = "closeTab",
+                Data = new
+                {
+                    tabId,
+                    windowId
+                }
+            };
+
+            await BroadcastMessage(message);
+            Logger.Info($"Close tab request sent: TabId={tabId}, WindowId={windowId}");
+        }
+
         private async Task BroadcastMessage(WebSocketMessage message)
         {
             var tasks = new List<Task>();

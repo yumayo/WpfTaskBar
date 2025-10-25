@@ -8,6 +8,9 @@ export function handleMessage(message) {
         case 'focusTab':
             handleFocusTab(message.data);
             break;
+        case 'closeTab':
+            handleCloseTab(message.data);
+            break;
         case 'queryAllTabs':
             handleQueryAllTabs();
             break;
@@ -55,6 +58,19 @@ function handleFocusTab(data) {
             console.error('Failed to focus tab:', chrome.runtime.lastError);
         } else {
             console.log('Successfully focused tab and tab');
+        }
+    });
+}
+
+// タブクローズ処理
+function handleCloseTab(data) {
+    console.log('Close tab request:', data);
+
+    chrome.tabs.remove(data.tabId, () => {
+        if (chrome.runtime.lastError) {
+            console.error('Failed to close tab:', chrome.runtime.lastError);
+        } else {
+            console.log('Successfully closed tab:', data.tabId);
         }
     });
 }

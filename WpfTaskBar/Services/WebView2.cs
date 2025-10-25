@@ -262,6 +262,29 @@ namespace WpfTaskBar
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("handle", out var handleElement))
 				{
+					// Chromeタブの場合の処理
+					bool isChrome = false;
+					int? tabId = null;
+					int? windowId = null;
+
+					if (dataElement.TryGetProperty("isChrome", out var isChromeElement))
+					{
+						isChrome = isChromeElement.GetBoolean();
+					}
+
+					if (isChrome &&
+					    dataElement.TryGetProperty("tabId", out var tabIdElement) &&
+					    dataElement.TryGetProperty("windowId", out var windowIdElement))
+					{
+						tabId = tabIdElement.GetInt32();
+						windowId = windowIdElement.GetInt32();
+
+						// Chromeのタブを閉じる
+						_ = _webSocketHandler.CloseTab(tabId.Value, windowId.Value);
+						Logger.Info($"Chromeタブを閉じるメッセージを送信: TabId={tabId.Value}, WindowId={windowId.Value}");
+						return;
+					}
+
 					var handleString = handleElement.GetString();
 					if (IntPtr.TryParse(handleString, out var handle))
 					{
