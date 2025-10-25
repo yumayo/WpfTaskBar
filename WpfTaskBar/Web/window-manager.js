@@ -77,6 +77,13 @@ class WindowManager {
             // フォアグラウンドウィンドウの取得
             const foregroundHwnd = await this.requestForegroundWindow();
 
+            // ウィンドウハンドルに存在しないタスクバーを削除
+            this.taskBarItems = this.taskBarItems.filter(item => {
+                return this.windowHandles.some(handle =>
+                    handle === item.handle
+                );
+            });
+
             // 各ウィンドウハンドルを処理
             for (const windowHandle of this.windowHandles) {
                 // タスクバーウィンドウかどうかの判定をC#側に要求
