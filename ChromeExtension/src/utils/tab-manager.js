@@ -1,7 +1,7 @@
 // タブ管理とイベント処理を行うモジュール
 
 import { sendMessage, getConnectionStatus } from './websocket-client.js';
-import { registerTab } from './tab-registration.js';
+import { registerTab, unregisterTab } from './tab-registration.js';
 
 // 通知を送信（テスト用）
 export function sendTestNotification(tabId) {
@@ -66,6 +66,6 @@ export function setupTabEventListeners() {
 
     chrome.tabs.onRemoved.addListener((tabId) => {
         console.log('Tab removed:', tabId);
-        // タブ削除の通知は必要に応じて実装
+        unregisterTab(tabId);
     });
 }

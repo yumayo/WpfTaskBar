@@ -104,8 +104,30 @@ class WindowManager {
                         const updatedItemOrItems = await this.createTaskBarItem(windowHandle, foregroundHwnd);
                         // createTaskBarItemがChromeタブの配列を返す場合がある
                         if (Array.isArray(updatedItemOrItems)) {
+                            // 新しいタブリストに存在しないタブを削除
+                            this.taskBarItems = this.taskBarItems.filter(item => {
+                                // 異なるwindowHandleのアイテムは残す
+                                if (item.handle !== windowHandle) {
+                                    return true;
+                                }
+                                // Chromeタブでない場合は残す（念のため）
+                                if (!item.isChrome) {
+                                    return true;
+                                }
+                                // 同じwindowHandleのChromeタブの場合、updatedItemOrItemsに含まれるかチェック
+                                const isSame = updatedItemOrItems.some(updatedItem =>
+                                    updatedItem.tabId === item.tabId &&
+                                    updatedItem.windowId === item.windowId
+                                );
+                                return isSame;
+                            });
+                            // 各タブを更新または追加
                             for (let updatedItem of updatedItemOrItems) {
-                                const index = this.taskBarItems.findIndex(item => item.handle === updatedItem.handle && item.tabId === updatedItem.tabId && item.windowId === updatedItem.windowId);
+                                const index = this.taskBarItems.findIndex(item =>
+                                    item.handle === updatedItem.handle &&
+                                    item.tabId === updatedItem.tabId &&
+                                    item.windowId === updatedItem.windowId
+                                );
                                 if (index >= 0) {
                                     this.taskBarItems[index] = updatedItem;
                                 } else {
@@ -123,8 +145,13 @@ class WindowManager {
                         const newItemOrItems = await this.createTaskBarItem(windowHandle, foregroundHwnd);
                         // createTaskBarItemがChromeタブの配列を返す場合がある
                         if (Array.isArray(newItemOrItems)) {
+                            // 各タブを追加
                             for (let newItem of newItemOrItems) {
-                                const index = this.taskBarItems.findIndex(item => item.handle === newItem.handle && item.tabId === newItem.tabId && item.windowId === newItem.windowId);
+                                const index = this.taskBarItems.findIndex(item =>
+                                    item.handle === newItem.handle &&
+                                    item.tabId === newItem.tabId &&
+                                    item.windowId === newItem.windowId
+                                );
                                 if (index >= 0) {
                                     this.taskBarItems[index] = newItem;
                                 } else {

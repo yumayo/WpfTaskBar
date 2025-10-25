@@ -35,3 +35,17 @@ export function registerTab(tab) {
 
     console.log('Tab registered:', tabInfo);
 }
+
+// タブ情報を登録解除
+export function unregisterTab(tabId) {
+    if (!getConnectionStatus()) return;
+
+    sendMessage({
+        action: 'unregisterTab',
+        data: {
+            tabId: tabId
+        }
+    });
+
+    console.log('Tab unregistered:', tabId);
+}

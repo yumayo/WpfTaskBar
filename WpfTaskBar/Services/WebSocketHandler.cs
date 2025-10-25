@@ -107,6 +107,9 @@ namespace WpfTaskBar
                     case "registerTab":
                         HandleRegisterTab(webSocketMessage.Data);
                         break;
+                    case "unregisterTab":
+                        HandleUnregisterTab(webSocketMessage.Data);
+                        break;
                     case "sendNotification":
                         HandleSendNotification(webSocketMessage.Data);
                         break;
@@ -133,6 +136,24 @@ namespace WpfTaskBar
                 if (tabInfo != null)
                 {
                     _tabManager.RegisterTab(tabInfo);
+                    Logger.Info($"Tab registered: {tabInfo.TabId} - {tabInfo.Title}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error registering tab");
+            }
+        }
+        
+        private void HandleUnregisterTab(object data)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
+                if (tabInfo != null)
+                {
+                    _tabManager.UnregisterTab(tabInfo.TabId);
                     Logger.Info($"Tab registered: {tabInfo.TabId} - {tabInfo.Title}");
                 }
             }
