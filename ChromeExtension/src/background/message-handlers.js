@@ -34,7 +34,8 @@ async function handleQueryAllTabs() {
             title: tab.title || '',
             faviconUrl: tab.favIconUrl || '',
             isActive: tab.active,
-            lastActivity: new Date().toISOString()
+            lastActivity: new Date().toISOString(),
+            index: tab.index || 0
         }));
 
         // WebSocket経由でタブ情報を送信

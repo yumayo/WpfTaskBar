@@ -59,6 +59,16 @@ namespace WpfTaskBar
             return _tabs.Values;
         }
 
+        public IEnumerable<TabInfo> GetAllTabsSorted()
+        {
+            return _tabs.Values.OrderBy(tab => tab.WindowId).ThenBy(tab => tab.Index);
+        }
+
+        public IEnumerable<TabInfo> GetTabsByWindow(int windowId)
+        {
+            return _tabs.Values.Where(tab => tab.WindowId == windowId).OrderBy(tab => tab.Index);
+        }
+
         public void AssociateNotificationWithTab(string notificationId, NotificationData notification)
         {
             _notificationTabMap[notificationId] = notification;

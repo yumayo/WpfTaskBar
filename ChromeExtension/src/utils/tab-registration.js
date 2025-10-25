@@ -25,7 +25,8 @@ export function registerTab(tab) {
         url: tab.url,
         title: tab.title || 'Untitled',
         faviconUrl: tab.favIconUrl || '',
-        isActive: tab.active || false
+        isActive: tab.active || false,
+        index: tab.index || 0
     };
 
     sendMessage({

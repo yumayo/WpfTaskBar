@@ -446,7 +446,7 @@ namespace WpfTaskBar
 						// Chromeプロセスの場合、全タブ情報を返す
 						if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
 						{
-							var allTabs = _chromeTabManager.GetAllTabs().ToList();
+							var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
 
 							// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
 							// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
