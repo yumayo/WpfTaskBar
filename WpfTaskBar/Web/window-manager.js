@@ -117,16 +117,11 @@ class WindowManager {
                                 if (item.handle !== windowHandle) {
                                     return true;
                                 }
-                                // Chromeタブでない場合は残す（念のため）
-                                if (!item.isChrome) {
-                                    return true;
-                                }
                                 // 同じwindowHandleのChromeタブの場合、updatedItemOrItemsに含まれるかチェック
-                                const isSame = updatedItemOrItems.some(updatedItem =>
+                                return updatedItemOrItems.some(updatedItem =>
                                     updatedItem.tabId === item.tabId &&
                                     updatedItem.windowId === item.windowId
                                 );
-                                return isSame;
                             });
                             // 各タブを更新または追加
                             for (let updatedItem of updatedItemOrItems) {
