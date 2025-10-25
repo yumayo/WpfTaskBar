@@ -6,9 +6,7 @@ import { sendMessage, getConnectionStatus } from './websocket-client.js';
 export function registerCurrentTabs() {
     chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
-            if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-                registerTab(tab);
-            }
+            registerTab(tab);
         });
     });
 }
