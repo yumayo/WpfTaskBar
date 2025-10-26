@@ -35,7 +35,8 @@ function areTasksEqual(oldTasks, newTasks) {
             oldTask.title !== newTask.title ||
             oldTask.moduleFileName !== newTask.moduleFileName ||
             oldTask.isForeground !== newTask.isForeground ||
-            oldTask.iconData !== newTask.iconData) {
+            oldTask.iconData !== newTask.iconData ||
+            oldTask.faviconData !== newTask.faviconData) {
             return false;
         }
     }
