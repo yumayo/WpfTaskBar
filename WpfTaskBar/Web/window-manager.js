@@ -18,8 +18,7 @@ class WindowManager {
     async updateTaskWindows() {
         try {
             // C#側にウィンドウハンドル一覧の取得を要求
-            const windowHandles = await this.requestWindowHandles();
-            this.windowHandles = windowHandles || [];
+            this.windowHandles = await this.requestWindowHandles();
 
             // タスクバーウィンドウの更新
             await this.updateTaskBarWindows();
@@ -55,7 +54,8 @@ class WindowManager {
                     if (data && data.type === 'window_handles_response') {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.windowHandles);
+                        const windowHandles = data.windowHandles.map(handle => parseInt(handle, 10));
+                        resolve(windowHandles);
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -192,7 +192,7 @@ class WindowManager {
                     if (data && data.type === 'foreground_window_response') {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.foregroundWindow);
+                        resolve(parseInt(data.foregroundWindow, 10));
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -220,10 +220,13 @@ class WindowManager {
                         data = event.data;
                     }
 
-                    if (data && data.type === 'is_taskbar_window_response' && data.windowHandle === windowHandle) {
-                        clearTimeout(timeout);
-                        window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.isTaskBarWindow);
+                    if (data && data.type === 'is_taskbar_window_response') {
+                        data.windowHandle = parseInt(data.windowHandle, 10);
+                        if (data.windowHandle === windowHandle) {
+                            clearTimeout(timeout);
+                            window.chrome.webview.removeEventListener('message', responseHandler);
+                            resolve(data.isTaskBarWindow);
+                        }
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -297,11 +300,13 @@ class WindowManager {
                         data = event.data;
                     }
 
-                    if (data && data.type === 'window_info_response' &&
-                        data.windowHandle === windowHandle) {
-                        clearTimeout(timeout);
-                        window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data);
+                    if (data && data.type === 'window_info_response') {
+                        data.windowHandle = parseInt(data.windowHandle, 10);
+                        if (data.windowHandle === windowHandle) {
+                            clearTimeout(timeout);
+                            window.chrome.webview.removeEventListener('message', responseHandler);
+                            resolve(data);
+                        }
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -330,7 +335,7 @@ class WindowManager {
                     }
 
                     if (data && data.type === 'is_window_on_current_virtual_desktop_response' &&
-                        data.windowHandle === windowHandle) {
+                        parseInt(data.windowHandle) === windowHandle) {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
                         resolve(data.isOnCurrentVirtualDesktop);

@@ -50,7 +50,7 @@ class ApplicationOrder {
 
         // アプリケーションごとにウィンドウをグループ化
         orderedWindows
-            .filter(w => w.handle && w.handle.trim() !== '' && w.moduleFileName && w.moduleFileName.trim() !== '')
+            .filter(w => w.handle && w.handle && w.moduleFileName && w.moduleFileName.trim() !== '')
             .forEach(w => {
                 if (!windowsByApp.has(w.moduleFileName)) {
                     windowsByApp.set(w.moduleFileName, []);

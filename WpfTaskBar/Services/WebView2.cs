@@ -43,7 +43,7 @@ namespace WpfTaskBar
 				// HTMLファイルのパスを取得
 				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Web", "index.html");
 #endif
-				
+
 				var htmlUri = new Uri($"file:///{htmlPath.Replace('\\', '/')}");
 
 				Logger.Info($"Loading HTML from: {htmlUri}");
@@ -198,51 +198,48 @@ namespace WpfTaskBar
 
 					if (dataElement.TryGetProperty("handle", out var handleElement))
 					{
-						var handleString = handleElement.GetString();
-						if (IntPtr.TryParse(handleString, out var handle))
+						var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+						// ウィンドウが最小化されているかチェック
+						if (NativeMethods.IsIconic(handle))
 						{
-							// ウィンドウが最小化されているかチェック
-							if (NativeMethods.IsIconic(handle))
+							// 最小化されたウィンドウを復元してアクティブにする
+							NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
+							NativeMethods.SetForegroundWindow(handle);
+							Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
+						}
+						else
+						{
+							// 現在のフォアグラウンドウィンドウを取得
+							var foregroundWindow = NativeMethods.GetForegroundWindow();
+
+							// クリックされたウィンドウが既にアクティブな場合
+							if (handle == foregroundWindow)
 							{
-								// 最小化されたウィンドウを復元してアクティブにする
-								NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
-								NativeMethods.SetForegroundWindow(handle);
-								Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
+								// Chromeタブの場合は、タブIDも比較する
+								bool shouldMinimize = true;
+								if (tabId.HasValue)
+								{
+									var currentTab = _chromeTabManager.GetAllTabs().FirstOrDefault(t => t.IsActive);
+									// 現在アクティブなタブと異なるタブの場合は最小化しない
+									if (currentTab != null && currentTab.TabId != tabId.Value)
+									{
+										shouldMinimize = false;
+										Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
+									}
+								}
+
+								if (shouldMinimize)
+								{
+									// ウィンドウを最小化
+									NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+									Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+								}
 							}
 							else
 							{
-								// 現在のフォアグラウンドウィンドウを取得
-								var foregroundWindow = NativeMethods.GetForegroundWindow();
-
-								// クリックされたウィンドウが既にアクティブな場合
-								if (handle == foregroundWindow)
-								{
-									// Chromeタブの場合は、タブIDも比較する
-									bool shouldMinimize = true;
-									if (tabId.HasValue)
-									{
-										var currentTab = _chromeTabManager.GetAllTabs().FirstOrDefault(t => t.IsActive);
-										// 現在アクティブなタブと異なるタブの場合は最小化しない
-										if (currentTab != null && currentTab.TabId != tabId.Value)
-										{
-											shouldMinimize = false;
-											Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
-										}
-									}
-
-									if (shouldMinimize)
-									{
-										// ウィンドウを最小化
-										NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
-										Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
-									}
-								}
-								else
-								{
-									// ウィンドウをアクティブにする
-									NativeMethods.SetForegroundWindow(handle);
-									Logger.Info($"ウィンドウをアクティブにしました: {handle}");
-								}
+								// ウィンドウをアクティブにする
+								NativeMethods.SetForegroundWindow(handle);
+								Logger.Info($"ウィンドウをアクティブにしました: {handle}");
 							}
 						}
 					}
@@ -291,38 +288,38 @@ namespace WpfTaskBar
 						return;
 					}
 
-					var handleString = handleElement.GetString();
-					if (IntPtr.TryParse(handleString, out var handle))
-					{
-						// handleのプロセスIDを取得
-						NativeMethods.GetWindowThreadProcessId(handle, out var targetProcessId);
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
 
-						// 全ウィンドウのhandleを一旦配列に格納
-						var allHandles = new List<IntPtr>();
-						NativeMethods.EnumWindows((hwnd, lParam) =>
+					// handleのプロセスIDを取得
+					NativeMethods.GetWindowThreadProcessId(handle, out var targetProcessId);
+
+					// 全ウィンドウのhandleを一旦配列に格納
+					var allHandles = new List<IntPtr>();
+					NativeMethods.EnumWindows((hwnd, lParam) =>
 						{
 							allHandles.Add(hwnd);
 							return true;
-						}, 0);
+						},
+						0);
 
-						// タスクバーに表示されているウィンドウのみ抽出
-						var taskbarHandles = allHandles.Where(NativeMethodUtility.IsTaskBarWindow).ToList();
+					// タスクバーに表示されているウィンドウのみ抽出
+					var taskbarHandles = allHandles.Where(NativeMethodUtility.IsTaskBarWindow).ToList();
 
-						var sameProcessCount = taskbarHandles.Count(h => {
-							NativeMethods.GetWindowThreadProcessId(h, out var processId);
-							return processId == targetProcessId;
-						});
+					var sameProcessCount = taskbarHandles.Count(h =>
+					{
+						NativeMethods.GetWindowThreadProcessId(h, out var processId);
+						return processId == targetProcessId;
+					});
 
-						if (sameProcessCount > 1)
-						{
-							NativeMethods.PostMessage(handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
-						}
-						else
-						{
-							// プロセスを終了する
-							NativeMethods.PostMessage(handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-							Logger.Info($"プロセス終了メッセージを送信: {handle}");
-						}
+					if (sameProcessCount > 1)
+					{
+						NativeMethods.PostMessage(handle, NativeMethods.WM_SYSCOMMAND, new IntPtr(NativeMethods.SC_CLOSE), IntPtr.Zero);
+					}
+					else
+					{
+						// プロセスを終了する
+						NativeMethods.PostMessage(handle, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+						Logger.Info($"プロセス終了メッセージを送信: {handle}");
 					}
 				}
 			}
@@ -358,10 +355,10 @@ namespace WpfTaskBar
 		{
 			try
 			{
-				var windowHandles = new List<string>();
+				var windowHandles = new List<int>();
 				NativeMethods.EnumWindows((hwnd, lParam) =>
 					{
-						windowHandles.Add(hwnd.ToString());
+						windowHandles.Add(hwnd.ToInt32());
 						return true;
 					},
 					0);
@@ -388,7 +385,7 @@ namespace WpfTaskBar
 				var response = new
 				{
 					type = "foreground_window_response",
-					foregroundWindow = foregroundWindow.ToString()
+					foregroundWindow = foregroundWindow.ToInt32()
 				};
 
 				SendMessageToWebView(response);
@@ -406,24 +403,22 @@ namespace WpfTaskBar
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
-					var handleString = handleElement.GetString();
-					if (IntPtr.TryParse(handleString, out var hwnd))
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+
+					var isTaskBarWindow = NativeMethodUtility.IsTaskBarWindow(handle);
+
+					// 現在の仮想デスクトップにあるウィンドウのみを対象とする
+					if (isTaskBarWindow && !VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(handle))
 					{
-						var isTaskBarWindow = NativeMethodUtility.IsTaskBarWindow(hwnd);
-
-						// 現在の仮想デスクトップにあるウィンドウのみを対象とする
-						if (isTaskBarWindow && !VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd))
-						{
-							isTaskBarWindow = false;
-						}
-
-						SendMessageToWebView(new
-						{
-							type = "is_taskbar_window_response",
-							windowHandle = handleString,
-							isTaskBarWindow
-						});
+						isTaskBarWindow = false;
 					}
+
+					SendMessageToWebView(new
+					{
+						type = "is_taskbar_window_response",
+						windowHandle = handle.ToInt32(),
+						isTaskBarWindow
+					});
 				}
 			}
 			catch (Exception ex)
@@ -441,61 +436,58 @@ namespace WpfTaskBar
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
-					var handleString = handleElement.GetString();
-					if (IntPtr.TryParse(handleString, out var hwnd))
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					var processName = UwpUtility.GetProcessName(handle) ?? "";
+					var sb = new StringBuilder(255);
+					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
+					var title = sb.ToString();
+
+					// Chromeプロセスの場合、全タブ情報を返す
+					if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
 					{
-						var processName = UwpUtility.GetProcessName(hwnd) ?? "";
-						var sb = new StringBuilder(255);
-						NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-						var title = sb.ToString();
+						var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
 
-						// Chromeプロセスの場合、全タブ情報を返す
-						if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
+						// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
+						// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
+						var chromeTabs = allTabs.Select(tab => new
 						{
-							var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
+							tabId = tab.TabId,
+							windowId = tab.WindowId,
+							title = tab.Title,
+							url = tab.Url,
+							iconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+							isActive = tab.IsActive
+						}).ToList();
 
-							// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
-							// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
-							var chromeTabs = allTabs.Select(tab => new
-							{
-								tabId = tab.TabId,
-								windowId = tab.WindowId,
-								title = tab.Title,
-								url = tab.Url,
-								iconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
-								isActive = tab.IsActive
-							}).ToList();
-
-							var response = new
-							{
-								type = "window_info_response",
-								windowHandle = handleString,
-								moduleFileName = processName,
-								title,
-								iconData = (string?)null,
-								chromeTabs = chromeTabs.ToArray()
-							};
-
-							SendMessageToWebView(response);
-							Logger.Info($"Chrome window info with {chromeTabs.Count} tabs returned for handle {hwnd}");
-							return;
-						}
-
-						// Chrome以外の通常のウィンドウ
-						var iconData = GetIconAsBase64(processName);
-
-						var normalResponse = new
+						var response = new
 						{
 							type = "window_info_response",
-							windowHandle = handleString,
+							windowHandle = handle.ToInt32(),
 							moduleFileName = processName,
 							title,
-							iconData,
-							chromeTabs = (object[]?)null
+							iconData = (string?)null,
+							chromeTabs = chromeTabs.ToArray()
 						};
 
-						SendMessageToWebView(normalResponse);
+						SendMessageToWebView(response);
+						Logger.Info($"Chrome window info with {chromeTabs.Count} tabs returned for handle {handle}");
+						return;
 					}
+
+					// Chrome以外の通常のウィンドウ
+					var iconData = GetIconAsBase64(processName);
+
+					var normalResponse = new
+					{
+						type = "window_info_response",
+						windowHandle = handle.ToInt32(),
+						moduleFileName = processName,
+						title,
+						iconData,
+						chromeTabs = (object[]?)null
+					};
+
+					SendMessageToWebView(normalResponse);
 				}
 			}
 			catch (Exception ex)
@@ -638,17 +630,14 @@ namespace WpfTaskBar
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
-					var handleString = handleElement.GetString();
-					if (IntPtr.TryParse(handleString, out var hwnd))
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					var isOnCurrentVirtualDesktop = VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(handle);
+					SendMessageToWebView(new
 					{
-						var isOnCurrentVirtualDesktop = VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd);
-						SendMessageToWebView(new
-						{
-							type = "is_window_on_current_virtual_desktop_response",
-							windowHandle = handleString,
-							isOnCurrentVirtualDesktop
-						});
-					}
+						type = "is_window_on_current_virtual_desktop_response",
+						windowHandle = handle.ToInt32(),
+						isOnCurrentVirtualDesktop
+					});
 				}
 			}
 			catch (Exception ex)

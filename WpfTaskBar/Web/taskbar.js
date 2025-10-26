@@ -356,7 +356,13 @@ function onDrop(item, e) {
                     lastElement.classList.add('drag-over-below');
                 }
 
-                const dropTargetTask = isAbove ? firstElement.dataset : lastElement.dataset
+                let dropTargetTask = isAbove ? firstElement.dataset : lastElement.dataset
+
+                dropTargetTask = {
+                    handle: parseInt(dropTargetTask.handle, 10),
+                    tabId: parseInt(dropTargetTask.tabId, 10),
+                    windowId: parseInt(dropTargetTask.windowId, 10),
+                }
 
                 // タスクの順序を変更
                 reorderTasks(draggedTask, dropTargetTask, isAbove);
@@ -367,45 +373,36 @@ function onDrop(item, e) {
             const mouseY = e.clientY;
             const itemCenter = rect.top + rect.height / 2;
             const isAbove = mouseY < itemCenter;
+            
+            const dropTargetTask = {
+                handle: parseInt(item.dataset.handle, 10),
+                tabId: parseInt(item.dataset.tabId, 10),
+                windowId: parseInt(item.dataset.windowId, 10),
+            }
 
             // タスクの順序を変更
-            reorderTasks(draggedTask, item.dataset, isAbove);
+            reorderTasks(draggedTask, dropTargetTask, isAbove);
         }
     }
 }
 
 // タスクの順序を変更（同種アプリケーションの一括移動対応）
 function reorderTasks(draggedTask, targetTask, dropAbove) {
+    
     // targetTaskがdatasetオブジェクトの場合とtaskオブジェクトの場合を考慮
     const targetIndex = tasks.findIndex(t => {
-        // handleが一致するかチェック
-        if (t.handle !== targetTask.handle) {
-            return false;
+        if (t.isChrome) {
+            return t.handle === targetTask.handle && t.tabId === targetTask.tabId && t.windowId === targetTask.windowId;
+        } else {
+            return t.handle === targetTask.handle;
         }
-
-        // Chromeタブの場合は、tabIdとwindowIdも一致する必要がある
-        if (t.isChrome && targetTask.tabId && targetTask.windowId) {
-            return t.tabId === targetTask.tabId && t.windowId === targetTask.windowId;
-        }
-
-        return true;
     });
 
     const draggedIndex = tasks.findIndex(t => {
-        if (typeof draggedTask === 'object' && draggedTask.handle) {
-            // draggedTaskがtaskオブジェクトの場合
-            if (t.handle !== draggedTask.handle) {
-                return false;
-            }
-
-            if (t.isChrome && draggedTask.tabId && draggedTask.windowId) {
-                return t.tabId === draggedTask.tabId && t.windowId === draggedTask.windowId;
-            }
-
-            return true;
+        if (t.isChrome) {
+            return t.handle === draggedTask.handle && t.tabId === draggedTask.tabId && t.windowId === draggedTask.windowId;
         } else {
-            // draggedTaskがhandleの文字列の場合
-            return t.handle === draggedTask;
+            return t.handle === draggedTask.handle;
         }
     });
 
