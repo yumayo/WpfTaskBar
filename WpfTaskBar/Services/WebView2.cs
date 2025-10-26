@@ -219,13 +219,31 @@ namespace WpfTaskBar
 								bool shouldMinimize = true;
 								if (tabId.HasValue)
 								{
-									var currentTab = _chromeTabManager.GetAllTabs().FirstOrDefault(t => t.IsActive);
-									// 現在アクティブなタブと異なるタブの場合は最小化しない
-									if (currentTab != null && currentTab.TabId != tabId.Value)
+									// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
+									// hwndから対応するWindowIdを探す
+									var targetWindowId = FindWindowIdByHwnd(handle);
+									if (targetWindowId.HasValue)
 									{
-										shouldMinimize = false;
-										Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
+										var currentTab = _chromeTabManager.GetTabsByWindow(targetWindowId.Value).FirstOrDefault(t => t.IsActive);
+										// 現在アクティブなタブと異なるタブの場合は最小化しない
+										if (currentTab != null && currentTab.TabId != tabId.Value)
+										{
+											shouldMinimize = false;
+											Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
+										}
+										else
+										{
+											Logger.Info($"Chromeの同じタブがアクティブなため最小化します: TabId={tabId.Value}");
+										}
 									}
+									else
+									{
+										Logger.Info($"WindowHandleと関連付けられたWindowIdが見つからないため、通常のウィンドウ拡大縮小動作となります。{handle}");
+									}
+								}
+								else
+								{
+									Logger.Info($"通常のウィンドウがアクティブなため最小化します: {handle}");
 								}
 
 								if (shouldMinimize)
@@ -233,6 +251,10 @@ namespace WpfTaskBar
 									// ウィンドウを最小化
 									NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
 									Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
+								}
+								else
+								{
+									Logger.Info($"別のウィンドウをアクティブにするため最小化をスキップします: {handle}");
 								}
 							}
 							else
@@ -242,6 +264,10 @@ namespace WpfTaskBar
 								Logger.Info($"ウィンドウをアクティブにしました: {handle}");
 							}
 						}
+					}
+					else
+					{
+						Logger.Info($"Handleプロパティーが代入されていません。");
 					}
 
 					// Chromeタブの場合は、タブもアクティブにする
@@ -440,7 +466,6 @@ namespace WpfTaskBar
 					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 					var title = sb.ToString();
 
-					// Chromeプロセスの場合、全タブ情報を返す
 					if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
 					{
 						var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
@@ -469,35 +494,20 @@ namespace WpfTaskBar
 									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
 									isActive = tab.IsActive
 								}).ToList();
-						}
-						else
-						{
-							// WindowIdが特定できない場合は、全タブを返す（後方互換性のため）
-							chromeTabs = allTabs.Select(tab => new
+
+							var response = new
 							{
-								tabId = tab.TabId,
-								windowId = tab.WindowId,
-								title = tab.Title,
-								url = tab.Url,
-								index = tab.Index,
+								type = "window_info_response",
+								windowHandle = handle.ToInt32(),
+								moduleFileName = processName,
+								title,
 								iconData = chromeIconData,
-								faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
-								isActive = tab.IsActive
-							}).ToList();
+								chromeTabs = chromeTabs.ToArray()
+							};
+
+							SendMessageToWebView(response);
+							return;
 						}
-
-						var response = new
-						{
-							type = "window_info_response",
-							windowHandle = handle.ToInt32(),
-							moduleFileName = processName,
-							title,
-							iconData = chromeIconData,
-							chromeTabs = chromeTabs.ToArray()
-						};
-
-						SendMessageToWebView(response);
-						return;
 					}
 
 					// Chrome以外の通常のウィンドウ
