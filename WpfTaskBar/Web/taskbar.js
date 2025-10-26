@@ -202,153 +202,177 @@ function getItems(targetModuleName) {
 function setupDragAndDrop(item, task) {
     // ドラッグ開始
     item.addEventListener('dragstart', (e) => {
-        draggedTask = task;
-        draggedElement = item;
-        item.classList.add('dragging');
-
-        // ドラッグデータを設定
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', task.handle);
-
-        // 少し遅延してスタイルを適用（ドラッグ画像に影響しないよう）
-        setTimeout(() => {
-            item.style.opacity = '0.5';
-        }, 0);
+        onDragStart(item, task, e);
     });
 
     // ドラッグ終了
     item.addEventListener('dragend', (e) => {
-        item.classList.remove('dragging');
-        item.style.opacity = '';
-
-        // 全ての要素からdrag-overクラスを除去
-        document.querySelectorAll('.task-item').forEach(el => {
-            el.classList.remove('drag-over-above', 'drag-over-below');
-        });
-
-        draggedTask = null;
-        draggedElement = null;
+        onDragEnd(item);
     });
 
     // ドラッグオーバー（他の要素の上を通過）
     item.addEventListener('dragover', (e) => {
-        if (draggedElement && draggedElement !== item) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-
-            const draggedModuleName = draggedElement.dataset.moduleFileName;
-            const targetModuleName = item.dataset.moduleFileName;
-
-            // 異なるアプリケーション
-            if (draggedModuleName !== targetModuleName) {
-                const mouseY = e.clientY;
-                const { firstElement, lastElement } = getItems(targetModuleName)
-
-                if (!firstElement || !lastElement) {
-                    return null;
-                }
-
-                const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
-                if (isAbove !== null) {
-
-                    // 既存のクラスを削除
-                    firstElement.classList.remove('drag-over-above', 'drag-over-below');
-                    lastElement.classList.remove('drag-over-above', 'drag-over-below');
-
-                    // 適切なクラスを追加
-                    if (isAbove) {
-                        firstElement.classList.add('drag-over-above');
-                    } else {
-                        lastElement.classList.add('drag-over-below');
-                    }
-                }
-            } else {
-                // マウスの位置から上半分か下半分かを判定
-                const rect = item.getBoundingClientRect();
-                const mouseY = e.clientY;
-                const itemCenter = rect.top + rect.height / 2;
-                const isAbove = mouseY < itemCenter;
-
-                // 既存のクラスを削除
-                item.classList.remove('drag-over-above', 'drag-over-below');
-
-                // 適切なクラスを追加
-                if (isAbove) {
-                    item.classList.add('drag-over-above');
-                } else {
-                    item.classList.add('drag-over-below');
-                }
-            }
-        }
+        onDragOver(item, e);
     });
 
     // ドラッグエンター（要素に入る）
     item.addEventListener('dragenter', (e) => {
-        if (draggedElement && draggedElement !== item) {
-            e.preventDefault();
-            // dragoverで位置判定を行うためここでは何もしない
-        }
+        onDragEnter(e);
     });
 
     // ドラッグリーブ（要素から出る）
     item.addEventListener('dragleave', (e) => {
-        // 子要素に移動した場合は除外
-        if (!item.contains(e.relatedTarget)) {
-            item.classList.remove('drag-over-above', 'drag-over-below');
-        }
+        onDragLeave(item, e);
     });
 
     // ドロップ
     item.addEventListener('drop', (e) => {
+        onDrop(item, e);
+    });
+}
+
+function onDragStart(item, task, e) {
+    draggedTask = task;
+    draggedElement = item;
+    item.classList.add('dragging');
+
+    // ドラッグデータを設定
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', task.handle);
+
+    // 少し遅延してスタイルを適用（ドラッグ画像に影響しないよう）
+    setTimeout(() => {
+        item.style.opacity = '0.5';
+    }, 0);
+}
+
+function onDragEnd(item) {
+    item.classList.remove('dragging');
+    item.style.opacity = '';
+
+    // 全ての要素からdrag-overクラスを除去
+    document.querySelectorAll('.task-item').forEach(el => {
+        el.classList.remove('drag-over-above', 'drag-over-below');
+    });
+
+    draggedTask = null;
+    draggedElement = null;
+}
+
+function onDragOver(item, e) {
+    if (draggedElement && draggedElement !== item) {
         e.preventDefault();
-        item.classList.remove('drag-over-above', 'drag-over-below');
+        e.dataTransfer.dropEffect = 'move';
 
-        if (draggedTask && draggedElement && draggedElement !== item) {
+        const draggedModuleName = draggedElement.dataset.moduleFileName;
+        const targetModuleName = item.dataset.moduleFileName;
 
-            const draggedModuleName = draggedElement.dataset.moduleFileName;
-            const targetModuleName = item.dataset.moduleFileName;
+        // 異なるアプリケーション
+        if (draggedModuleName !== targetModuleName) {
+            const mouseY = e.clientY;
+            const { firstElement, lastElement } = getItems(targetModuleName)
 
-            // 異なるアプリケーション
-            if (draggedModuleName !== targetModuleName) {
-                const mouseY = e.clientY;
-                const { firstElement, lastElement } = getItems(targetModuleName)
+            if (!firstElement || !lastElement) {
+                return null;
+            }
 
-                if (!firstElement || !lastElement) {
-                    return null;
+            const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
+            if (isAbove !== null) {
+
+                // 既存のクラスを削除
+                firstElement.classList.remove('drag-over-above', 'drag-over-below');
+                lastElement.classList.remove('drag-over-above', 'drag-over-below');
+
+                // 適切なクラスを追加
+                if (isAbove) {
+                    firstElement.classList.add('drag-over-above');
+                } else {
+                    lastElement.classList.add('drag-over-below');
                 }
+            }
+        } else {
+            // マウスの位置から上半分か下半分かを判定
+            const rect = item.getBoundingClientRect();
+            const mouseY = e.clientY;
+            const itemCenter = rect.top + rect.height / 2;
+            const isAbove = mouseY < itemCenter;
 
-                const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
-                if (isAbove !== null) {
+            // 既存のクラスを削除
+            item.classList.remove('drag-over-above', 'drag-over-below');
 
-                    // 既存のクラスを削除
-                    firstElement.classList.remove('drag-over-above', 'drag-over-below');
-                    lastElement.classList.remove('drag-over-above', 'drag-over-below');
-
-                    // 適切なクラスを追加
-                    if (isAbove) {
-                        firstElement.classList.add('drag-over-above');
-                    } else {
-                        lastElement.classList.add('drag-over-below');
-                    }
-
-                    const dropTargetHandle = isAbove ? firstElement.dataset.handle : lastElement.dataset.handle
-                    const draggedHandle = draggedTask.handle;
-
-                    // タスクの順序を変更
-                    reorderTasks(draggedHandle, dropTargetHandle, isAbove);
-                }
+            // 適切なクラスを追加
+            if (isAbove) {
+                item.classList.add('drag-over-above');
             } else {
-                // マウスの位置から上半分か下半分かを判定
-                const rect = item.getBoundingClientRect();
-                const mouseY = e.clientY;
-                const itemCenter = rect.top + rect.height / 2;
-                const isAbove = mouseY < itemCenter;
-
-                // タスクの順序を変更
-                reorderTasks(draggedTask, item.dataset, isAbove);
+                item.classList.add('drag-over-below');
             }
         }
-    });
+    }
+}
+
+function onDragEnter(e) {
+    if (draggedElement) {
+        e.preventDefault();
+        // dragoverで位置判定を行うためここでは何もしない
+    }
+}
+
+function onDragLeave(item, e) {
+    // 子要素に移動した場合は除外
+    if (!item.contains(e.relatedTarget)) {
+        item.classList.remove('drag-over-above', 'drag-over-below');
+    }
+}
+
+function onDrop(item, e) {
+    e.preventDefault();
+    item.classList.remove('drag-over-above', 'drag-over-below');
+
+    if (draggedTask && draggedElement && draggedElement !== item) {
+
+        const draggedModuleName = draggedElement.dataset.moduleFileName;
+        const targetModuleName = item.dataset.moduleFileName;
+
+        // 異なるアプリケーション
+        if (draggedModuleName !== targetModuleName) {
+            const mouseY = e.clientY;
+            const { firstElement, lastElement } = getItems(targetModuleName)
+
+            if (!firstElement || !lastElement) {
+                return null;
+            }
+
+            const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY)
+            if (isAbove !== null) {
+
+                // 既存のクラスを削除
+                firstElement.classList.remove('drag-over-above', 'drag-over-below');
+                lastElement.classList.remove('drag-over-above', 'drag-over-below');
+
+                // 適切なクラスを追加
+                if (isAbove) {
+                    firstElement.classList.add('drag-over-above');
+                } else {
+                    lastElement.classList.add('drag-over-below');
+                }
+
+                const dropTargetHandle = isAbove ? firstElement.dataset.handle : lastElement.dataset.handle
+                const draggedHandle = draggedTask.handle;
+
+                // タスクの順序を変更
+                reorderTasks(draggedHandle, dropTargetHandle, isAbove);
+            }
+        } else {
+            // マウスの位置から上半分か下半分かを判定
+            const rect = item.getBoundingClientRect();
+            const mouseY = e.clientY;
+            const itemCenter = rect.top + rect.height / 2;
+            const isAbove = mouseY < itemCenter;
+
+            // タスクの順序を変更
+            reorderTasks(draggedTask, item.dataset, isAbove);
+        }
+    }
 }
 
 // タスクの順序を変更（同種アプリケーションの一括移動対応）

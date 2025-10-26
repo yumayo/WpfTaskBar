@@ -256,6 +256,7 @@ class WindowManager {
                     isChrome: true,
                     tabId: tab.tabId,
                     windowId: tab.windowId,
+                    index: tab.index,
                     url: tab.url
                 }));
             } else {
