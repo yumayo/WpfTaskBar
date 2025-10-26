@@ -13,16 +13,7 @@ function updateTaskList(newTasks) {
 
     tasks = newTasks;
 
-    const taskList = document.getElementById('taskList');
-
-    // 既存のタスクアイテムをクリア
-    taskList.innerHTML = '';
-
-    // タスクアイテムを追加
-    tasks.forEach(task => {
-        const taskItem = createTaskItem(task);
-        taskList.appendChild(taskItem);
-    });
+    updateTaskListOrder();
 }
 
 // タスクリストの比較関数
@@ -36,6 +27,9 @@ function areTasksEqual(oldTasks, newTasks) {
         const newTask = newTasks[i];
 
         if (oldTask.handle !== newTask.handle ||
+            oldTask.tabId !== newTask.tabId ||
+            oldTask.windowId !== newTask.windowId ||
+            oldTask.index !== newTask.index ||
             oldTask.title !== newTask.title ||
             oldTask.moduleFileName !== newTask.moduleFileName ||
             oldTask.isForeground !== newTask.isForeground ||
