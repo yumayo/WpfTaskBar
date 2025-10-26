@@ -4,7 +4,9 @@ let draggedElement = null;
 
 // タスクリストの更新
 function updateTaskList(newTasks) {
-    newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => task.handle)
+    newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => {
+        return `${task.handle}-${task.tabId}-${task.windowId}`
+    })
 
     // 変更がない場合は処理をスキップ
     if (areTasksEqual(tasks, newTasks)) {
@@ -435,7 +437,7 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
     updateTaskListOrder();
 
     window.applicationOrder.updateOrderFromList(tasks.map(task => task.moduleFileName))
-    window.applicationOrder.updateWindowOrder(tasks.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName })))
+    window.applicationOrder.updateWindowOrder(tasks.map(task => ({ handle: `${task.handle}-${task.tabId}-${task.windowId}`, moduleFileName: task.moduleFileName })))
 }
 
 // 同種アプリケーションの一括移動
