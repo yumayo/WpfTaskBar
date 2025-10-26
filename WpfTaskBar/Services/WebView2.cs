@@ -36,8 +36,14 @@ namespace WpfTaskBar
 				// JavaScriptからのメッセージを受信するイベントハンドラを設定
 				_webView2.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
+#if DEBUG
+				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Web", "index.html");
+				htmlPath = Path.GetFullPath(htmlPath);
+#else
 				// HTMLファイルのパスを取得
 				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Web", "index.html");
+#endif
+				
 				var htmlUri = new Uri($"file:///{htmlPath.Replace('\\', '/')}");
 
 				Logger.Info($"Loading HTML from: {htmlUri}");
