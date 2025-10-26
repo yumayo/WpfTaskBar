@@ -1,92 +1,94 @@
 (async () => {
-    // 動的インポートを使用してWebSocketClientを読み込む
-    const { WebSocketClient } = await import(chrome.runtime.getURL('src/utils/websocket-client.js'));
-
-    // スリープ関数
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-    // WebSocketクライアントを作成
-    const wsClient = new WebSocketClient();
-
-    // ページアンロード時のクリーンアップ
-    window.addEventListener('beforeunload', () => {
-        if (wsClient) {
-            console.log('[Content] Closing WebSocket');
-            wsClient.close();
-        }
-    });
-
-    // WebSocketコールバックを登録
-    wsClient.onConnected(() => {
-        console.log('[Content] WebSocket connected');
-    });
-
-    wsClient.onMessage((message) => {
-        console.log('[Content] WebSocket message received:', message);
-    });
-
-    wsClient.onDisconnected(() => {
-        console.log('[Content] WebSocket disconnected');
-    });
-
-    wsClient.onError((error) => {
-        console.error('[Content] WebSocket error:', error);
-    });
-
-    // WebSocket接続を開始
-    wsClient.initialize();
-
-    // WebSocket接続を待機
-    let i = 0;
-    for (; i < 30; ++i) {
-        if (wsClient.getConnectionStatus()) {
-            // 接続成功
-            break;
-        }
-        console.log(`[Content] Waiting for WebSocket connection... (attempt ${i + 1}/30)`);
-        await sleep(100);
-    }
-
-    if (i >= 30) {
-        console.error('[Content] Failed to establish WebSocket connection after 30 attempts');
-        return;
-    }
 
     // ウィンドウIDを取得
     async function getTabInfo() {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             chrome.runtime.sendMessage({ action: 'getTabInfo' }, (response) => {
                 if (response) {
-                    resolve(response);
-                } else {
-                    resolve(null);
+                    if (response.tabId && response.windowId) {
+                        resolve(response);
+                        return;
+                    }
                 }
+                reject(new Error('[Content] Fail getTabInfo'));
             });
         });
     }
 
-    const tabInfo = await getTabInfo();
+    async function connectWebSocket(url, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            console.log('[Content] Connecting WebSocket');
+            const ws = new WebSocket(url);
 
-    if (tabInfo) {
-        // WindowHandleをバインドする
-        const message = {
-            action: 'bindWindowHandle',
-            data: {
-                tabId: tabInfo.tabId,
-                windowId: tabInfo.windowId
-            }
-        };
+            const timer = setTimeout(() => {
+                ws.close();
+                reject(new Error('[Content] Timeout WebSocket'));
+            }, timeout);
 
-        wsClient.sendMessage(message);
-        console.log('Sent bindWindowHandle message:', message);
-        console.log('[Content] Bound window handle for tab:', tabInfo);
-    } else {
-        console.warn('[Content] Failed to get tab info for binding window handle');
+            ws.onopen = () => {
+                clearTimeout(timer);
+                console.log('[Content] Connected WebSocket');
+                resolve(ws);
+            };
+
+            ws.onerror = (error) => {
+                clearTimeout(timer);
+                reject(error);
+            };
+        });
     }
 
-    // TODO: bindWindowHandleのレスポンスを受け取ってから閉じる
-    await sleep(5000);
+    async function closeWebSocket(ws, timeout = 5000) {
+        return new Promise((resolve, reject) => {
 
-    console.log('[Content] Closing WebSocket');
-    wsClient.close();
+            if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+                console.log('[Content] Closing WebSocket');
+                ws.close();
+
+                const timer = setTimeout(() => {
+                    ws.close();
+                    reject(new Error('[Content] Timeout WebSocket'));
+                }, timeout);
+
+                ws.onclose = () => {
+                    clearTimeout(timer);
+                    console.log('[Content] Closed WebSocket');
+                    resolve(ws);
+                };
+
+                ws.onerror = (error) => {
+                    clearTimeout(timer);
+                    reject(error);
+                };
+            } else {
+                console.log('[Content] Already Closed WebSocket');
+            }
+        });
+    }
+
+    const ws = await connectWebSocket('ws://127.0.0.1:5000/ws');
+
+    // ページアンロード時のクリーンアップ
+    window.addEventListener('beforeunload', () => {
+        if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+            console.log('[Content] Closing WebSocket');
+            ws.close();
+        }
+    });
+
+    const tabInfo = await getTabInfo();
+
+    // WindowHandleをバインドする
+    const message = {
+        action: 'bindWindowHandle',
+        data: {
+            tabId: tabInfo.tabId,
+            windowId: tabInfo.windowId
+        }
+    };
+    const jsonMessage = JSON.stringify(message);
+    ws.send(jsonMessage);
+    console.log(`[Content] Request bindWindowHandle windowId:${tabInfo.windowId} tabInfo:${tabInfo.tabId}`);
+
+    await closeWebSocket(ws);
 })();
