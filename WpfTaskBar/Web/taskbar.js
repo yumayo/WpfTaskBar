@@ -354,9 +354,15 @@ function onDrop(item, e) {
 
         const draggedModuleName = draggedElement.dataset.moduleFileName;
         const targetModuleName = item.dataset.moduleFileName;
+        
+        let differentApplication = draggedModuleName !== targetModuleName;
+        
+        if (parseInt(draggedElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
+            differentApplication = true;
+        }
 
         // 異なるアプリケーション
-        if (draggedModuleName !== targetModuleName) {
+        if (differentApplication) {
             const mouseY = e.clientY;
             const { firstElement, lastElement } = getItems(targetModuleName)
 
@@ -439,11 +445,16 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
     const draggedModuleName = draggedTaskObj.moduleFileName;
     const targetModuleName = targetTaskObj.moduleFileName;
 
+    let differentApplication = draggedModuleName !== targetModuleName;
+    if (draggedTaskObj.windowId !== targetTaskObj.windowId) {
+        differentApplication = true;
+    }
+
     // Chromeタブの場合の特別な処理
     const isBothChrome = draggedTaskObj.isChrome && targetTaskObj.isChrome;
 
     // 異なるアプリケーション間での移動の場合のみ一括移動を実行
-    if (draggedModuleName !== targetModuleName) {
+    if (differentApplication) {
         reorderTasksWithSameApp(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
     } else if (isBothChrome) {
         // Chromeタブ同士の移動は個別のタブとして扱う（tabIdとwindowIdを使用）
