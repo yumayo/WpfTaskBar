@@ -15,10 +15,6 @@ export function registerCurrentTabs() {
 export function registerTab(tab) {
     if (!getConnectionStatus()) return;
 
-    // faviconUrlをデバッグ
-    console.log('Tab object:', tab);
-    console.log('favIconUrl:', tab.favIconUrl);
-
     const tabInfo = {
         tabId: tab.id,
         windowId: tab.windowId,

@@ -44,15 +44,19 @@ export function setupTabEventListeners() {
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        console.log('【OnUpdated】 Tab updated:', tab, 'changeInfo:', changeInfo);
+
         if (changeInfo.url || changeInfo.title || changeInfo.favIconUrl) {
+            console.log('【OnUpdated】Tab property changed (url/title/favicon), registering tab:', tab);
             registerTab(tab);
         }
 
         // ページの読み込みが完了した時にfaviconが確定するのでタブを再登録
         if (changeInfo.status === 'complete') {
-            registerTab(tab);
+            console.log('【OnUpdated】Tab loading complete, notifying tabs change and re-registering:', tab);
             // タブ更新時にすべてのタブ情報を送信
             notifyTabsChange();
+            registerTab(tab);
         }
     });
 

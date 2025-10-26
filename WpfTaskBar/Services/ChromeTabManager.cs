@@ -22,7 +22,7 @@ namespace WpfTaskBar
         public void RegisterTab(TabInfo tabInfo)
         {
             _tabs.AddOrUpdate(tabInfo.TabId, tabInfo, (key, oldValue) => tabInfo);
-            Logger.Info($"Tab registered: ID={tabInfo.TabId}, Title={tabInfo.Title}, URL={tabInfo.Url}");
+            Logger.Info($"Tab registered: ID={tabInfo.TabId}, Title={tabInfo.Title}, URL={tabInfo.Url}, FavIconUrl={tabInfo.FaviconUrl}");
         }
 
         public void UnregisterTab(int tabId)
