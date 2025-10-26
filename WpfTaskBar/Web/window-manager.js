@@ -255,6 +255,7 @@ class WindowManager {
                     // Chromeウィンドウがフォアグラウンドで、かつタブがアクティブな場合のみハイライト
                     isForeground: windowHandle === foregroundHwnd && tab.isActive,
                     iconData: tab.iconData || null,
+                    faviconData: tab.faviconData || null,
                     // Chromeタブ専用のプロパティ
                     isChrome: true,
                     tabId: tab.tabId,

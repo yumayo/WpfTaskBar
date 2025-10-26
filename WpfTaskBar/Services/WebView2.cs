@@ -447,6 +447,9 @@ namespace WpfTaskBar
 					{
 						var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
 
+						// Chromeアプリケーションのアイコンを取得
+						var chromeIconData = GetIconAsBase64(processName);
+
 						// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
 						// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
 						var chromeTabs = allTabs.Select(tab => new
@@ -455,7 +458,8 @@ namespace WpfTaskBar
 							windowId = tab.WindowId,
 							title = tab.Title,
 							url = tab.Url,
-							iconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+							iconData = chromeIconData,
+							faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
 							isActive = tab.IsActive
 						}).ToList();
 
@@ -465,7 +469,7 @@ namespace WpfTaskBar
 							windowHandle = handle.ToInt32(),
 							moduleFileName = processName,
 							title,
-							iconData = (string?)null,
+							iconData = chromeIconData,
 							chromeTabs = chromeTabs.ToArray()
 						};
 

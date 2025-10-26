@@ -59,7 +59,26 @@ function createTaskItem(task) {
     // アイコン
     const icon = document.createElement('div');
     icon.className = 'task-icon';
-    if (task.iconData) {
+
+    if (task.isChrome && task.iconData) {
+        // Chromeタブの場合：Chromeアイコンをベースに、右上にFaviconを表示
+        icon.classList.add('chrome-icon-container');
+
+        // Chromeアイコン（ベース）
+        const chromeIcon = document.createElement('img');
+        chromeIcon.src = `data:image/png;base64,${task.iconData}`;
+        chromeIcon.className = 'chrome-base-icon';
+        icon.appendChild(chromeIcon);
+
+        // Favicon（右上に円形で表示）
+        if (task.faviconData) {
+            const favicon = document.createElement('img');
+            favicon.src = `data:image/png;base64,${task.faviconData}`;
+            favicon.className = 'chrome-favicon-overlay';
+            icon.appendChild(favicon);
+        }
+    } else if (task.iconData) {
+        // 通常のアプリケーションアイコン
         const img = document.createElement('img');
         img.src = `data:image/png;base64,${task.iconData}`;
         img.style.width = '100%';
