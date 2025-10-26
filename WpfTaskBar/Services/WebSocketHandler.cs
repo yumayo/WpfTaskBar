@@ -3,7 +3,6 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
-using System.Net.NetworkInformation;
 using System.Diagnostics;
 
 namespace WpfTaskBar
