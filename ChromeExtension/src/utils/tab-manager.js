@@ -77,6 +77,13 @@ export function setupTabEventListeners() {
         // タブ削除時にすべてのタブ情報を送信
         notifyTabsChange();
     });
+
+    // タブが並び替えられた時に通知
+    chrome.tabs.onMoved.addListener((tabId, moveInfo) => {
+        console.log('Tab moved:', tabId, 'from index', moveInfo.fromIndex, 'to index', moveInfo.toIndex);
+        // タブの並び替え時にすべてのタブ情報を送信
+        notifyTabsChange();
+    });
 }
 
 // すべてのタブ情報を送信する汎用関数
