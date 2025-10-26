@@ -356,11 +356,10 @@ function onDrop(item, e) {
                     lastElement.classList.add('drag-over-below');
                 }
 
-                const dropTargetHandle = isAbove ? firstElement.dataset.handle : lastElement.dataset.handle
-                const draggedHandle = draggedTask.handle;
+                const dropTargetTask = isAbove ? firstElement.dataset : lastElement.dataset
 
                 // タスクの順序を変更
-                reorderTasks(draggedHandle, dropTargetHandle, isAbove);
+                reorderTasks(draggedTask, dropTargetTask, isAbove);
             }
         } else {
             // マウスの位置から上半分か下半分かを判定
@@ -386,7 +385,7 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
 
         // Chromeタブの場合は、tabIdとwindowIdも一致する必要がある
         if (t.isChrome && targetTask.tabId && targetTask.windowId) {
-            return t.tabId === parseInt(targetTask.tabId) && t.windowId === parseInt(targetTask.windowId);
+            return t.tabId === targetTask.tabId && t.windowId === targetTask.windowId;
         }
 
         return true;
