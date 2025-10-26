@@ -449,18 +449,42 @@ namespace WpfTaskBar
 						var chromeIconData = GetIconAsBase64(processName);
 
 						// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
-						// TODO: 現時点ではWindowIdとhwndの正確な対応が不明なため、全タブを返す
-						var chromeTabs = allTabs.Select(tab => new
+						// hwndから対応するWindowIdを探す
+						var targetWindowId = FindWindowIdByHwnd(handle);
+						IEnumerable<dynamic> chromeTabs;
+
+						if (targetWindowId.HasValue)
 						{
-							tabId = tab.TabId,
-							windowId = tab.WindowId,
-							title = tab.Title,
-							url = tab.Url,
-							index = tab.Index,
-							iconData = chromeIconData,
-							faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
-							isActive = tab.IsActive
-						}).ToList();
+							// WindowIdが特定できた場合は、そのウィンドウのタブのみをフィルタリング
+							chromeTabs = allTabs
+								.Where(tab => tab.WindowId == targetWindowId.Value)
+								.Select(tab => new
+								{
+									tabId = tab.TabId,
+									windowId = tab.WindowId,
+									title = tab.Title,
+									url = tab.Url,
+									index = tab.Index,
+									iconData = chromeIconData,
+									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+									isActive = tab.IsActive
+								}).ToList();
+						}
+						else
+						{
+							// WindowIdが特定できない場合は、全タブを返す（後方互換性のため）
+							chromeTabs = allTabs.Select(tab => new
+							{
+								tabId = tab.TabId,
+								windowId = tab.WindowId,
+								title = tab.Title,
+								url = tab.Url,
+								index = tab.Index,
+								iconData = chromeIconData,
+								faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+								isActive = tab.IsActive
+							}).ToList();
+						}
 
 						var response = new
 						{
@@ -623,6 +647,27 @@ namespace WpfTaskBar
 					NativeMethods.DeleteObject(hBitmap);
 				}
 			}
+		}
+
+		private int? FindWindowIdByHwnd(IntPtr hwnd)
+		{
+			// WebSocketHandlerからhwndに対応するwindowIdを探す
+			// _chromeTabManagerの全タブから、対応するwindowIdを探す
+			var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
+
+			// 各windowIdに対して、WebSocketHandlerから対応するhwndを取得して比較
+			var uniqueWindowIds = allTabs.Select(tab => tab.WindowId).Distinct();
+
+			foreach (var windowId in uniqueWindowIds)
+			{
+				var mappedHwnd = _webSocketHandler.GetHwndByWindowId(windowId);
+				if (mappedHwnd == hwnd)
+				{
+					return windowId;
+				}
+			}
+
+			return null;
 		}
 
 		private void HandleRequestIsWindowOnCurrentVirtualDesktop(JsonElement root)

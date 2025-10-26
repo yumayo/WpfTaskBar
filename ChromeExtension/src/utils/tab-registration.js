@@ -1,6 +1,6 @@
 // タブ登録機能を処理するモジュール
 
-import { sendMessage, getConnectionStatus } from './websocket-client.js';
+import { wsClient } from '../background/background.js';
 
 // 現在のタブ情報を登録
 export function registerCurrentTabs() {
@@ -13,7 +13,7 @@ export function registerCurrentTabs() {
 
 // タブ情報を登録
 export function registerTab(tab) {
-    if (!getConnectionStatus()) return;
+    if (!wsClient.getConnectionStatus()) return;
 
     const tabInfo = {
         tabId: tab.id,
@@ -25,7 +25,7 @@ export function registerTab(tab) {
         index: tab.index || 0
     };
 
-    sendMessage({
+    wsClient.sendMessage({
         action: 'registerTab',
         data: tabInfo
     });
@@ -35,9 +35,9 @@ export function registerTab(tab) {
 
 // タブ情報を登録解除
 export function unregisterTab(tabId) {
-    if (!getConnectionStatus()) return;
+    if (!wsClient.getConnectionStatus()) return;
 
-    sendMessage({
+    wsClient.sendMessage({
         action: 'unregisterTab',
         data: {
             tabId: tabId

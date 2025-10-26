@@ -1,6 +1,6 @@
 // WebSocketメッセージハンドラーを処理するモジュール
 
-import { sendMessage } from '../utils/websocket-client.js';
+import { wsClient } from './background.js';
 
 // メッセージ処理のメインハンドラー
 export function handleMessage(message) {
@@ -39,7 +39,7 @@ async function handleQueryAllTabs() {
         }));
 
         // WebSocket経由でタブ情報を送信
-        sendMessage({
+        wsClient.sendMessage({
             action: 'updateTabs',
             data: {
                 tabs: tabsInfo

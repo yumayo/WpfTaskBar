@@ -1,6 +1,6 @@
 // タブ管理とイベント処理を行うモジュール
 
-import { sendMessage, getConnectionStatus } from './websocket-client.js';
+import { wsClient } from '../background/background.js';
 import { registerTab, unregisterTab } from './tab-registration.js';
 
 // 通知を送信（テスト用）
@@ -11,11 +11,11 @@ export function sendTestNotification(tabId) {
             return;
         }
 
-        if (!getConnectionStatus()) {
+        if (!wsClient.getConnectionStatus()) {
             console.log('WebSocket not connected, skipping page loaded notification');
             return;
         }
-        
+
         const notification = {
             title: 'テスト通知',
             message: `${tab.title} からの通知です`,
@@ -25,8 +25,8 @@ export function sendTestNotification(tabId) {
             tabTitle: tab.title,
             timestamp: new Date().toISOString()
         };
-        
-        sendMessage({
+
+        wsClient.sendMessage({
             action: 'sendNotification',
             data: notification
         });
@@ -92,7 +92,7 @@ export function setupTabEventListeners() {
 
 // すべてのタブ情報を送信する汎用関数
 function notifyTabsChange() {
-    if (!getConnectionStatus()) {
+    if (!wsClient.getConnectionStatus()) {
         console.log('WebSocket not connected, skipping tabs change notification');
         return;
     }
@@ -109,7 +109,7 @@ function notifyTabsChange() {
             index: t.index || 0
         }));
 
-        sendMessage({
+        wsClient.sendMessage({
             action: 'updateTabs',
             data: {
                 tabs: tabsInfo

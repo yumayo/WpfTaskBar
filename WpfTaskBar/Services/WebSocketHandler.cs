@@ -11,6 +11,7 @@ namespace WpfTaskBar
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
         private readonly ConcurrentDictionary<string, IntPtr> _connectionWindowHandles = new();
+        private readonly ConcurrentDictionary<int, IntPtr> _windowIdToHwndMap = new();
         private readonly ChromeTabManager _tabManager;
         
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -115,6 +116,9 @@ namespace WpfTaskBar
                     case "updateTabs":
                         HandleUpdateTabs(webSocketMessage.Data);
                         break;
+                    case "bindWindowHandle":
+                        HandleBindWindowHandle(connectionId, webSocketMessage.Data);
+                        break;
                     case "ping":
                         await SendMessage(webSocket, new WebSocketMessage { Action = "pong", Data = new {} });
                         break;
@@ -212,6 +216,37 @@ namespace WpfTaskBar
             catch (Exception ex)
             {
                 Logger.Error(ex, "Error handling tabs update");
+            }
+        }
+
+        private void HandleBindWindowHandle(string connectionId, object data)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
+                if (tabInfo != null)
+                {
+                    // connectionIdから既に取得済みのChromeウィンドウハンドルを取得
+                    if (_connectionWindowHandles.TryGetValue(connectionId, out var chromeHandle))
+                    {
+                        // WindowIdとWindowHandleを紐づける
+                        _windowIdToHwndMap[tabInfo.WindowId] = chromeHandle;
+                        Logger.Info($"Bound WindowId={tabInfo.WindowId} to Chrome Handle={chromeHandle} (ConnectionId={connectionId})");
+                    }
+                    else
+                    {
+                        Logger.Warning($"Failed to bind WindowId={tabInfo.WindowId}: Chrome handle not found for ConnectionId={connectionId}");
+                    }
+                }
+                else
+                {
+                    Logger.Warning($"Failed to bind window handle: Invalid tabInfo or WindowId is null");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error handling bindWindowHandle");
             }
         }
 
@@ -460,9 +495,18 @@ namespace WpfTaskBar
             }
         }
 
+        public IntPtr GetHwndByWindowId(int windowId)
+        {
+            if (_windowIdToHwndMap.TryGetValue(windowId, out var hwnd))
+            {
+                return hwnd;
+            }
+            return IntPtr.Zero;
+        }
+
         public void Dispose()
         {
-            
+
             // 全ての接続を閉じる
             foreach (var connection in _connections.Values)
             {
@@ -471,7 +515,7 @@ namespace WpfTaskBar
                     connection.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down", CancellationToken.None);
                 }
             }
-            
+
             Logger.Info("WebSocketHandler disposed");
         }
     }

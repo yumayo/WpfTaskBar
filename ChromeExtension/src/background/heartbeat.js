@@ -1,6 +1,6 @@
 // ハートビート機能を処理するモジュール
 
-import { sendMessage, getConnectionStatus } from '../utils/websocket-client.js';
+import { wsClient } from './background.js';
 
 let heartbeatTimer = null;
 let heartbeatInterval = 30000; // 30秒ごとにping送信
@@ -8,14 +8,14 @@ let heartbeatInterval = 30000; // 30秒ごとにping送信
 // ハートビートを開始
 export function startHeartbeat() {
     stopHeartbeat(); // 既存のタイマーをクリア
-    
+
     heartbeatTimer = setInterval(() => {
-        if (getConnectionStatus()) {
+        if (wsClient.getConnectionStatus()) {
             console.log('Sending heartbeat ping...');
-            sendMessage({ action: 'ping', data: {} });
+            wsClient.sendMessage({ action: 'ping', data: {} });
         }
     }, heartbeatInterval);
-    
+
     console.log(`Heartbeat started with ${heartbeatInterval}ms interval`);
 }
 

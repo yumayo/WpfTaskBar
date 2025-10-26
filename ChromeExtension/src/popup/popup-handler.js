@@ -18,7 +18,6 @@ export function setupPopupMessageListener(getConnectionStatus, sendTestNotificat
                 break;
                 
             default:
-                sendResponse({ error: 'Unknown action' });
                 break;
         }
     });
