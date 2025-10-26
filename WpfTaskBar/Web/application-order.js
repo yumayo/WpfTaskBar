@@ -194,7 +194,7 @@ class ApplicationOrder {
                 serializableData[key] = Array.from(value);
             });
 
-            await this.writeFile('application_relations.json', JSON.stringify(serializableData));
+            await this.writeFile('application_relations.json', JSON.stringify(serializableData, null, 2));
             console.log('Application relations save requested');
         } catch (error) {
             console.error('関係データの保存に失敗しました:', error);
@@ -230,7 +230,7 @@ class ApplicationOrder {
                 serializableData[key] = value;
             });
 
-            await this.writeFile('window_order.json', JSON.stringify(serializableData));
+            await this.writeFile('window_order.json', JSON.stringify(serializableData, null, 2));
             console.log('Window order save requested');
         } catch (error) {
             console.error('ウィンドウ順序の保存に失敗しました:', error);
