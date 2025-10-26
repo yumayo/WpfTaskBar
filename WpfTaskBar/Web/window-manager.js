@@ -53,8 +53,7 @@ class WindowManager {
                     if (data && data.type === 'window_handles_response') {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
-                        const windowHandles = data.windowHandles.map(handle => parseInt(handle, 10));
-                        resolve(windowHandles);
+                        resolve(data.windowHandles);
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -200,7 +199,7 @@ class WindowManager {
                     if (data && data.type === 'foreground_window_response') {
                         clearTimeout(timeout);
                         window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(parseInt(data.foregroundWindow, 10));
+                        resolve(data.foregroundWindow);
                     }
                 } catch (error) {
                     clearTimeout(timeout);
@@ -310,7 +309,6 @@ class WindowManager {
                     }
 
                     if (data && data.type === 'window_info_response') {
-                        data.windowHandle = parseInt(data.windowHandle, 10);
                         if (data.windowHandle === windowHandle) {
                             clearTimeout(timeout);
                             window.chrome.webview.removeEventListener('message', responseHandler);
@@ -343,11 +341,12 @@ class WindowManager {
                         data = event.data;
                     }
 
-                    if (data && data.type === 'is_window_on_current_virtual_desktop_response' &&
-                        parseInt(data.windowHandle) === windowHandle) {
-                        clearTimeout(timeout);
-                        window.chrome.webview.removeEventListener('message', responseHandler);
-                        resolve(data.isOnCurrentVirtualDesktop);
+                    if (data && data.type === 'is_window_on_current_virtual_desktop_response') {
+                        if (data.windowHandle === windowHandle) {
+                            clearTimeout(timeout);
+                            window.chrome.webview.removeEventListener('message', responseHandler);
+                            resolve(data.isOnCurrentVirtualDesktop);   
+                        }
                     }
                 } catch (error) {
                     clearTimeout(timeout);
