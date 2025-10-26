@@ -431,8 +431,6 @@ namespace WpfTaskBar
 		{
 			try
 			{
-				Logger.Info($"On HandleRequestWindowInfo {root}");
-
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
@@ -458,6 +456,7 @@ namespace WpfTaskBar
 							windowId = tab.WindowId,
 							title = tab.Title,
 							url = tab.Url,
+							index = tab.Index,
 							iconData = chromeIconData,
 							faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
 							isActive = tab.IsActive
@@ -474,7 +473,6 @@ namespace WpfTaskBar
 						};
 
 						SendMessageToWebView(response);
-						Logger.Info($"Chrome window info with {chromeTabs.Count} tabs returned for handle {handle}");
 						return;
 					}
 
