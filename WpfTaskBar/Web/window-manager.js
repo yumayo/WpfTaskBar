@@ -3,7 +3,6 @@
 
 class WindowManager {
     constructor() {
-        this.windowHandles = [];
         this.taskBarItems = [];
     }
 
@@ -18,10 +17,10 @@ class WindowManager {
     async updateTaskWindows() {
         try {
             // C#側にウィンドウハンドル一覧の取得を要求
-            this.windowHandles = await this.requestWindowHandles();
+            const windowHandles = await this.requestWindowHandles();
 
             // タスクバーウィンドウの更新
-            await this.updateTaskBarWindows();
+            await this.updateTaskBarWindows(windowHandles);
 
             // 100ms後に再実行
             setTimeout(() => {
@@ -72,20 +71,20 @@ class WindowManager {
     }
 
     // タスクバーウィンドウの更新処理
-    async updateTaskBarWindows() {
+    async updateTaskBarWindows(windowHandles) {
         try {
             // フォアグラウンドウィンドウの取得
             const foregroundHwnd = await this.requestForegroundWindow();
 
             // ウィンドウハンドルに存在しないタスクバーを削除
             this.taskBarItems = this.taskBarItems.filter(item => {
-                return this.windowHandles.some(handle =>
+                return windowHandles.some(handle =>
                     handle === item.handle
                 );
             });
 
             // 各ウィンドウハンドルを処理
-            for (const windowHandle of this.windowHandles) {
+            for (const windowHandle of windowHandles) {
                 // タスクバーウィンドウかどうかの判定をC#側に要求
                 let isTaskBarWindow = await this.requestIsTaskBarWindow(windowHandle);
 
@@ -136,6 +135,24 @@ class WindowManager {
                                     this.taskBarItems.push(updatedItem);
                                 }
                             }
+
+                            // taskbarItemsのChrome要素をindex順でソート
+                            this.taskBarItems.sort((a, b) => {
+                                // 両方Chromeタブの場合、index順でソート
+                                if (a.isChrome && b.isChrome) {
+                                    // 同じwindowIdの場合はindex順
+                                    if (a.windowId === b.windowId) {
+                                        return a.index - b.index;
+                                    }
+                                    // 異なるwindowIdの場合はwindowId順
+                                    return a.windowId - b.windowId;
+                                }
+                                // Chromeタブとそうでないものは元の順序を維持
+                                if (a.isChrome && !b.isChrome) return -1;
+                                if (!a.isChrome && b.isChrome) return 1;
+                                return 0;
+                            });
+
                         } else {
                             const index = this.taskBarItems.findIndex(item => item.handle === updatedItemOrItems.handle);
                             this.taskBarItems[index] = updatedItemOrItems;
@@ -149,16 +166,7 @@ class WindowManager {
                         if (Array.isArray(newItemOrItems)) {
                             // 各タブを追加
                             for (let newItem of newItemOrItems) {
-                                const index = this.taskBarItems.findIndex(item =>
-                                    item.handle === newItem.handle &&
-                                    item.tabId === newItem.tabId &&
-                                    item.windowId === newItem.windowId
-                                );
-                                if (index >= 0) {
-                                    this.taskBarItems[index] = newItem;
-                                } else {
-                                    this.taskBarItems.push(newItem);
-                                }
+                                this.taskBarItems.push(newItem);
                             }
                         } else {
                             this.taskBarItems.push(newItemOrItems);
