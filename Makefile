@@ -1,4 +1,4 @@
-.PHONY: initialize
+.PHONY: initialize artifact
 
 initialize:
 	mkdir -p .claude.local
@@ -6,3 +6,13 @@ initialize:
 	mkdir -p .claude.local/.claude
 
 DEFAULT_GUAL := initialize
+
+artifact:
+	rm -rf dist
+	rm -rf WpfTaskBar/log
+	dotnet.exe build WpfTaskBar --configuration Release -o dist
+	cp -r ChromeExtension dist
+	(cd dist && zip -r ../WpfTaskBar_${APP_VERSION}.zip .)
+	git tag ${APP_VERSION}
+	git push origin master
+	git push origin --tags

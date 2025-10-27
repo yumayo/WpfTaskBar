@@ -47,10 +47,14 @@ docker compose up -d --build && docker compose exec ai bash -i -c "claude -c"
 # ビルド
 
 ```sh
-rm -rf dist
-dotnet build WpfTaskBar --configuration Release -o dist
-(cd dist && zip -r ../WpfTaskBar_v0.1.zip .)
-git tag v0.1
+wsl
+make artifact APP_VERSION=v0.xx.zip
+```
+
+# Gitプッシュ
+
+```sh
 git push origin master
+git tag v0.xx
 git push origin --tags
 ```
