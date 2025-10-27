@@ -62,22 +62,11 @@ function createTaskItem(task) {
     icon.className = 'task-icon';
 
     if (task.isChrome && task.iconData) {
-        // Chromeタブの場合：Chromeアイコンをベースに、右上にFaviconを表示
-        icon.classList.add('chrome-icon-container');
-
-        // Chromeアイコン（ベース）
+        // Chromeタブの場合：Chromeアイコンを表示
         const chromeIcon = document.createElement('img');
         chromeIcon.src = `data:image/png;base64,${task.iconData}`;
         chromeIcon.className = 'chrome-base-icon';
         icon.appendChild(chromeIcon);
-
-        // Favicon（右上に円形で表示）
-        if (task.faviconData) {
-            const favicon = document.createElement('img');
-            favicon.src = `data:image/png;base64,${task.faviconData}`;
-            favicon.className = 'chrome-favicon-overlay';
-            icon.appendChild(favicon);
-        }
     } else if (task.iconData) {
         // 通常のアプリケーションアイコン
         const img = document.createElement('img');
@@ -93,13 +82,23 @@ function createTaskItem(task) {
         icon.textContent = processName.charAt(0).toUpperCase();
     }
 
+    // Chromeタブの場合のFavicon（アイコンとタイトルの間）
+    if (task.isChrome && task.faviconData) {
+        const favicon = document.createElement('img');
+        favicon.src = `data:image/png;base64,${task.faviconData}`;
+        favicon.className = 'chrome-favicon';
+        item.appendChild(icon);
+        item.appendChild(favicon);
+    } else {
+        item.appendChild(icon);
+    }
+
     // テキスト
     const text = document.createElement('div');
     text.className = 'task-text';
     text.textContent = task.title || 'Unknown';
     text.title = task.title || 'Unknown'; // ツールチップ
 
-    item.appendChild(icon);
     item.appendChild(text);
 
     // ドラッグ&ドロップイベントリスナー
