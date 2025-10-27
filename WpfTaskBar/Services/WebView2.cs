@@ -572,11 +572,63 @@ namespace WpfTaskBar
 			{
 				Logger.Error(ex, $"Favicon URLの変換に失敗しました: {faviconUrl}");
 
-				// エラーの場合もキャッシュに保存（null値として）
-				_faviconCache[faviconUrl] = null;
+				// 一時的なネットワークエラーかどうかを判定
+				bool isTemporaryError = IsTemporaryNetworkError(ex);
+
+				// 一時的なエラーでない場合のみキャッシュに保存
+				if (!isTemporaryError)
+				{
+					_faviconCache[faviconUrl] = null;
+					Logger.Info($"Faviconのエラーをキャッシュしました: {faviconUrl}");
+				}
+				else
+				{
+					Logger.Info($"一時的なネットワークエラーのためキャッシュしません: {faviconUrl}");
+				}
 
 				return null;
 			}
+		}
+
+		private bool IsTemporaryNetworkError(Exception ex)
+		{
+			// 一時的なネットワークエラーと判定する条件
+			// 1. TaskCanceledException (タイムアウト)
+			// 2. HttpRequestException のうち特定のもの (接続失敗など)
+			// 3. AggregateException の内部例外を確認
+
+			if (ex is TaskCanceledException || ex is OperationCanceledException)
+			{
+				return true;
+			}
+
+			if (ex is System.Net.Http.HttpRequestException httpEx)
+			{
+				// 接続エラーやDNS解決失敗などは一時的なエラーとみなす
+				var message = httpEx.Message.ToLower();
+				if (message.Contains("timeout") ||
+				    message.Contains("connection") ||
+				    message.Contains("network") ||
+				    message.Contains("dns"))
+				{
+					return true;
+				}
+			}
+
+			if (ex is AggregateException aggEx)
+			{
+				// AggregateExceptionの内部例外をチェック
+				foreach (var innerEx in aggEx.InnerExceptions)
+				{
+					if (IsTemporaryNetworkError(innerEx))
+					{
+						return true;
+					}
+				}
+			}
+
+			// その他のエラー（404, 403など）は永続的なエラーとみなす
+			return false;
 		}
 
 		private string? GetIconAsBase64(string? moduleFileName)
