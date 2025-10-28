@@ -4,9 +4,99 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace WpfTaskBar
 {
+    // WebSocketメッセージの検証と安全性チェック用のユーティリティ
+    public static class WebSocketMessageValidator
+    {
+        // 文字列の最大長制限
+        private const int MaxStringLength = 10000;
+        private const int MaxTitleLength = 500;
+        private const int MaxUrlLength = 2048;
+        private const int MaxMessageLength = 1000;
+
+        // 制御文字を検出する正規表現 (タブ、改行、キャリッジリターン以外)
+        private static readonly Regex ControlCharacterRegex = new Regex(@"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 文字列から制御文字を除去し、長さを制限します
+        /// </summary>
+        public static string SanitizeString(string input, int maxLength = MaxStringLength)
+        {
+            if (string.IsNullOrEmpty(input))
+                return string.Empty;
+
+            // 制御文字を除去
+            string sanitized = ControlCharacterRegex.Replace(input, "");
+
+            // 長さ制限
+            if (sanitized.Length > maxLength)
+            {
+                sanitized = sanitized.Substring(0, maxLength);
+            }
+
+            return sanitized;
+        }
+
+        /// <summary>
+        /// TabInfo オブジェクトを検証およびサニタイズします
+        /// </summary>
+        public static TabInfo ValidateAndSanitizeTabInfo(TabInfo tabInfo)
+        {
+            if (tabInfo == null)
+                throw new ArgumentNullException(nameof(tabInfo));
+
+            return new TabInfo
+            {
+                TabId = tabInfo.TabId,
+                WindowId = tabInfo.WindowId,
+                Url = SanitizeString(tabInfo.Url, MaxUrlLength),
+                Title = SanitizeString(tabInfo.Title, MaxTitleLength),
+                FaviconUrl = SanitizeString(tabInfo.FaviconUrl, MaxUrlLength),
+                IsActive = tabInfo.IsActive,
+                Index = tabInfo.Index,
+                LastActivity = tabInfo.LastActivity
+            };
+        }
+
+        /// <summary>
+        /// NotificationData オブジェクトを検証およびサニタイズします
+        /// </summary>
+        public static NotificationData ValidateAndSanitizeNotification(NotificationData notification)
+        {
+            if (notification == null)
+                throw new ArgumentNullException(nameof(notification));
+
+            return new NotificationData
+            {
+                Title = SanitizeString(notification.Title, MaxTitleLength),
+                Message = SanitizeString(notification.Message, MaxMessageLength),
+                TabId = notification.TabId,
+                WindowId = notification.WindowId,
+                Url = SanitizeString(notification.Url, MaxUrlLength),
+                TabTitle = SanitizeString(notification.TabTitle, MaxTitleLength),
+                Timestamp = notification.Timestamp,
+                WindowHandle = notification.WindowHandle
+            };
+        }
+
+        /// <summary>
+        /// 受信したJSONメッセージのサイズを検証します
+        /// </summary>
+        public static bool ValidateMessageSize(string message)
+        {
+            // メッセージサイズの上限を設定 (100KB)
+            const int MaxMessageSize = 100 * 1024;
+
+            if (string.IsNullOrEmpty(message))
+                return false;
+
+            return Encoding.UTF8.GetByteCount(message) <= MaxMessageSize;
+        }
+    }
+
     public class WebSocketHandler : IDisposable
     {
         private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
@@ -91,12 +181,27 @@ namespace WpfTaskBar
         {
             try
             {
+                // メッセージサイズの検証
+                if (!WebSocketMessageValidator.ValidateMessageSize(message))
+                {
+                    Logger.Warning($"Message size exceeds limit from {connectionId}");
+                    return;
+                }
+
                 Logger.Info($"Raw message from {connectionId}: {message}");
-                
+
                 var webSocketMessage = JsonSerializer.Deserialize<WebSocketMessage>(message, JsonOptions);
                 if (webSocketMessage == null)
                 {
                     Logger.Info($"Invalid message format from {connectionId}: {message}");
+                    return;
+                }
+
+                // Actionの検証 - 制御文字を含まないことを確認
+                if (string.IsNullOrEmpty(webSocketMessage.Action) ||
+                    webSocketMessage.Action != WebSocketMessageValidator.SanitizeString(webSocketMessage.Action, 50))
+                {
+                    Logger.Warning($"Invalid action from {connectionId}: {webSocketMessage.Action}");
                     return;
                 }
 
@@ -141,8 +246,10 @@ namespace WpfTaskBar
                 var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
-                    _tabManager.RegisterTab(tabInfo);
-                    Logger.Info($"Tab registered: {tabInfo.TabId} - {tabInfo.Title}");
+                    // サニタイゼーション適用
+                    var sanitizedTabInfo = WebSocketMessageValidator.ValidateAndSanitizeTabInfo(tabInfo);
+                    _tabManager.RegisterTab(sanitizedTabInfo);
+                    Logger.Info($"Tab registered: {sanitizedTabInfo.TabId} - {sanitizedTabInfo.Title}");
                 }
             }
             catch (Exception ex)
@@ -159,13 +266,14 @@ namespace WpfTaskBar
                 var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
+                    // IDの検証のみ実行
                     _tabManager.UnregisterTab(tabInfo.TabId);
-                    Logger.Info($"Tab registered: {tabInfo.TabId} - {tabInfo.Title}");
+                    Logger.Info($"Tab unregistered: {tabInfo.TabId}");
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error registering tab");
+                Logger.Error(ex, "Error unregistering tab");
             }
         }
 
@@ -177,19 +285,22 @@ namespace WpfTaskBar
                 var notification = JsonSerializer.Deserialize<NotificationData>(json, JsonOptions);
                 if (notification != null)
                 {
+                    // サニタイゼーション適用
+                    var sanitizedNotification = WebSocketMessageValidator.ValidateAndSanitizeNotification(notification);
+
                     // 通知を送信してきた接続のChromeウィンドウハンドルを設定
                     var connectionId = _connections.FirstOrDefault(c => c.Value.State == WebSocketState.Open).Key;
                     if (!string.IsNullOrEmpty(connectionId) && _connectionWindowHandles.TryGetValue(connectionId, out var handle))
                     {
-                        notification.WindowHandle = handle;
-                        Logger.Info($"Notification received: {notification.Title}, WindowHandle: {notification.WindowHandle}");
+                        sanitizedNotification.WindowHandle = handle;
+                        Logger.Info($"Notification received: {sanitizedNotification.Title}, WindowHandle: {sanitizedNotification.WindowHandle}");
                     }
                     else
                     {
-                        Logger.Info($"Notification received: {notification.Title}, WindowHandle not found");
+                        Logger.Info($"Notification received: {sanitizedNotification.Title}, WindowHandle not found");
                     }
 
-                    ShowNotification(notification);
+                    ShowNotification(sanitizedNotification);
                 }
             }
             catch (Exception ex)
@@ -208,7 +319,9 @@ namespace WpfTaskBar
                 {
                     foreach (var tab in tabsData.Tabs)
                     {
-                        _tabManager.RegisterTab(tab);
+                        // 各タブ情報をサニタイゼーション
+                        var sanitizedTab = WebSocketMessageValidator.ValidateAndSanitizeTabInfo(tab);
+                        _tabManager.RegisterTab(sanitizedTab);
                     }
                     Logger.Info($"Tabs updated: {tabsData.Tabs.Count} tabs registered");
                 }

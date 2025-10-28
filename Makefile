@@ -14,5 +14,5 @@ artifact:
 	cp -r ChromeExtension dist
 	(cd dist && zip -r ../WpfTaskBar_${APP_VERSION}.zip .)
 	git tag ${APP_VERSION}
-	git push origin master
-	git push origin --tags
+	git.exe push origin master
+	git.exe push origin --tags

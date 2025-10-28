@@ -1,5 +1,7 @@
 // WebSocket接続とメッセージング機能を処理するクラス
 
+import { sanitizeMessage, validateMessageSize } from './sanitizer.js';
+
 export class WebSocketClient {
     constructor(url = 'ws://127.0.0.1:5000/ws') {
         this.url = url;
@@ -88,8 +90,21 @@ export class WebSocketClient {
     // WebSocketメッセージを送信
     sendMessage(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            const jsonMessage = JSON.stringify(message);
-            this.ws.send(jsonMessage);
+            try {
+                // メッセージをサニタイズ
+                const sanitized = sanitizeMessage(message);
+
+                // メッセージサイズを検証
+                if (!validateMessageSize(sanitized)) {
+                    console.error('Message size exceeds limit, message not sent');
+                    return;
+                }
+
+                const jsonMessage = JSON.stringify(sanitized);
+                this.ws.send(jsonMessage);
+            } catch (error) {
+                console.error('Failed to sanitize or send message:', error, message);
+            }
         } else {
             console.warn('WebSocket is not connected, message not sent:', message);
         }
