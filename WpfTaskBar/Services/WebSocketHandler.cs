@@ -68,11 +68,17 @@ namespace WpfTaskBar
 
         private async Task HandleConnectionAsync(string connectionId, WebSocket webSocket)
         {
-            var buffer = new byte[4096];
+            // 1MBとします。
+            var buffer = new byte[1 * 1024 * 1024];
 
             while (webSocket.State == WebSocketState.Open)
             {
                 var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.Count >= buffer.Length)
+                {
+                    Logger.Warning($"Message size exceeded the limit. ConnectionId: {connectionId}, Received: {result.Count} bytes, Limit: {buffer.Length} bytes");
+                    continue;
+                }
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
