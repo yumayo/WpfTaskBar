@@ -6,24 +6,25 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace WpfTaskBar
 {
-	public class WebView2
+	public class WebView2Handler
 	{
 		private Dispatcher _dispatcher;
-		private Microsoft.Web.WebView2.Wpf.WebView2 _webView2;
+		private WebView2 _webView2;
 		private ChromeTabManager _chromeTabManager;
-		private WebSocketHandler _webSocketHandler;
+		private Http2StreamHandler _http2StreamHandler;
 		private readonly Dictionary<string, string?> _faviconCache = new Dictionary<string, string?>();
 
-		public WebView2(ChromeTabManager chromeTabManager, WebSocketHandler webSocketHandler)
+		public WebView2Handler(ChromeTabManager chromeTabManager, Http2StreamHandler http2StreamHandler)
 		{
 			_chromeTabManager = chromeTabManager;
-			_webSocketHandler = webSocketHandler;
+			_http2StreamHandler = http2StreamHandler;
 		}
 
-		public async Task Initialize(Dispatcher dispatcher, Microsoft.Web.WebView2.Wpf.WebView2 webView2)
+		public async Task Initialize(Dispatcher dispatcher, WebView2 webView2)
 		{
 			_dispatcher = dispatcher;
 			_webView2 = webView2;
@@ -273,7 +274,7 @@ namespace WpfTaskBar
 					// Chromeタブの場合は、タブもアクティブにする
 					if (tabId.HasValue && windowId.HasValue)
 					{
-						_ = _webSocketHandler.FocusTab(tabId.Value, windowId.Value);
+						_ = _http2StreamHandler.FocusTab(tabId.Value, windowId.Value);
 						Logger.Info($"復元後にChromeタブをアクティブにしました: TabId={tabId.Value}, WindowId={windowId.Value}");
 					}
 				}
@@ -309,7 +310,7 @@ namespace WpfTaskBar
 						windowId = windowIdElement.GetInt32();
 
 						// Chromeのタブを閉じる
-						_ = _webSocketHandler.CloseTab(tabId.Value, windowId.Value);
+						_ = _http2StreamHandler.CloseTab(tabId.Value, windowId.Value);
 						Logger.Info($"Chromeタブを閉じるメッセージを送信: TabId={tabId.Value}, WindowId={windowId.Value}");
 						return;
 					}
@@ -483,6 +484,35 @@ namespace WpfTaskBar
 							// WindowIdが特定できた場合は、そのウィンドウのタブのみをフィルタリング
 							chromeTabs = allTabs
 								.Where(tab => tab.WindowId == targetWindowId.Value)
+								.Select(tab => new
+								{
+									tabId = tab.TabId,
+									windowId = tab.WindowId,
+									title = tab.Title,
+									url = tab.Url,
+									index = tab.Index,
+									iconData = chromeIconData,
+									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
+									isActive = tab.IsActive
+								}).ToList();
+
+							var response = new
+							{
+								type = "window_info_response",
+								windowHandle = handle.ToInt32(),
+								moduleFileName = processName,
+								title,
+								iconData = chromeIconData,
+								chromeTabs = chromeTabs.ToArray()
+							};
+
+							SendMessageToWebView(response);
+							return;
+						}
+						else
+						{
+							// WindowIdが特定できない場合は、フォールバックとして全タブを返す
+							chromeTabs = allTabs
 								.Select(tab => new
 								{
 									tabId = tab.TabId,
@@ -713,16 +743,14 @@ namespace WpfTaskBar
 
 		private int? FindWindowIdByHwnd(IntPtr hwnd)
 		{
-			// WebSocketHandlerからhwndに対応するwindowIdを探す
 			// _chromeTabManagerの全タブから、対応するwindowIdを探す
 			var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
 
-			// 各windowIdに対して、WebSocketHandlerから対応するhwndを取得して比較
 			var uniqueWindowIds = allTabs.Select(tab => tab.WindowId).Distinct();
 
 			foreach (var windowId in uniqueWindowIds)
 			{
-				var mappedHwnd = _webSocketHandler.GetHwndByWindowId(windowId);
+				var mappedHwnd = _http2StreamHandler.GetHwndByWindowId(windowId);
 				if (mappedHwnd == hwnd)
 				{
 					return windowId;

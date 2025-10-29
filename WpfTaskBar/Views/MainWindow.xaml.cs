@@ -15,9 +15,8 @@ namespace WpfTaskBar;
 public partial class MainWindow : Window
 {
 	private IHost? _host;
-	private WebSocketHandler? _webSocketHandler;
 	private ChromeTabManager? _tabManager;
-	private WebView2? _webView2;
+	private WebView2Handler? _webView2;
 
 	public MainWindow()
 	{
@@ -103,6 +102,14 @@ public partial class MainWindow : Window
 		{
 			webBuilder.UseUrls("http://0.0.0.0:5000");
 			webBuilder.UseStartup<Startup>();
+			// HTTP/2を有効化（HTTPでもh2cとして動作可能）
+			webBuilder.ConfigureKestrel(options =>
+			{
+				options.ConfigureEndpointDefaults(listenOptions =>
+				{
+					listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2;
+				});
+			});
 		});
 		
 		_host = builder.Build();
@@ -110,11 +117,10 @@ public partial class MainWindow : Window
 		Logger.Info("REST API server started");
 
 		// DIコンテナからサービスを取得
-		_webSocketHandler = _host.Services.GetRequiredService<WebSocketHandler>();
 		_tabManager = _host.Services.GetRequiredService<ChromeTabManager>();
-		_webView2 = _host.Services.GetRequiredService<WebView2>();
+		_webView2 = _host.Services.GetRequiredService<WebView2Handler>();
 
-		_webView2.Initialize(App.Current.Dispatcher, webView);
+		_webView2.Initialize(App.Current.Dispatcher, webView2);
 
 		Logger.Info("Services obtained from DI container");
 

@@ -1,135 +1,158 @@
 using System.Collections.Concurrent;
-using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.Diagnostics;
+using System.IO;
 
 namespace WpfTaskBar
 {
-    public class WebSocketHandler : IDisposable
+    public class Http2StreamHandler : IDisposable
     {
-        private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
+        private readonly ConcurrentDictionary<string, StreamWriter> _connections = new();
         private readonly ConcurrentDictionary<string, IntPtr> _connectionWindowHandles = new();
         private readonly ConcurrentDictionary<int, IntPtr> _windowIdToHwndMap = new();
         private readonly ChromeTabManager _tabManager;
-        
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        public WebSocketHandler(ChromeTabManager tabManager)
+        public Http2StreamHandler(ChromeTabManager tabManager)
         {
             _tabManager = tabManager;
-            
-            Logger.Info("WebSocketHandler initialized");
+
+            Logger.Info("Http2StreamHandler initialized");
         }
 
-        public async Task HandleWebSocketAsync(HttpContext context)
+        // サーバーからクライアントへのストリーム接続を処理
+        public async Task HandleStreamAsync(HttpContext context)
         {
-            if (!context.WebSockets.IsWebSocketRequest)
-            {
-                context.Response.StatusCode = 400;
-                return;
-            }
-
             var connectionId = Guid.NewGuid().ToString();
-            var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-            _connections[connectionId] = webSocket;
 
-            // WebSocket接続からChromeプロセスを特定
+            Logger.Info($"HTTP/2 stream connection established: {connectionId}");
+
+            // Chrome プロセスを特定
             var chromeHandle = FindChromeProcessByConnection(context);
             if (chromeHandle != IntPtr.Zero)
             {
                 _connectionWindowHandles[connectionId] = chromeHandle;
-                Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle: {chromeHandle}");
+                Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle: {chromeHandle}");
             }
             else
             {
-                Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle not found");
+                Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle not found");
             }
+
+            context.Response.Headers["Content-Type"] = "text/event-stream";
+            context.Response.Headers["Cache-Control"] = "no-cache";
+            context.Response.Headers["Connection"] = "keep-alive";
 
             try
             {
-                await HandleConnectionAsync(connectionId, webSocket);
+                var writer = new StreamWriter(context.Response.Body, Encoding.UTF8, leaveOpen: true)
+                {
+                    AutoFlush = false  // 同期フラッシュを無効化
+                };
+
+                _connections[connectionId] = writer;
+
+                // 接続確認メッセージを送信
+                await SendMessage(writer, new Payload
+                {
+                    Action = "connected",
+                    Data = new { connectionId }
+                });
+
+                // 接続を維持（クライアントが切断するまで）
+                var tcs = new TaskCompletionSource<bool>();
+                context.RequestAborted.Register(() => tcs.TrySetResult(true));
+                await tcs.Task;
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, $"WebSocket error for {connectionId}");
+                Logger.Error(ex, $"HTTP/2 stream error for {connectionId}");
             }
             finally
             {
                 _connections.TryRemove(connectionId, out _);
                 _connectionWindowHandles.TryRemove(connectionId, out _);
-                Logger.Info($"WebSocket connection closed: {connectionId}");
+                Logger.Info($"HTTP/2 stream connection closed: {connectionId}");
             }
         }
 
-        private async Task HandleConnectionAsync(string connectionId, WebSocket webSocket)
+        // クライアントからサーバーへのメッセージを処理
+        public async Task HandleMessageAsync(HttpContext context)
         {
-            // 1MBとします。
-            var buffer = new byte[1 * 1024 * 1024];
-
-            while (webSocket.State == WebSocketState.Open)
+            try
             {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                if (result.Count >= buffer.Length)
+                // リクエストボディの最大サイズチェック（1MB）
+                const int maxSize = 1 * 1024 * 1024;
+                if (context.Request.ContentLength > maxSize)
                 {
-                    Logger.Warning($"Message size exceeded the limit. ConnectionId: {connectionId}, Received: {result.Count} bytes, Limit: {buffer.Length} bytes");
-                    continue;
+                    Logger.Warning($"Message size exceeded the limit. Received: {context.Request.ContentLength} bytes, Limit: {maxSize} bytes");
+                    context.Response.StatusCode = 413; // Payload Too Large
+                    await context.Response.WriteAsync("Message too large");
+                    return;
                 }
 
-                if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    await ProcessMessage(connectionId, webSocket, message);
-                }
-                else if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed", CancellationToken.None);
-                    break;
-                }
+                using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
+                var message = await reader.ReadToEndAsync();
+
+                var connectionId = context.Request.Headers["X-Connection-Id"].ToString();
+
+                await ProcessMessage(connectionId, message);
+
+                context.Response.StatusCode = 200;
+                await context.Response.WriteAsync("OK");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error handling message");
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsync("Internal Server Error");
             }
         }
 
-        private async Task ProcessMessage(string connectionId, WebSocket webSocket, string message)
+        private async Task ProcessMessage(string connectionId, string message)
         {
             try
             {
                 Logger.Info($"Raw message from {connectionId}: {message}");
-                
-                var webSocketMessage = JsonSerializer.Deserialize<WebSocketMessage>(message, JsonOptions);
-                if (webSocketMessage == null)
+
+                var payload = JsonSerializer.Deserialize<Payload>(message, JsonOptions);
+                if (payload == null)
                 {
                     Logger.Info($"Invalid message format from {connectionId}: {message}");
                     return;
                 }
 
-                Logger.Info($"Parsed message from {connectionId}: Action='{webSocketMessage.Action}', Data={JsonSerializer.Serialize(webSocketMessage.Data, JsonOptions)}");
+                Logger.Info($"Parsed message from {connectionId}: Action='{payload.Action}', Data={JsonSerializer.Serialize(payload.Data, JsonOptions)}");
 
-                switch (webSocketMessage.Action)
+                switch (payload.Action)
                 {
                     case "registerTab":
-                        HandleRegisterTab(webSocketMessage.Data);
+                        HandleRegisterTab(payload.Data);
                         break;
                     case "unregisterTab":
-                        HandleUnregisterTab(webSocketMessage.Data);
+                        HandleUnregisterTab(payload.Data);
                         break;
                     case "sendNotification":
-                        HandleSendNotification(webSocketMessage.Data);
+                        HandleSendNotification(payload.Data);
                         break;
                     case "updateTabs":
-                        HandleUpdateTabs(webSocketMessage.Data);
+                        HandleUpdateTabs(payload.Data);
                         break;
                     case "bindWindowHandle":
-                        HandleBindWindowHandle(connectionId, webSocketMessage.Data);
+                        HandleBindWindowHandle(connectionId, payload.Data);
                         break;
                     case "ping":
-                        await SendMessage(webSocket, new WebSocketMessage { Action = "pong", Data = new {} });
+                        // pingに対してはpongを全接続にブロードキャスト
+                        await BroadcastMessage(new Payload { Action = "pong", Data = new {} });
                         break;
                     default:
-                        Logger.Info($"Unknown action: {webSocketMessage.Action}");
+                        Logger.Info($"Unknown action: {payload.Action}");
                         break;
                 }
             }
@@ -156,7 +179,7 @@ namespace WpfTaskBar
                 Logger.Error(ex, "Error registering tab");
             }
         }
-        
+
         private void HandleUnregisterTab(object data)
         {
             try
@@ -166,12 +189,12 @@ namespace WpfTaskBar
                 if (tabInfo != null)
                 {
                     _tabManager.UnregisterTab(tabInfo.TabId);
-                    Logger.Info($"Tab registered: {tabInfo.TabId} - {tabInfo.Title}");
+                    Logger.Info($"Tab unregistered: {tabInfo.TabId} - {tabInfo.Title}");
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error registering tab");
+                Logger.Error(ex, "Error unregistering tab");
             }
         }
 
@@ -184,7 +207,7 @@ namespace WpfTaskBar
                 if (notification != null)
                 {
                     // 通知を送信してきた接続のChromeウィンドウハンドルを設定
-                    var connectionId = _connections.FirstOrDefault(c => c.Value.State == WebSocketState.Open).Key;
+                    var connectionId = _connections.FirstOrDefault(c => c.Value != null).Key;
                     if (!string.IsNullOrEmpty(connectionId) && _connectionWindowHandles.TryGetValue(connectionId, out var handle))
                     {
                         notification.WindowHandle = handle;
@@ -258,7 +281,7 @@ namespace WpfTaskBar
 
         public async Task QueryAllTabs()
         {
-            var message = new WebSocketMessage
+            var message = new Payload
             {
                 Action = "queryAllTabs",
                 Data = new { }
@@ -269,7 +292,7 @@ namespace WpfTaskBar
 
         public async Task FocusTab(int tabId, int windowId)
         {
-            var message = new WebSocketMessage
+            var message = new Payload
             {
                 Action = "focusTab",
                 Data = new
@@ -285,7 +308,7 @@ namespace WpfTaskBar
 
         public async Task CloseTab(int tabId, int windowId)
         {
-            var message = new WebSocketMessage
+            var message = new Payload
             {
                 Action = "closeTab",
                 Data = new
@@ -299,49 +322,33 @@ namespace WpfTaskBar
             Logger.Info($"Close tab request sent: TabId={tabId}, WindowId={windowId}");
         }
 
-        private async Task BroadcastMessage(WebSocketMessage message)
+        private async Task BroadcastMessage(Payload payload)
         {
             var tasks = new List<Task>();
 
             foreach (var connection in _connections.Values)
             {
-                if (connection.State == WebSocketState.Open)
+                if (connection != null)
                 {
-                    tasks.Add(SendMessage(connection, message));
+                    tasks.Add(SendMessage(connection, payload));
                 }
             }
 
             await Task.WhenAll(tasks);
         }
 
-        private async Task SendMessage(WebSocket webSocket, WebSocketMessage message)
+        private async Task SendMessage(StreamWriter writer, Payload payload)
         {
             try
             {
-                var json = JsonSerializer.Serialize(message, JsonOptions);
-                var bytes = Encoding.UTF8.GetBytes(json);
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(bytes),
-                    WebSocketMessageType.Text,
-                    true,
-                    CancellationToken.None);
+                var json = JsonSerializer.Serialize(payload, JsonOptions);
+                await writer.WriteAsync($"data: {json}\n\n");
+                await writer.FlushAsync();  // 非同期的にフラッシュ
             }
             catch (Exception ex)
             {
                 Logger.Error(ex, "Error sending message");
             }
-        }
-
-        private void ShowNotification(NotificationData notification)
-        {
-            // MainWindowへの通知表示処理を実装
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                if (App.Current.MainWindow is MainWindow mainWindow)
-                {
-                    mainWindow.ShowNotification(notification);
-                }
-            });
         }
 
         private IntPtr FindChromeProcessByConnection(HttpContext context)
@@ -351,8 +358,8 @@ namespace WpfTaskBar
                 // リモートIPアドレスとポートを取得
                 var remoteEndPoint = context.Connection.RemoteIpAddress;
                 var remotePort = context.Connection.RemotePort;
-                
-                Logger.Info($"WebSocket connection from: {remoteEndPoint}:{remotePort}");
+
+                Logger.Info($"HTTP/2 connection from: {remoteEndPoint}:{remotePort}");
 
                 // netstatの情報を使ってプロセスIDを特定
                 var processId = GetProcessIdByPort(remotePort);
@@ -441,7 +448,7 @@ namespace WpfTaskBar
             {
                 // 同じプロセス名のすべてのプロセスをチェック
                 var processes = Process.GetProcessesByName("chrome");
-                
+
                 foreach (var process in processes)
                 {
                     try
@@ -510,54 +517,27 @@ namespace WpfTaskBar
             return IntPtr.Zero;
         }
 
+        private void ShowNotification(NotificationData notification)
+        {
+            // MainWindowへの通知表示処理を実装
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                if (App.Current.MainWindow is MainWindow mainWindow)
+                {
+                    mainWindow.ShowNotification(notification);
+                }
+            });
+        }
+
         public void Dispose()
         {
-
             // 全ての接続を閉じる
             foreach (var connection in _connections.Values)
             {
-                if (connection.State == WebSocketState.Open)
-                {
-                    connection.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutting down", CancellationToken.None);
-                }
+                connection?.Dispose();
             }
 
-            Logger.Info("WebSocketHandler disposed");
+            Logger.Info("Http2StreamHandler disposed");
         }
-    }
-
-    public class WebSocketMessage
-    {
-        public string Action { get; set; } = "";
-        public object Data { get; set; } = new {};
-    }
-
-    public class TabInfo
-    {
-        public int TabId { get; set; }
-        public int WindowId { get; set; }
-        public string Url { get; set; } = "";
-        public string Title { get; set; } = "";
-        public string LastActivity { get; set; } = DateTime.UtcNow.ToString("O");
-        public string FaviconUrl { get; set; } = "";
-        public bool IsActive { get; set; } = false;
-        public int Index { get; set; } = 0;
-    }
-
-    public class NotificationData
-    {
-        public string Title { get; set; } = "";
-        public string Message { get; set; } = "";
-        public int TabId { get; set; }
-        public int WindowId { get; set; }
-        public string Url { get; set; } = "";
-        public string TabTitle { get; set; } = "";
-        public string Timestamp { get; set; } = "";
-        public IntPtr WindowHandle { get; set; } = IntPtr.Zero;
-    }
-
-    public class TabsUpdateData
-    {
-        public List<TabInfo> Tabs { get; set; } = new();
     }
 }

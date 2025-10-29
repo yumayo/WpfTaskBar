@@ -6,17 +6,10 @@ namespace WpfTaskBar
     {
         private readonly ConcurrentDictionary<int, TabInfo> _tabs = new();
         private readonly ConcurrentDictionary<string, NotificationData> _notificationTabMap = new();
-        private WebSocketHandler? _webSocketHandler;
 
         public ChromeTabManager()
         {
             Logger.Info("ChromeTabManager initialized");
-        }
-
-        public void SetWebSocketHandler(WebSocketHandler webSocketHandler)
-        {
-            _webSocketHandler = webSocketHandler;
-            Logger.Info("WebSocketHandler set in ChromeTabManager");
         }
 
         public void RegisterTab(TabInfo tabInfo)

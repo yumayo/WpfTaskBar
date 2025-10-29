@@ -6,11 +6,11 @@ namespace WpfTaskBar
     [ApiController]
     public class TimeRecordController : ControllerBase
     {
-        private readonly WebView2 _webView2;
+        private readonly WebView2Handler _webView2Handler;
 
-        public TimeRecordController(WebView2 webView2)
+        public TimeRecordController(WebView2Handler webView2Handler)
         {
-            _webView2 = webView2;
+            _webView2Handler = webView2Handler;
         }
 
         [HttpPost("clock-in")]
@@ -18,7 +18,7 @@ namespace WpfTaskBar
         {
             TimeRecordModel.ClockInDate = request.Date;
 
-            _webView2.SendMessageToWebView(new
+            _webView2Handler.SendMessageToWebView(new
             {
                 type = "clock_in_update",
                 date = TimeRecordModel.ClockInDate,
@@ -32,7 +32,7 @@ namespace WpfTaskBar
         {
             TimeRecordModel.ClockOutDate = request.Date;
             
-            _webView2.SendMessageToWebView(new
+            _webView2Handler.SendMessageToWebView(new
             {
                 type = "clock_out_update",
                 date = TimeRecordModel.ClockOutDate,
@@ -47,7 +47,7 @@ namespace WpfTaskBar
             TimeRecordModel.ClockInDate = default;
             TimeRecordModel.ClockOutDate = default;
             
-            _webView2.SendMessageToWebView(new
+            _webView2Handler.SendMessageToWebView(new
             {
                 type = "clock_clear"
             });

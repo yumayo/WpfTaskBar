@@ -1,6 +1,4 @@
-// WebSocketメッセージハンドラーを処理するモジュール
-
-import { wsClient } from './background.js';
+import { steamClient } from './background.js';
 
 // メッセージ処理のメインハンドラー
 export function handleMessage(message) {
@@ -13,6 +11,9 @@ export function handleMessage(message) {
             break;
         case 'queryAllTabs':
             handleQueryAllTabs();
+            break;
+        case 'pong':
+            console.log('pong received.');
             break;
         default:
             console.log('Unknown message action:', message.action);
@@ -38,8 +39,7 @@ async function handleQueryAllTabs() {
             index: tab.index || 0
         }));
 
-        // WebSocket経由でタブ情報を送信
-        wsClient.sendMessage({
+        steamClient.sendMessage({
             action: 'updateTabs',
             data: {
                 tabs: tabsInfo

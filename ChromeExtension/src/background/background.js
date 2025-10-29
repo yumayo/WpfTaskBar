@@ -1,32 +1,32 @@
 // メイン背景スクリプト - モジュール化されたファイルをまとめる
 
-import { WebSocketClient } from '../utils/websocket-client.js';
+import { HttpStreamClient } from '../utils/http-stream-client.js';
 import { setupTabEventListeners, sendTestNotification } from '../utils/tab-manager.js';
 import { setupPopupMessageListener } from '../popup/popup-handler.js';
 import { handleMessage } from './message-handlers.js';
 import { startHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { registerCurrentTabs } from '../utils/tab-registration.js';
 
-// WebSocketクライアントのインスタンスを作成
-const wsClient = new WebSocketClient();
+// HTTP/2 Streamクライアントのインスタンスを作成
+const steamClient = new HttpStreamClient();
 
 // 拡張機能の初期化
 chrome.runtime.onStartup.addListener(() => {
-    wsClient.initialize();
+    steamClient.initialize();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-    wsClient.initialize();
+    steamClient.initialize();
 });
 
 // ポップアップとの通信設定
-setupPopupMessageListener(() => wsClient.getConnectionStatus(), sendTestNotification);
+setupPopupMessageListener(() => steamClient.getConnectionStatus(), sendTestNotification);
 
 // タブイベントリスナー設定
 setupTabEventListeners();
 
-// WebSocketコールバックを登録
-wsClient.onConnected(() => {
+// HTTP/2コールバックを登録
+steamClient.onConnected(() => {
     // ハートビートを開始
     startHeartbeat();
 
@@ -34,11 +34,11 @@ wsClient.onConnected(() => {
     registerCurrentTabs();
 });
 
-wsClient.onMessage((message) => {
+steamClient.onMessage((message) => {
     handleMessage(message);
 });
 
-wsClient.onDisconnected(() => {
+steamClient.onDisconnected(() => {
     // ハートビートを停止
     stopHeartbeat();
 });
@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // 初期化
-wsClient.initialize();
+steamClient.initialize();
 
 // wsClientをグローバルに公開して他のモジュールから参照可能にする
-export { wsClient };
+export { steamClient };

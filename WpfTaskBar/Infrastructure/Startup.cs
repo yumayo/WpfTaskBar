@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.AspNetCore.WebSockets;
 
 namespace WpfTaskBar
 {
@@ -22,8 +21,8 @@ namespace WpfTaskBar
             });
 
             services.AddSingleton<ChromeTabManager>();
-            services.AddSingleton<WebSocketHandler>();
-            services.AddSingleton<WebView2>();
+            services.AddSingleton<Http2StreamHandler>();
+            services.AddSingleton<WebView2Handler>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -33,32 +32,27 @@ namespace WpfTaskBar
                 app.UseDeveloperExceptionPage();
             }
 
-            // ChromeTabManagerとWebSocketHandlerを相互に設定
-            var tabManager = app.ApplicationServices.GetRequiredService<ChromeTabManager>();
-            var webSocketHandler = app.ApplicationServices.GetRequiredService<WebSocketHandler>();
-            tabManager.SetWebSocketHandler(webSocketHandler);
-
             app.UseRouting();
             app.UseCors();
-
-            // WebSocketサポートを有効化
-            app.UseWebSockets(new WebSocketOptions
-            {
-                KeepAliveInterval = TimeSpan.FromSeconds(30), // 30秒ごとにKeep-Alive
-            });
 
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
             });
 
-            // WebSocketエンドポイントを設定
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path == "/ws")
+                if (context.Request.Path == "/stream")
                 {
-                    var webSocketHandler = app.ApplicationServices.GetRequiredService<WebSocketHandler>();
-                    await webSocketHandler.HandleWebSocketAsync(context);
+                    // HTTP/2 ストリーミングエンドポイント（サーバー→クライアント）
+                    var http2Handler = app.ApplicationServices.GetRequiredService<Http2StreamHandler>();
+                    await http2Handler.HandleStreamAsync(context);
+                }
+                else if (context.Request.Path == "/message" && context.Request.Method == "POST")
+                {
+                    // HTTP/2 メッセージエンドポイント（クライアント→サーバー）
+                    var http2Handler = app.ApplicationServices.GetRequiredService<Http2StreamHandler>();
+                    await http2Handler.HandleMessageAsync(context);
                 }
                 else
                 {

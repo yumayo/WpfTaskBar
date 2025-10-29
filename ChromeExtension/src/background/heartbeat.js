@@ -1,6 +1,6 @@
 // ハートビート機能を処理するモジュール
 
-import { wsClient } from './background.js';
+import { steamClient } from './background.js';
 
 let heartbeatTimer = null;
 let heartbeatInterval = 30000; // 30秒ごとにping送信
@@ -10,9 +10,9 @@ export function startHeartbeat() {
     stopHeartbeat(); // 既存のタイマーをクリア
 
     heartbeatTimer = setInterval(() => {
-        if (wsClient.getConnectionStatus()) {
+        if (steamClient.getConnectionStatus()) {
             console.log('Sending heartbeat ping...');
-            wsClient.sendMessage({ action: 'ping', data: {} });
+            steamClient.sendMessage({ action: 'ping', data: {} });
         }
     }, heartbeatInterval);
 
