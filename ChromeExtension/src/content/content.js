@@ -15,21 +15,58 @@
         });
     }
 
+    // ConnectionIDを取得
+    async function getConnectionId() {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ action: 'getConnectionId' }, (response) => {
+                if (response && response.connectionId) {
+                    console.log('[TCP調査] [Content] ConnectionId received from background:', response.connectionId);
+                    resolve(response.connectionId);
+                } else {
+                    console.warn('[Content] ConnectionId not available');
+                    resolve(null);
+                }
+            });
+        });
+    }
+
+    // GUIDを生成
+    function generateGuid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
     // HTTP/2でメッセージを送信
     async function sendMessage(url, message, timeout = 5000) {
         try {
-            console.log('[Content] Sending HTTP/2 message');
+            // background.jsからconnectionIdを取得
+            // const connectionId = await getConnectionId();
+
+            // content.js独自のGUIDを生成
+            const connectionId = generateGuid();
+
+            console.log('[TCP調査] [Content] Sending HTTP/2 message with ConnectionId:', connectionId, 'Message:', message);
 
             const controller = new AbortController();
             const timer = setTimeout(() => {
                 controller.abort();
             }, timeout);
 
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+
+            // connectionIdがあればヘッダーに追加
+            if (connectionId) {
+                headers['X-Connection-Id'] = connectionId;
+            }
+
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: headers,
                 body: JSON.stringify(message),
                 signal: controller.signal
             });

@@ -509,35 +509,6 @@ namespace WpfTaskBar
 							SendMessageToWebView(response);
 							return;
 						}
-						else
-						{
-							// WindowIdが特定できない場合は、フォールバックとして全タブを返す
-							chromeTabs = allTabs
-								.Select(tab => new
-								{
-									tabId = tab.TabId,
-									windowId = tab.WindowId,
-									title = tab.Title,
-									url = tab.Url,
-									index = tab.Index,
-									iconData = chromeIconData,
-									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
-									isActive = tab.IsActive
-								}).ToList();
-
-							var response = new
-							{
-								type = "window_info_response",
-								windowHandle = handle.ToInt32(),
-								moduleFileName = processName,
-								title,
-								iconData = chromeIconData,
-								chromeTabs = chromeTabs.ToArray()
-							};
-
-							SendMessageToWebView(response);
-							return;
-						}
 					}
 
 					// Chrome以外の通常のウィンドウ

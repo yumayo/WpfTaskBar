@@ -30,8 +30,9 @@ namespace WpfTaskBar
         public async Task HandleStreamAsync(HttpContext context)
         {
             var connectionId = Guid.NewGuid().ToString();
+            var remotePort = context.Connection.RemotePort;
 
-            Logger.Info($"HTTP/2 stream connection established: {connectionId}");
+            Logger.Info($"[TCP調査] HandleStreamAsync: ConnectionId={connectionId}, RemotePort={remotePort}");
 
             // Chrome プロセスを特定
             var chromeHandle = FindChromeProcessByConnection(context);
@@ -87,6 +88,11 @@ namespace WpfTaskBar
         {
             try
             {
+                var remotePort = context.Connection.RemotePort;
+                var connectionId = context.Request.Headers["X-Connection-Id"].ToString();
+
+                Logger.Info($"[TCP調査] HandleMessageAsync: ConnectionId='{connectionId}', RemotePort={remotePort}");
+
                 // リクエストボディの最大サイズチェック（1MB）
                 const int maxSize = 1 * 1024 * 1024;
                 if (context.Request.ContentLength > maxSize)
@@ -99,8 +105,6 @@ namespace WpfTaskBar
 
                 using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
                 var message = await reader.ReadToEndAsync();
-
-                var connectionId = context.Request.Headers["X-Connection-Id"].ToString();
 
                 await ProcessMessage(connectionId, message);
 

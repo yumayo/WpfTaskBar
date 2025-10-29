@@ -59,6 +59,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse(null);
             }
             break;
+        case 'getConnectionId':
+            // content scriptにconnectionIdを返す
+            const connectionId = steamClient.connectionId;
+            console.log('[TCP調査] [Background] connectionId requested by content script:', connectionId);
+            sendResponse({ connectionId });
+            break;
         default:
             // 他のメッセージは既存のハンドラーに任せる
             break;
