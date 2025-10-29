@@ -2,7 +2,6 @@
 
 import { wsClient } from '../background/background.js';
 import { registerTab, unregisterTab } from './tab-registration.js';
-import { sanitizeNotification } from './sanitizer.js';
 
 // 通知を送信（テスト用）
 export function sendTestNotification(tabId) {
@@ -27,15 +26,12 @@ export function sendTestNotification(tabId) {
             timestamp: new Date().toISOString()
         };
 
-        // サニタイゼーション適用
-        const sanitized = sanitizeNotification(notification);
-
         wsClient.sendMessage({
             action: 'sendNotification',
-            data: sanitized
+            data: notification
         });
-
-        console.log('Test notification sent:', sanitized);
+        
+        console.log('Test notification sent:', notification);
     });
 }
 
@@ -102,7 +98,6 @@ function notifyTabsChange() {
     }
 
     chrome.tabs.query({}, (tabs) => {
-        // サニタイゼーションはwebsocket-client.jsのsendMessage内で実行されるため、ここでは不要
         const tabsInfo = tabs.map(t => ({
             tabId: t.id,
             windowId: t.windowId,

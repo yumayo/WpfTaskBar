@@ -1,7 +1,6 @@
 // WebSocketメッセージハンドラーを処理するモジュール
 
 import { wsClient } from './background.js';
-import { sanitizeTabInfo } from '../utils/sanitizer.js';
 
 // メッセージ処理のメインハンドラー
 export function handleMessage(message) {
@@ -27,22 +26,17 @@ async function handleQueryAllTabs() {
         // すべてのタブを取得
         const tabs = await chrome.tabs.query({});
 
-        // タブ情報を整形してサニタイズ
-        const tabsInfo = tabs.map(tab => {
-            const tabInfo = {
-                tabId: tab.id,
-                windowId: tab.windowId,
-                url: tab.url || '',
-                title: tab.title || '',
-                faviconUrl: tab.favIconUrl || '',
-                isActive: tab.active,
-                lastActivity: new Date().toISOString(),
-                index: tab.index || 0
-            };
-
-            // サニタイゼーション適用
-            return sanitizeTabInfo(tabInfo);
-        });
+        // タブ情報を整形
+        const tabsInfo = tabs.map(tab => ({
+            tabId: tab.id,
+            windowId: tab.windowId,
+            url: tab.url || '',
+            title: tab.title || '',
+            faviconUrl: tab.favIconUrl || '',
+            isActive: tab.active,
+            lastActivity: new Date().toISOString(),
+            index: tab.index || 0
+        }));
 
         // WebSocket経由でタブ情報を送信
         wsClient.sendMessage({
