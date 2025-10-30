@@ -20,6 +20,8 @@ namespace WpfTaskBar
                 });
             });
 
+            services.AddHttpClient();
+
             services.AddSingleton<ChromeTabManager>();
             services.AddSingleton<Http2StreamHandler>();
             services.AddSingleton<WebView2Handler>();

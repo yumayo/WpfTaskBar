@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -16,12 +17,14 @@ namespace WpfTaskBar
 		private WebView2 _webView2;
 		private ChromeTabManager _chromeTabManager;
 		private Http2StreamHandler _http2StreamHandler;
+		private readonly IHttpClientFactory _httpClientFactory;
 		private readonly Dictionary<string, string?> _faviconCache = new Dictionary<string, string?>();
 
-		public WebView2Handler(ChromeTabManager chromeTabManager, Http2StreamHandler http2StreamHandler)
+		public WebView2Handler(ChromeTabManager chromeTabManager, Http2StreamHandler http2StreamHandler, IHttpClientFactory httpClientFactory)
 		{
 			_chromeTabManager = chromeTabManager;
 			_http2StreamHandler = http2StreamHandler;
+			_httpClientFactory = httpClientFactory;
 		}
 
 		public async Task Initialize(Dispatcher dispatcher, WebView2 webView2)
@@ -553,7 +556,7 @@ namespace WpfTaskBar
 				else
 				{
 					// HTTPからダウンロードしてdata URL形式に変換
-					using var httpClient = new System.Net.Http.HttpClient();
+					var httpClient = _httpClientFactory.CreateClient();
 					httpClient.Timeout = TimeSpan.FromSeconds(10);
 					var imageBytes = httpClient.GetByteArrayAsync(faviconUrl).Result;
 					var base64String = Convert.ToBase64String(imageBytes);
