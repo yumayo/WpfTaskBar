@@ -5,7 +5,7 @@ let draggedElement = null;
 // タスクリストの更新
 function updateTaskList(newTasks) {
     newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => {
-        return `${task.handle}`
+        return `${task.handle}-${task.windowId}-${task.tabId}`
     })
 
     // 変更がない場合は処理をスキップ
