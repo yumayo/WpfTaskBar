@@ -356,8 +356,10 @@ function onDrop(item, e) {
         
         let differentApplication = draggedModuleName !== targetModuleName;
         
-        if (parseInt(draggedElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
-            differentApplication = true;
+        if (draggedElement.dataset.windowId !== undefined && item.dataset.windowId !== undefined) {
+            if (parseInt(draggedElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
+                differentApplication = true;
+            }
         }
 
         // 異なるアプリケーション
