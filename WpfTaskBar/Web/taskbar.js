@@ -5,7 +5,11 @@ let draggedElement = null;
 // タスクリストの更新
 function updateTaskList(newTasks) {
     newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => {
-        return `${task.handle}-${task.windowId}-${task.tabId}`
+        if (task.isChrome) {
+            return `${task.handle}-${task.windowId}-${task.tabId}`
+        } else {
+            return `${task.handle}`
+        }
     })
 
     // 変更がない場合は処理をスキップ
