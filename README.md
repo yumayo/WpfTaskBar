@@ -58,3 +58,9 @@ git push origin master
 git tag v0.xx
 git push origin --tags
 ```
+
+# デバッグ
+
+```sh
+wsl tail ---disable-inotify -f WpfTaskBar/bin/Debug/net8.0-windows/log/WpfTaskBar.log
+```
