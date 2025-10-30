@@ -26,7 +26,7 @@ export class HttpStreamClient {
         try {
             this.abortController = new AbortController();
 
-            console.log('[TCP調査] [Background] Connecting to HTTP/2 stream at /stream...');
+            console.log('[Background] Connecting to HTTP/2 stream at /stream...');
 
             const response = await fetch(`${this.baseUrl}/stream`, {
                 method: 'GET',
@@ -40,7 +40,7 @@ export class HttpStreamClient {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            console.log('[TCP調査] [Background] HTTP/2 stream connected to WpfTaskBar');
+            console.log('[Background] HTTP/2 stream connected to WpfTaskBar');
             this.isConnected = true;
 
             // 接続成功時に再接続タイマーをクリア
@@ -86,7 +86,7 @@ export class HttpStreamClient {
                                 // connectionIdを保存
                                 if (message.action === 'connected' && message.data?.connectionId) {
                                     this.connectionId = message.data.connectionId;
-                                    console.log('[TCP調査] [Background] Connection ID received:', this.connectionId);
+                                    console.log('[Background] Connection ID received:', this.connectionId);
                                 }
 
                                 // メッセージコールバックを実行
@@ -156,7 +156,7 @@ export class HttpStreamClient {
                 headers['X-Connection-Id'] = this.connectionId;
             }
 
-            console.log('[TCP調査] [Background] Sending HTTP/2 message with ConnectionId:', this.connectionId, 'Message:', message);
+            console.log('[Background] Sending HTTP/2 message with ConnectionId:', this.connectionId, 'Message:', message);
 
             const response = await fetch(`${this.baseUrl}/message`, {
                 method: 'POST',

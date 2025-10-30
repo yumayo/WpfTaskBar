@@ -10,7 +10,6 @@ namespace WpfTaskBar
     public class Http2StreamHandler : IDisposable
     {
         private readonly ConcurrentDictionary<string, StreamWriter> _connections = new();
-        private readonly ConcurrentDictionary<string, IntPtr> _connectionWindowHandles = new();
         private readonly ConcurrentDictionary<int, IntPtr> _windowIdToHwndMap = new();
         private readonly ChromeTabManager _tabManager;
 
@@ -29,22 +28,10 @@ namespace WpfTaskBar
         // サーバーからクライアントへのストリーム接続を処理
         public async Task HandleStreamAsync(HttpContext context)
         {
-            var connectionId = Guid.NewGuid().ToString();
+            var connectionId = context.Connection.Id;
             var remotePort = context.Connection.RemotePort;
 
-            Logger.Info($"[TCP調査] HandleStreamAsync: ConnectionId={connectionId}, RemotePort={remotePort}");
-
-            // Chrome プロセスを特定
-            var chromeHandle = FindChromeProcessByConnection(context);
-            if (chromeHandle != IntPtr.Zero)
-            {
-                _connectionWindowHandles[connectionId] = chromeHandle;
-                Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle: {chromeHandle}");
-            }
-            else
-            {
-                Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle not found");
-            }
+            Logger.Info($"HandleStreamAsync: ConnectionId={connectionId}, RemotePort={remotePort}");
 
             context.Response.Headers["Content-Type"] = "text/event-stream";
             context.Response.Headers["Cache-Control"] = "no-cache";
@@ -78,7 +65,6 @@ namespace WpfTaskBar
             finally
             {
                 _connections.TryRemove(connectionId, out _);
-                _connectionWindowHandles.TryRemove(connectionId, out _);
                 Logger.Info($"HTTP/2 stream connection closed: {connectionId}");
             }
         }
@@ -89,9 +75,9 @@ namespace WpfTaskBar
             try
             {
                 var remotePort = context.Connection.RemotePort;
-                var connectionId = context.Request.Headers["X-Connection-Id"].ToString();
+                var connectionId = context.Connection.Id;
 
-                Logger.Info($"[TCP調査] HandleMessageAsync: ConnectionId='{connectionId}', RemotePort={remotePort}");
+                Logger.Info($"HandleMessageAsync: ConnectionId='{connectionId}', RemotePort={remotePort}");
 
                 // リクエストボディの最大サイズチェック（1MB）
                 const int maxSize = 1 * 1024 * 1024;
@@ -106,7 +92,7 @@ namespace WpfTaskBar
                 using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
                 var message = await reader.ReadToEndAsync();
 
-                await ProcessMessage(connectionId, message);
+                await ProcessMessage(context, message);
 
                 context.Response.StatusCode = 200;
                 await context.Response.WriteAsync("OK");
@@ -119,8 +105,9 @@ namespace WpfTaskBar
             }
         }
 
-        private async Task ProcessMessage(string connectionId, string message)
+        private async Task ProcessMessage(HttpContext context, string message)
         {
+            string connectionId = context.Connection.Id;
             try
             {
                 Logger.Info($"Raw message from {connectionId}: {message}");
@@ -149,11 +136,10 @@ namespace WpfTaskBar
                         HandleUpdateTabs(payload.Data);
                         break;
                     case "bindWindowHandle":
-                        HandleBindWindowHandle(connectionId, payload.Data);
+                        HandleBindWindowHandle(context, payload.Data);
                         break;
                     case "ping":
-                        // pingに対してはpongを全接続にブロードキャスト
-                        await BroadcastMessage(new Payload { Action = "pong", Data = new {} });
+                        await HandlePing(connectionId);
                         break;
                     default:
                         Logger.Info($"Unknown action: {payload.Action}");
@@ -164,6 +150,16 @@ namespace WpfTaskBar
             {
                 Logger.Error(ex, $"Error processing message from {connectionId}");
             }
+        }
+
+        private Task HandlePing(string connectionId)
+        {
+            if (_connections.TryGetValue(connectionId, out var connection))
+            {
+                return SendMessage(connection, new Payload { Action = "pong", Data = new { } });
+            }
+
+            return Task.CompletedTask;
         }
 
         private void HandleRegisterTab(object data)
@@ -211,10 +207,9 @@ namespace WpfTaskBar
                 if (notification != null)
                 {
                     // 通知を送信してきた接続のChromeウィンドウハンドルを設定
-                    var connectionId = _connections.FirstOrDefault(c => c.Value != null).Key;
-                    if (!string.IsNullOrEmpty(connectionId) && _connectionWindowHandles.TryGetValue(connectionId, out var handle))
+                    if (_windowIdToHwndMap.TryGetValue(notification.WindowId, out var hwnd))
                     {
-                        notification.WindowHandle = handle;
+                        notification.WindowHandle = hwnd;
                         Logger.Info($"Notification received: {notification.Title}, WindowHandle: {notification.WindowHandle}");
                     }
                     else
@@ -252,24 +247,26 @@ namespace WpfTaskBar
             }
         }
 
-        private void HandleBindWindowHandle(string connectionId, object data)
+        private void HandleBindWindowHandle(HttpContext context, object data)
         {
+            string connectionId = context.Connection.Id;
             try
             {
                 var json = JsonSerializer.Serialize(data, JsonOptions);
                 var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
-                    // connectionIdから既に取得済みのChromeウィンドウハンドルを取得
-                    if (_connectionWindowHandles.TryGetValue(connectionId, out var chromeHandle))
+                    // Chrome プロセスを特定
+                    var chromeHandle = FindChromeProcessByConnection(context);
+                    if (chromeHandle != IntPtr.Zero)
                     {
                         // WindowIdとWindowHandleを紐づける
                         _windowIdToHwndMap[tabInfo.WindowId] = chromeHandle;
-                        Logger.Info($"Bound WindowId={tabInfo.WindowId} to Chrome Handle={chromeHandle} (ConnectionId={connectionId})");
+                        Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle: {chromeHandle}, WindowId={tabInfo.WindowId}");
                     }
                     else
                     {
-                        Logger.Warning($"Failed to bind WindowId={tabInfo.WindowId}: Chrome handle not found for ConnectionId={connectionId}");
+                        Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle not found, WindowId={tabInfo.WindowId}");
                     }
                 }
                 else
