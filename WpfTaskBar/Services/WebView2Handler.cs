@@ -543,31 +543,42 @@ namespace WpfTaskBar
 					return cachedBase64;
 				}
 
-				string? base64Result = null;
+				string? dataUrlResult = null;
 
-				// data:image形式のURLの場合、既にBase64エンコードされているため、そのまま返す
+				// data:image形式のURLの場合、既にdata URL形式なのでそのまま返す
 				if (faviconUrl.StartsWith("data:image"))
 				{
-					// data:image/png;base64,... の形式からBase64部分のみを抽出
-					var base64Index = faviconUrl.IndexOf("base64,");
-					if (base64Index >= 0)
-					{
-						base64Result = faviconUrl.Substring(base64Index + 7);
-					}
+					dataUrlResult = faviconUrl;
 				}
 				else
 				{
-					// それ以外の場合はHTTPからダウンロード
+					// HTTPからダウンロードしてdata URL形式に変換
 					using var httpClient = new System.Net.Http.HttpClient();
-					httpClient.Timeout = TimeSpan.FromSeconds(5);
+					httpClient.Timeout = TimeSpan.FromSeconds(10);
 					var imageBytes = httpClient.GetByteArrayAsync(faviconUrl).Result;
-					base64Result = Convert.ToBase64String(imageBytes);
+					var base64String = Convert.ToBase64String(imageBytes);
+
+					// MIMEタイプを判定（簡易的にPNGとして扱う、必要に応じて拡張可能）
+					string mimeType = "image/png";
+					if (faviconUrl.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+					{
+						mimeType = "image/svg+xml";
+					}
+					else if (faviconUrl.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+					{
+						mimeType = "image/x-icon";
+					}
+
+					dataUrlResult = $"data:{mimeType};base64,{base64String}";
 				}
 
 				// 結果をキャッシュに保存
-				_faviconCache[faviconUrl] = base64Result;
+				if (dataUrlResult != null)
+				{
+					_faviconCache[faviconUrl] = dataUrlResult;
+				}
 
-				return base64Result;
+				return dataUrlResult;
 			}
 			catch (Exception ex)
 			{

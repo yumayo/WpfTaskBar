@@ -86,7 +86,7 @@ function createTaskItem(task) {
     if (task.isChrome) {
         const favicon = document.createElement('img');
         if (task.faviconData) {
-            favicon.src = `data:image/png;base64,${task.faviconData}`;
+            favicon.src = task.faviconData;
         }
         favicon.className = 'chrome-favicon';
         item.appendChild(icon);
