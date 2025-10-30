@@ -3,7 +3,6 @@
 export class HttpStreamClient {
     constructor(baseUrl = 'http://127.0.0.1:5000') {
         this.baseUrl = baseUrl;
-        this.connectionId = null;
         this.isConnected = false;
         this.reconnectTimer = null;
         this.abortController = null;
@@ -18,9 +17,9 @@ export class HttpStreamClient {
 
     // ストリーム接続を初期化
     async initialize() {
-        // 既存の接続があれば閉じる
+
         if (this.abortController) {
-            return;
+            this.close();
         }
 
         try {
@@ -79,15 +78,9 @@ export class HttpStreamClient {
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            const data = line.substring(6);
+                            const data = line.substring('data: '.length);
                             try {
                                 const message = JSON.parse(data);
-
-                                // connectionIdを保存
-                                if (message.action === 'connected' && message.data?.connectionId) {
-                                    this.connectionId = message.data.connectionId;
-                                    console.log('[Background] Connection ID received:', this.connectionId);
-                                }
 
                                 // メッセージコールバックを実行
                                 if (this.onMessageCallback) {
@@ -121,7 +114,7 @@ export class HttpStreamClient {
             this.reconnectTimer = setTimeout(() => {
                 console.log('Attempting to reconnect...');
                 this.initialize();
-            }, 5000);
+            }, 1000);
 
         } catch (error) {
             console.error('Failed to initialize HTTP/2 stream:', error);
@@ -133,7 +126,7 @@ export class HttpStreamClient {
             }
 
             // 5秒後に再試行
-            this.reconnectTimer = setTimeout(() => this.initialize(), 5000);
+            this.reconnectTimer = setTimeout(() => this.initialize(), 1000);
         }
     }
 
@@ -151,12 +144,7 @@ export class HttpStreamClient {
                 'Content-Type': 'application/json',
             };
 
-            // connectionIdがあればヘッダーに追加
-            if (this.connectionId) {
-                headers['X-Connection-Id'] = this.connectionId;
-            }
-
-            console.log('[Background] Sending HTTP/2 message with ConnectionId:', this.connectionId, 'Message:', message);
+            console.log('[Background] Sending HTTP/2 Message:', message);
 
             const response = await fetch(`${this.baseUrl}/message`, {
                 method: 'POST',
@@ -214,6 +202,5 @@ export class HttpStreamClient {
         }
 
         this.isConnected = false;
-        this.connectionId = null;
     }
 }
