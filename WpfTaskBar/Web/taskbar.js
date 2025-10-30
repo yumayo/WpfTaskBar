@@ -83,9 +83,11 @@ function createTaskItem(task) {
     }
 
     // Chromeタブの場合のFavicon（アイコンとタイトルの間）
-    if (task.isChrome && task.faviconData) {
+    if (task.isChrome) {
         const favicon = document.createElement('img');
-        favicon.src = `data:image/png;base64,${task.faviconData}`;
+        if (task.faviconData) {
+            favicon.src = `data:image/png;base64,${task.faviconData}`;
+        }
         favicon.className = 'chrome-favicon';
         item.appendChild(icon);
         item.appendChild(favicon);
