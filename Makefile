@@ -13,6 +13,6 @@ artifact:
 	dotnet.exe build WpfTaskBar --configuration Release -o dist
 	cp -r ChromeExtension dist
 	(cd dist && zip -r ../WpfTaskBar_${APP_VERSION}.zip .)
-	git tag ${APP_VERSION}
-	git push origin master
-	git push origin --tags
+	git.exe tag ${APP_VERSION} || true
+	git.exe push origin master
+	git.exe push origin --tags
