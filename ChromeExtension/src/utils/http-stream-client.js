@@ -110,7 +110,7 @@ export class HttpStreamClient {
                 this.onDisconnectedCallback();
             }
 
-            // 5秒後に再接続を試行
+            // 1秒後に再接続を試行
             this.reconnectTimer = setTimeout(() => {
                 console.log('Attempting to reconnect...');
                 this.initialize();
