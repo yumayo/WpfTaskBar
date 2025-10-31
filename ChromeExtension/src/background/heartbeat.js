@@ -3,7 +3,7 @@
 import { steamClient } from './background.js';
 
 let heartbeatTimer = null;
-let heartbeatInterval = 30000; // 30秒ごとにping送信
+let heartbeatInterval = 10000; // 10秒ごとにping送信
 
 // ハートビートを開始
 export function startHeartbeat() {

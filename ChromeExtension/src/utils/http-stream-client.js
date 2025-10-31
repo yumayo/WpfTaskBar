@@ -25,7 +25,7 @@ export class HttpStreamClient {
         try {
             this.abortController = new AbortController();
 
-            console.log('[Background] Connecting to HTTP/2 stream at /stream...');
+            console.log('Connecting to HTTP/2 stream at /stream...');
 
             const response = await fetch(`${this.baseUrl}/stream`, {
                 method: 'GET',
@@ -39,7 +39,7 @@ export class HttpStreamClient {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            console.log('[Background] HTTP/2 stream connected to WpfTaskBar');
+            console.log('HTTP/2 stream connected to WpfTaskBar');
             this.isConnected = true;
 
             // 接続成功時に再接続タイマーをクリア
@@ -144,7 +144,7 @@ export class HttpStreamClient {
                 'Content-Type': 'application/json',
             };
 
-            console.log('[Background] Sending HTTP/2 Message:', message);
+            console.log('Sending HTTP/2 Message:', message);
 
             const response = await fetch(`${this.baseUrl}/message`, {
                 method: 'POST',

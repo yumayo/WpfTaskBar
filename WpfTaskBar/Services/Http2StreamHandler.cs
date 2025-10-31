@@ -139,7 +139,7 @@ namespace WpfTaskBar
                         HandleBindWindowHandle(context, payload.Data);
                         break;
                     case "ping":
-                        await HandlePing(connectionId);
+                        await HandlePing();
                         break;
                     default:
                         Logger.Info($"Unknown action: {payload.Action}");
@@ -152,14 +152,12 @@ namespace WpfTaskBar
             }
         }
 
-        private Task HandlePing(string connectionId)
+        private Task HandlePing()
         {
-            if (_connections.TryGetValue(connectionId, out var connection))
-            {
-                return SendMessage(connection, new Payload { Action = "pong", Data = new { } });
-            }
-
-            return Task.CompletedTask;
+            // ブラウザで双方向ストリームに対応していなさそうなので、書き込みはブラウザから/messageへ、サーバーからブラウザへは/streamとしています。
+            // このときコネクションIDは/messageと/streamで分かれているため、両方に送る必要があります。
+            // もともと、ブラウザ側がアクティブなウィンドウでない場合、Keep-Aliveが行われないため、/streamが意図せず閉じてしまうため、/messageを受け取ったらサーバー側から/streamに返して通信を維持しているというトリックです。
+            return BroadcastMessage(new Payload { Action = "pong", Data = new { } });
         }
 
         private void HandleRegisterTab(object data)
