@@ -902,14 +902,14 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
         reorderSingleTask(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
     }
 
-    // UIを更新
-    updateTaskListOrder();
-
     window.applicationOrder.updateOrderFromList(taskBarItems.map(task => task.moduleFileName))
 
     // アプリケーションのグルーピングを行っていますが、ここはgetTaskKeyで判定しません。
     // ここでChromeのwindowIdとtabIdでソートしてしまうと、Chrome側でタブを並び替えたときに反映されません。
     window.applicationOrder.updateWindowOrder(taskBarItems.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName })))
+
+    // UIを更新
+    updateTaskListOrder();
 }
 
 // 同種アプリケーションの一括移動
