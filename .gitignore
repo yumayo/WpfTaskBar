@@ -400,6 +400,5 @@ FodyWeavers.xsd
 *.sln.iml
 .idea
 
-.claude.local
 .env
 dist
