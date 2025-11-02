@@ -143,12 +143,32 @@ namespace WpfTaskBar
 								HandleRequestIsWindowOnCurrentVirtualDesktop(root);
 								break;
 
-							case "task_click":
-								HandleTaskClick(root);
-								break;
-
 							case "task_middle_click":
 								HandleTaskMiddleClick(root);
+								break;
+
+							case "request_is_window_minimized":
+								HandleRequestIsWindowMinimized(root);
+								break;
+
+							case "request_next_window_to_activate":
+								HandleRequestNextWindowToActivate(root);
+								break;
+
+							case "restore_window":
+								HandleRestoreWindow(root);
+								break;
+
+							case "minimize_window":
+								HandleMinimizeWindow(root);
+								break;
+
+							case "activate_window":
+								HandleActivateWindow(root);
+								break;
+
+							case "focus_chrome_tab":
+								HandleFocusChromeTab(root);
 								break;
 
 							case "notification_click":
@@ -181,110 +201,6 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "WebView2メッセージ処理時にエラーが発生しました。");
-			}
-		}
-
-		private void HandleTaskClick(JsonElement root)
-		{
-			try
-			{
-				if (root.TryGetProperty("data", out var dataElement))
-				{
-					// Chromeタブの情報を取得（オプショナル）
-					int? tabId = null;
-					int? windowId = null;
-					if (dataElement.TryGetProperty("tabId", out var tabIdElement) &&
-					    dataElement.TryGetProperty("windowId", out var windowIdElement))
-					{
-						tabId = tabIdElement.GetInt32();
-						windowId = windowIdElement.GetInt32();
-					}
-
-					if (dataElement.TryGetProperty("handle", out var handleElement))
-					{
-						var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
-						// ウィンドウが最小化されているかチェック
-						if (NativeMethods.IsIconic(handle))
-						{
-							// 最小化されたウィンドウを復元してアクティブにする
-							NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
-							NativeMethods.SetForegroundWindow(handle);
-							Logger.Info($"最小化されたウィンドウを復元しました: {handle}");
-						}
-						else
-						{
-							// 現在のフォアグラウンドウィンドウを取得
-							var foregroundWindow = NativeMethods.GetForegroundWindow();
-
-							// クリックされたウィンドウが既にアクティブな場合
-							if (handle == foregroundWindow)
-							{
-								// Chromeタブの場合は、タブIDも比較する
-								bool shouldMinimize = true;
-								if (tabId.HasValue)
-								{
-									// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
-									// hwndから対応するWindowIdを探す
-									var targetWindowId = FindWindowIdByHwnd(handle);
-									if (targetWindowId.HasValue)
-									{
-										var currentTab = _chromeTabManager.GetTabsByWindow(targetWindowId.Value).FirstOrDefault(t => t.IsActive);
-										// 現在アクティブなタブと異なるタブの場合は最小化しない
-										if (currentTab != null && currentTab.TabId != tabId.Value)
-										{
-											shouldMinimize = false;
-											Logger.Info($"Chromeの別タブをアクティブにします: TabId={tabId.Value} (現在アクティブなタブ: {currentTab.TabId})");
-										}
-										else
-										{
-											Logger.Info($"Chromeの同じタブがアクティブなため最小化します: TabId={tabId.Value}");
-										}
-									}
-									else
-									{
-										Logger.Info($"WindowHandleと関連付けられたWindowIdが見つからないため、通常のウィンドウ拡大縮小動作となります。{handle}");
-									}
-								}
-								else
-								{
-									Logger.Info($"通常のウィンドウがアクティブなため最小化します: {handle}");
-								}
-
-								if (shouldMinimize)
-								{
-									// ウィンドウを最小化
-									NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
-									Logger.Info($"アクティブなウィンドウを最小化しました: {handle}");
-								}
-								else
-								{
-									Logger.Info($"別のウィンドウをアクティブにするため最小化をスキップします: {handle}");
-								}
-							}
-							else
-							{
-								// ウィンドウをアクティブにする
-								NativeMethods.SetForegroundWindow(handle);
-								Logger.Info($"ウィンドウをアクティブにしました: {handle}");
-							}
-						}
-					}
-					else
-					{
-						Logger.Info($"Handleプロパティーが代入されていません。");
-					}
-
-					// Chromeタブの場合は、タブもアクティブにする
-					if (tabId.HasValue && windowId.HasValue)
-					{
-						_ = _webSocketHandler.FocusTab(tabId.Value, windowId.Value);
-						Logger.Info($"復元後にChromeタブをアクティブにしました: TabId={tabId.Value}, WindowId={windowId.Value}");
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "タスククリック処理時にエラーが発生しました。");
 			}
 		}
 
@@ -762,6 +678,153 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "仮想デスクトップ判定時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleRequestIsWindowMinimized(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					var isMinimized = NativeMethods.IsIconic(handle);
+					SendMessageToWebView(new
+					{
+						type = "is_window_minimized_response",
+						handle = handle.ToInt32(),
+						isMinimized
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ウィンドウ最小化判定時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleRequestNextWindowToActivate(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var currentHandle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					var nextHandle = GetNextWindowToActivate(currentHandle);
+					SendMessageToWebView(new
+					{
+						type = "next_window_to_activate_response",
+						currentHandle = currentHandle.ToInt32(),
+						nextHandle = nextHandle.ToInt32()
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "次のウィンドウ取得時にエラーが発生しました。");
+			}
+		}
+
+		private IntPtr GetNextWindowToActivate(IntPtr currentHWnd)
+		{
+			IntPtr hWnd = NativeMethods.GetWindow(currentHWnd, NativeMethods.GW_HWNDNEXT);
+
+			while (hWnd != IntPtr.Zero)
+			{
+				if (NativeMethods.IsWindowVisible(hWnd))
+				{
+					ulong exStyle = NativeMethods.GetWindowLongA(hWnd, NativeMethods.GWL_EXSTYLE);
+					if ((exStyle & NativeMethods.WS_EX_TOOLWINDOW) == 0 &&
+					    (exStyle & NativeMethods.WS_EX_NOACTIVATE) == 0)
+					{
+						// タスクバーに表示されるべきウィンドウであることを確認
+						if (NativeMethodUtility.IsTaskBarWindow(hWnd))
+						{
+							return hWnd;
+						}
+					}
+				}
+
+				hWnd = NativeMethods.GetWindow(hWnd, NativeMethods.GW_HWNDNEXT);
+			}
+
+			return IntPtr.Zero;
+		}
+
+		private void HandleRestoreWindow(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
+					NativeMethods.SetForegroundWindow(handle);
+					Logger.Info($"ウィンドウを復元しました: {handle}");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ウィンドウ復元時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleMinimizeWindow(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+					Logger.Info($"ウィンドウを最小化しました: {handle}");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ウィンドウ最小化時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleActivateWindow(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					NativeMethods.SetForegroundWindow(handle);
+					Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ウィンドウアクティブ化時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleFocusChromeTab(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("tabId", out var tabIdElement) &&
+				    dataElement.TryGetProperty("windowId", out var windowIdElement))
+				{
+					var tabId = tabIdElement.GetInt32();
+					var windowId = windowIdElement.GetInt32();
+					_ = _webSocketHandler.FocusTab(tabId, windowId);
+					Logger.Info($"Chromeタブをフォーカスしました: TabId={tabId}, WindowId={windowId}");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "Chromeタブフォーカス時にエラーが発生しました。");
 			}
 		}
 

@@ -40,6 +40,14 @@ public class NativeMethods
 	public static readonly int SC_MINIMIZE = 0xF020;
 	public static readonly int SC_CLOSE = 0xF060;
 
+	// GetWindow用の定数
+	public static readonly uint GW_HWNDFIRST = 0;
+	public static readonly uint GW_HWNDLAST = 1;
+	public static readonly uint GW_HWNDNEXT = 2;
+	public static readonly uint GW_HWNDPREV = 3;
+	public static readonly uint GW_OWNER = 4;
+	public static readonly uint GW_CHILD = 5;
+
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public delegate bool EnumWindowsCallback(IntPtr hwnd, int lParam);
 
@@ -119,6 +127,12 @@ public class NativeMethods
 
 	[DllImport("user32.dll")]
 	public static extern IntPtr GetForegroundWindow();
+
+	[DllImport("user32.dll", SetLastError = true)]
+	public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+	[DllImport("user32.dll", SetLastError = true)]
+	public static extern IntPtr GetTopWindow(IntPtr hWnd);
 
 	// How to get the "Application Name" from hWnd for Windows 10 Store Apps (e.g. Edge)
 	// https://stackoverflow.com/questions/32001621/how-to-get-the-application-name-from-hwnd-for-windows-10-store-apps-e-g-edge

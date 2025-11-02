@@ -360,6 +360,72 @@ async function requestIsWindowOnCurrentVirtualDesktop(windowHandle) {
     });
 }
 
+// ウィンドウが最小化されているかを確認
+async function requestIsWindowMinimized(handle) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('requestIsWindowMinimized timeout')), 1000);
+
+        const responseHandler = (event) => {
+            try {
+                let data;
+                if (typeof event.data === 'string') {
+                    data = JSON.parse(event.data);
+                } else {
+                    data = event.data;
+                }
+
+                if (data && data.type === 'is_window_minimized_response') {
+                    if (data.handle === handle) {
+                        clearTimeout(timeout);
+                        window.chrome.webview.removeEventListener('message', responseHandler);
+                        resolve(data.isMinimized);
+                    }
+                }
+            } catch (error) {
+                clearTimeout(timeout);
+                window.chrome.webview.removeEventListener('message', responseHandler);
+                reject(error);
+            }
+        };
+
+        window.chrome.webview.addEventListener('message', responseHandler);
+        sendMessageToHost('request_is_window_minimized', { handle: handle });
+    });
+}
+
+// 次にアクティブになるウィンドウを取得
+async function requestNextWindowToActivate(handle) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('requestNextWindowToActivate timeout')), 1000);
+
+        const responseHandler = (event) => {
+            try {
+                let data;
+                if (typeof event.data === 'string') {
+                    data = JSON.parse(event.data);
+                } else {
+                    data = event.data;
+                }
+
+                if (data && data.type === 'next_window_to_activate_response') {
+                    if (data.currentHandle === handle) {
+                        clearTimeout(timeout);
+                        window.chrome.webview.removeEventListener('message', responseHandler);
+                        resolve(data.nextHandle);
+                    }
+                }
+            } catch (error) {
+                clearTimeout(timeout);
+                window.chrome.webview.removeEventListener('message', responseHandler);
+                reject(error);
+            }
+        };
+
+        window.chrome.webview.addEventListener('message', responseHandler);
+        sendMessageToHost('request_next_window_to_activate', { handle: handle });
+    });
+}
+
 // タスクリストの順序のみを更新
 function updateTaskListOrder() {
 
@@ -511,7 +577,7 @@ function setupDragAndDrop(item, task) {
 }
 
 // タスクアイテムのクリック処理
-function onClick(item, task, e) {
+async function onClick(item, task, e) {
     // ドラッグ中のクリックは無視
     if (item.classList.contains('dragging')) {
         return;
@@ -522,25 +588,96 @@ function onClick(item, task, e) {
         taskItem.classList.remove('foreground');
     });
 
-    // クリックされたアイテムに foreground クラスを追加
-    item.classList.add('foreground');
-
     // クリック時刻を記録（UPDATE_INTERVAL後まで全タスクのforeground更新をスキップするため）
     lastClickTime = Date.now();
 
-    // Chromeタブの場合は、tabIdとwindowIdを送信
-    if (task.isChrome) {
-        sendMessageToHost('task_click', {
-            handle: task.handle,
-            moduleFileName: task.moduleFileName,
-            tabId: task.tabId,
-            windowId: task.windowId
-        });
-    } else {
-        sendMessageToHost('task_click', {
-            handle: task.handle,
-            moduleFileName: task.moduleFileName
-        });
+    try {
+        // ウィンドウが最小化されているか確認
+        const isMinimized = await requestIsWindowMinimized(task.handle);
+
+        if (isMinimized) {
+            // 最小化されている場合は復元してアクティブ化
+            sendMessageToHost('restore_window', { handle: task.handle });
+
+            // クリックされたアイテムに foreground クラスを追加
+            item.classList.add('foreground');
+
+            // Chromeタブの場合は、タブもアクティブにする
+            if (task.isChrome) {
+                sendMessageToHost('focus_chrome_tab', {
+                    tabId: task.tabId,
+                    windowId: task.windowId
+                });
+            }
+        } else {
+            // 現在のフォアグラウンドウィンドウを取得
+            const foregroundWindow = await requestForegroundWindow();
+
+            // クリックされたウィンドウが既にアクティブな場合
+            if (task.handle === foregroundWindow) {
+                // Chromeタブの場合は、タブIDも比較する
+                let shouldMinimize = true;
+                if (task.isChrome) {
+                    // 現在アクティブなタブを取得
+                    const activeTab = taskBarItems.find(item =>
+                        item.windowId === task.windowId && item.isForeground
+                    );
+
+                    // 現在アクティブなタブと異なるタブの場合は最小化しない
+                    if (activeTab && activeTab.tabId !== task.tabId) {
+                        shouldMinimize = false;
+                    }
+                }
+
+                if (shouldMinimize) {
+                    // 次にアクティブになるウィンドウを取得
+                    const nextHandle = await requestNextWindowToActivate(task.handle);
+
+                    // 次にアクティブになるitemを探してforegroundクラスを付与
+                    if (nextHandle && nextHandle !== 0) {
+                        const nextItem = taskBarItems.find(t => t.handle === nextHandle);
+                        if (nextItem) {
+                            const nextKey = getTaskKey(nextItem);
+                            const nextElementSelector = nextItem.isChrome
+                                ? `.task-item[data-handle="${nextItem.handle}"][data-window-id="${nextItem.windowId}"][data-tab-id="${nextItem.tabId}"]`
+                                : `.task-item[data-handle="${nextItem.handle}"]`;
+                            const nextElement = document.querySelector(nextElementSelector);
+                            if (nextElement) {
+                                nextElement.classList.add('foreground');
+                            }
+                        }
+                    }
+
+                    // ウィンドウを最小化
+                    sendMessageToHost('minimize_window', { handle: task.handle });
+                } else {
+                    // クリックされたアイテムに foreground クラスを追加
+                    item.classList.add('foreground');
+                    
+                    // 別のタブをアクティブにする
+                    sendMessageToHost('focus_chrome_tab', {
+                        tabId: task.tabId,
+                        windowId: task.windowId
+                    });
+                }
+            } else {
+                // ウィンドウをアクティブにする
+                sendMessageToHost('activate_window', { handle: task.handle });
+
+                // クリックされたアイテムに foreground クラスを追加
+                item.classList.add('foreground');
+
+                // Chromeタブの場合は、タブもアクティブにする
+                if (task.isChrome) {
+                    sendMessageToHost('focus_chrome_tab', {
+                        tabId: task.tabId,
+                        windowId: task.windowId
+                    });
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error in onClick:', error);
     }
 }
 
