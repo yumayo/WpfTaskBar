@@ -23,7 +23,7 @@ namespace WpfTaskBar
             services.AddHttpClient();
 
             services.AddSingleton<ChromeTabManager>();
-            services.AddSingleton<Http2StreamHandler>();
+            services.AddSingleton<WebSocketHandler>();
             services.AddSingleton<WebView2Handler>();
         }
 
@@ -36,6 +36,7 @@ namespace WpfTaskBar
 
             app.UseRouting();
             app.UseCors();
+            app.UseWebSockets();
 
             app.UseEndpoints(endpoints =>
             {
@@ -44,17 +45,17 @@ namespace WpfTaskBar
 
             app.Use(async (context, next) =>
             {
-                if (context.Request.Path == "/stream")
+                if (context.Request.Path == "/ws")
                 {
-                    // HTTP/2 ストリーミングエンドポイント（サーバー→クライアント）
-                    var http2Handler = app.ApplicationServices.GetRequiredService<Http2StreamHandler>();
-                    await http2Handler.HandleStreamAsync(context);
-                }
-                else if (context.Request.Path == "/message" && context.Request.Method == "POST")
-                {
-                    // HTTP/2 メッセージエンドポイント（クライアント→サーバー）
-                    var http2Handler = app.ApplicationServices.GetRequiredService<Http2StreamHandler>();
-                    await http2Handler.HandleMessageAsync(context);
+                    if (context.WebSockets.IsWebSocketRequest)
+                    {
+                        var wsHandler = app.ApplicationServices.GetRequiredService<WebSocketHandler>();
+                        await wsHandler.HandleWebSocketAsync(context);
+                    }
+                    else
+                    {
+                        context.Response.StatusCode = 400;
+                    }
                 }
                 else
                 {

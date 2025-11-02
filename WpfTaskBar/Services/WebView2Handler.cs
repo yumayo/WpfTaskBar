@@ -16,14 +16,14 @@ namespace WpfTaskBar
 		private Dispatcher _dispatcher;
 		private WebView2 _webView2;
 		private ChromeTabManager _chromeTabManager;
-		private Http2StreamHandler _http2StreamHandler;
+		private WebSocketHandler _webSocketHandler;
 		private readonly IHttpClientFactory _httpClientFactory;
 		private readonly Dictionary<string, string?> _faviconCache = new Dictionary<string, string?>();
 
-		public WebView2Handler(ChromeTabManager chromeTabManager, Http2StreamHandler http2StreamHandler, IHttpClientFactory httpClientFactory)
+		public WebView2Handler(ChromeTabManager chromeTabManager, WebSocketHandler webSocketHandler, IHttpClientFactory httpClientFactory)
 		{
 			_chromeTabManager = chromeTabManager;
-			_http2StreamHandler = http2StreamHandler;
+			_webSocketHandler = webSocketHandler;
 			_httpClientFactory = httpClientFactory;
 		}
 
@@ -277,7 +277,7 @@ namespace WpfTaskBar
 					// Chromeタブの場合は、タブもアクティブにする
 					if (tabId.HasValue && windowId.HasValue)
 					{
-						_ = _http2StreamHandler.FocusTab(tabId.Value, windowId.Value);
+						_ = _webSocketHandler.FocusTab(tabId.Value, windowId.Value);
 						Logger.Info($"復元後にChromeタブをアクティブにしました: TabId={tabId.Value}, WindowId={windowId.Value}");
 					}
 				}
@@ -313,7 +313,7 @@ namespace WpfTaskBar
 						windowId = windowIdElement.GetInt32();
 
 						// Chromeのタブを閉じる
-						_ = _http2StreamHandler.CloseTab(tabId.Value, windowId.Value);
+						_ = _webSocketHandler.CloseTab(tabId.Value, windowId.Value);
 						Logger.Info($"Chromeタブを閉じるメッセージを送信: TabId={tabId.Value}, WindowId={windowId.Value}");
 						return;
 					}
@@ -732,7 +732,7 @@ namespace WpfTaskBar
 
 			foreach (var windowId in uniqueWindowIds)
 			{
-				var mappedHwnd = _http2StreamHandler.GetHwndByWindowId(windowId);
+				var mappedHwnd = _webSocketHandler.GetHwndByWindowId(windowId);
 				if (mappedHwnd == hwnd)
 				{
 					return windowId;

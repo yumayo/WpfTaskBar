@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -7,9 +8,9 @@ using System.IO;
 
 namespace WpfTaskBar
 {
-    public class Http2StreamHandler : IDisposable
+    public class WebSocketHandler : IDisposable
     {
-        private readonly ConcurrentDictionary<string, StreamWriter> _connections = new();
+        private readonly ConcurrentDictionary<string, WebSocket> _connections = new();
         private readonly ConcurrentDictionary<int, IntPtr> _windowIdToHwndMap = new();
         private readonly ChromeTabManager _tabManager;
 
@@ -18,90 +19,65 @@ namespace WpfTaskBar
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        public Http2StreamHandler(ChromeTabManager tabManager)
+        public WebSocketHandler(ChromeTabManager tabManager)
         {
             _tabManager = tabManager;
 
-            Logger.Info("Http2StreamHandler initialized");
+            Logger.Info("WebSocketHandler initialized");
         }
 
-        // サーバーからクライアントへのストリーム接続を処理
-        public async Task HandleStreamAsync(HttpContext context)
+        // WebSocket接続を処理
+        public async Task HandleWebSocketAsync(HttpContext context)
         {
             var connectionId = context.Connection.Id;
             var remotePort = context.Connection.RemotePort;
 
-            Logger.Info($"HandleStreamAsync: ConnectionId={connectionId}, RemotePort={remotePort}");
+            Logger.Info($"HandleWebSocketAsync: ConnectionId={connectionId}, RemotePort={remotePort}");
 
-            context.Response.Headers["Content-Type"] = "text/event-stream";
-            context.Response.Headers["Cache-Control"] = "no-cache";
-            context.Response.Headers["Connection"] = "keep-alive";
-
+            WebSocket? webSocket = null;
             try
             {
-                var writer = new StreamWriter(context.Response.Body, Encoding.UTF8, leaveOpen: true)
-                {
-                    AutoFlush = false  // 同期フラッシュを無効化
-                };
-
-                _connections[connectionId] = writer;
+                webSocket = await context.WebSockets.AcceptWebSocketAsync();
+                _connections[connectionId] = webSocket;
 
                 // 接続確認メッセージを送信
-                await SendMessage(writer, new Payload
+                await SendMessage(webSocket, new Payload
                 {
                     Action = "connected",
                     Data = new { connectionId }
                 });
 
-                // 接続を維持（クライアントが切断するまで）
-                var tcs = new TaskCompletionSource<bool>();
-                context.RequestAborted.Register(() => tcs.TrySetResult(true));
-                await tcs.Task;
+                // メッセージ受信ループ
+                var buffer = new byte[1 * 1024 * 1024];
+                while (webSocket.State == WebSocketState.Open)
+                {
+                    var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        await ProcessMessage(context, message);
+                    }
+                    else if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                        break;
+                    }
+                }
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, $"HTTP/2 stream error for {connectionId}");
+                Logger.Error(ex, $"WebSocket error for {connectionId}");
             }
             finally
             {
                 _connections.TryRemove(connectionId, out _);
-                Logger.Info($"HTTP/2 stream connection closed: {connectionId}");
-            }
-        }
-
-        // クライアントからサーバーへのメッセージを処理
-        public async Task HandleMessageAsync(HttpContext context)
-        {
-            try
-            {
-                var remotePort = context.Connection.RemotePort;
-                var connectionId = context.Connection.Id;
-
-                Logger.Info($"HandleMessageAsync: ConnectionId='{connectionId}', RemotePort={remotePort}");
-
-                // リクエストボディの最大サイズチェック（1MB）
-                const int maxSize = 1 * 1024 * 1024;
-                if (context.Request.ContentLength > maxSize)
+                if (webSocket != null && webSocket.State == WebSocketState.Open)
                 {
-                    Logger.Warning($"Message size exceeded the limit. Received: {context.Request.ContentLength} bytes, Limit: {maxSize} bytes");
-                    context.Response.StatusCode = 413; // Payload Too Large
-                    await context.Response.WriteAsync("Message too large");
-                    return;
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                 }
-
-                using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
-                var message = await reader.ReadToEndAsync();
-
-                await ProcessMessage(context, message);
-
-                context.Response.StatusCode = 200;
-                await context.Response.WriteAsync("OK");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "Error handling message");
-                context.Response.StatusCode = 500;
-                await context.Response.WriteAsync("Internal Server Error");
+                webSocket?.Dispose();
+                Logger.Info($"WebSocket connection closed: {connectionId}");
             }
         }
 
@@ -154,9 +130,6 @@ namespace WpfTaskBar
 
         private Task HandlePing()
         {
-            // ブラウザで双方向ストリームに対応していなさそうなので、書き込みはブラウザから/messageへ、サーバーからブラウザへは/streamとしています。
-            // このときコネクションIDは/messageと/streamで分かれているため、両方に送る必要があります。
-            // もともと、ブラウザ側がアクティブなウィンドウでない場合、Keep-Aliveが行われないため、/streamが意図せず閉じてしまうため、/messageを受け取ったらサーバー側から/streamに返して通信を維持しているというトリックです。
             return BroadcastMessage(new Payload { Action = "pong", Data = new { } });
         }
 
@@ -260,11 +233,11 @@ namespace WpfTaskBar
                     {
                         // WindowIdとWindowHandleを紐づける
                         _windowIdToHwndMap[tabInfo.WindowId] = chromeHandle;
-                        Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle: {chromeHandle}, WindowId={tabInfo.WindowId}");
+                        Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle: {chromeHandle}, WindowId={tabInfo.WindowId}");
                     }
                     else
                     {
-                        Logger.Info($"HTTP/2 connection established: {connectionId}, Chrome Handle not found, WindowId={tabInfo.WindowId}");
+                        Logger.Info($"WebSocket connection established: {connectionId}, Chrome Handle not found, WindowId={tabInfo.WindowId}");
                     }
                 }
                 else
@@ -327,7 +300,7 @@ namespace WpfTaskBar
 
             foreach (var connection in _connections.Values)
             {
-                if (connection != null)
+                if (connection != null && connection.State == WebSocketState.Open)
                 {
                     tasks.Add(SendMessage(connection, payload));
                 }
@@ -336,13 +309,13 @@ namespace WpfTaskBar
             await Task.WhenAll(tasks);
         }
 
-        private async Task SendMessage(StreamWriter writer, Payload payload)
+        private async Task SendMessage(WebSocket webSocket, Payload payload)
         {
             try
             {
                 var json = JsonSerializer.Serialize(payload, JsonOptions);
-                await writer.WriteAsync($"data: {json}\n\n");
-                await writer.FlushAsync();  // 非同期的にフラッシュ
+                var bytes = Encoding.UTF8.GetBytes(json);
+                await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
             }
             catch (Exception ex)
             {
@@ -358,7 +331,7 @@ namespace WpfTaskBar
                 var remoteEndPoint = context.Connection.RemoteIpAddress;
                 var remotePort = context.Connection.RemotePort;
 
-                Logger.Info($"HTTP/2 connection from: {remoteEndPoint}:{remotePort}");
+                Logger.Info($"WebSocket connection from: {remoteEndPoint}:{remotePort}");
 
                 // netstatの情報を使ってプロセスIDを特定
                 var processId = GetProcessIdByPort(remotePort);
@@ -533,10 +506,14 @@ namespace WpfTaskBar
             // 全ての接続を閉じる
             foreach (var connection in _connections.Values)
             {
+                if (connection.State == WebSocketState.Open)
+                {
+                    connection.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposing", CancellationToken.None).Wait();
+                }
                 connection?.Dispose();
             }
 
-            Logger.Info("Http2StreamHandler disposed");
+            Logger.Info("WebSocketHandler disposed");
         }
     }
 }

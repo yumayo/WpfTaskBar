@@ -96,20 +96,12 @@ public partial class MainWindow : Window
 		Logger.Info("Starting MainWindow service initialization");
 
 		Logger.Info("Starting REST API server...");
-		
+
 		var builder = Host.CreateDefaultBuilder();
 		builder.ConfigureWebHostDefaults(webBuilder =>
 		{
 			webBuilder.UseUrls("http://0.0.0.0:5000");
 			webBuilder.UseStartup<Startup>();
-			// HTTP/2を有効化（HTTPでもh2cとして動作可能）
-			webBuilder.ConfigureKestrel(options =>
-			{
-				options.ConfigureEndpointDefaults(listenOptions =>
-				{
-					listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2;
-				});
-			});
 		});
 		
 		_host = builder.Build();
