@@ -588,7 +588,7 @@ async function onClick(item, task, e) {
         taskItem.classList.remove('foreground');
     });
 
-    // クリック時刻を記録（UPDATE_INTERVAL後まで全タスクのforeground更新をスキップするため）
+    // クリック時刻を記録（FOREGROUND_UPDATE_SKIP_DURATION後まで全タスクのforeground更新をスキップするため）
     lastClickTime = Date.now();
 
     try {
@@ -995,7 +995,8 @@ function getTaskKey(task) {
 
 // タスク要素の内容を更新（変更がある場合のみ）
 function updateTaskItemContent(item, task) {
-    // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ（定期的な通信による上書きを防ぐため）
+    // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ
+    // これがないと定期的な通信によって上書きされて、アクティブなウィンドウのタスクバーがちらつきます。
     const timeSinceClick = Date.now() - lastClickTime;
     const shouldSkipForegroundUpdate = (timeSinceClick < FOREGROUND_UPDATE_SKIP_DURATION);
     if (!shouldSkipForegroundUpdate) {
