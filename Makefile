@@ -1,11 +1,4 @@
-.PHONY: initialize artifact clock-in clock-out
-
-initialize:
-	mkdir -p .claude.local
-	[ ! -f .claude.local/.claude.json ] && echo '{}' > .claude.local/.claude.json || true
-	mkdir -p .claude.local/.claude
-
-DEFAULT_GUAL := initialize
+.PHONY: artifact clock-in clock-out
 
 artifact:
 	rm -rf dist
