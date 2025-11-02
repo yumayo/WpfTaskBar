@@ -191,6 +191,10 @@ namespace WpfTaskBar
 								HandleOpenDevTools();
 								break;
 
+							case "request_time_record_status":
+								HandleRequestTimeRecordStatus();
+								break;
+
 							default:
 								Logger.Info($"未知のメッセージタイプ: {messageType}");
 								break;
@@ -989,6 +993,26 @@ namespace WpfTaskBar
 					data = ""
 				});
 				Logger.Error(ex, $"ファイル読み込み時にエラーが発生しました: {filename}");
+			}
+		}
+
+		private void HandleRequestTimeRecordStatus()
+		{
+			try
+			{
+				var response = new
+				{
+					type = "time_record_status_response",
+					clock_in_date = TimeRecordModel.ClockInDate,
+					clock_out_date = TimeRecordModel.ClockOutDate
+				};
+
+				SendMessageToWebView(response);
+				Logger.Info("時刻記録の状態を送信しました");
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "時刻記録の状態取得時にエラーが発生しました。");
 			}
 		}
 	}

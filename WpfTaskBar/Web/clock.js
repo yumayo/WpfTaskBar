@@ -92,11 +92,19 @@ function formatTime(date) {
     });
 }
 
-// 初回の時刻表示
-updateDateTime();
+// 起動時に時刻記録の状態を取得（WebView2経由）
+function loadTimeRecordStatus() {
+    try {
+        // network.jsのsendMessageToHostを使用してC#側にリクエストを送信
+        sendMessageToHost('request_time_record_status');
+        console.log('時刻記録の状態をリクエストしました');
+    } catch (error) {
+        console.error('時刻記録の状態取得リクエスト中にエラーが発生しました:', error);
+    }
+}
 
-// 定期的に時刻情報を更新
-setInterval(() => updateDateTime(), 100);
+// 起動時に時刻記録の状態を取得
+loadTimeRecordStatus();
 
 window.chrome?.webview?.addEventListener('message', function(event) {
     let data;
@@ -110,7 +118,26 @@ window.chrome?.webview?.addEventListener('message', function(event) {
     if (!data) {
         return;
     }
-    
+
+    // 起動時の時刻記録状態の受信
+    if (data.type === 'time_record_status_response') {
+        // ClockInDateとClockOutDateを設定
+        if (data.clock_in_date && data.clock_in_date !== '0001-01-01T00:00:00') {
+            timeRecord.clockInDate = new Date(data.clock_in_date);
+        }
+
+        if (data.clock_out_date && data.clock_out_date !== '0001-01-01T00:00:00') {
+            timeRecord.clockOutDate = new Date(data.clock_out_date);
+        }
+
+        console.log('時刻記録の状態を受信しました:', data);
+
+        updateDateTime();
+
+        // 定期的に時刻情報を更新
+        setInterval(() => updateDateTime(), 100);
+    }
+
     if (data.type === 'clock_in_update') {
         timeRecord.clockInDate = new Date(data.date);
     }

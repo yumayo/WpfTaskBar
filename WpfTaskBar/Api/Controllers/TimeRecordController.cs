@@ -17,6 +17,7 @@ namespace WpfTaskBar
         public ActionResult<ClockInResponse> ClockIn([FromBody] ClockInRequest request)
         {
             TimeRecordModel.ClockInDate = request.Date;
+            TimeRecordModel.Save();
 
             _webView2Handler.SendMessageToWebView(new
             {
@@ -31,27 +32,29 @@ namespace WpfTaskBar
         public ActionResult<ClockOutResponse> ClockOut([FromBody] ClockOutRequest request)
         {
             TimeRecordModel.ClockOutDate = request.Date;
-            
+            TimeRecordModel.Save();
+
             _webView2Handler.SendMessageToWebView(new
             {
                 type = "clock_out_update",
                 date = TimeRecordModel.ClockOutDate,
             });
-            
+
             return Ok(new ClockOutResponse { ClockOutDate = TimeRecordModel.ClockOutDate });
         }
-        
+
         [HttpPost("clear")]
         public ActionResult Clear()
         {
             TimeRecordModel.ClockInDate = default;
             TimeRecordModel.ClockOutDate = default;
-            
+            TimeRecordModel.Save();
+
             _webView2Handler.SendMessageToWebView(new
             {
                 type = "clock_clear"
             });
-            
+
             return Ok();
         }
     }

@@ -97,6 +97,10 @@ public partial class MainWindow : Window
 
 		Logger.Info("Starting REST API server...");
 
+		// TimeRecordModelのデータを読み込む
+		TimeRecordModel.Load();
+		Logger.Info("TimeRecordModel data loaded");
+
 		var builder = Host.CreateDefaultBuilder();
 		builder.ConfigureWebHostDefaults(webBuilder =>
 		{
