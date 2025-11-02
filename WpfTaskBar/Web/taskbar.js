@@ -1,6 +1,10 @@
+const UPDATE_INTERVAL = 100; // 更新間隔（ミリ秒）
+const FOREGROUND_UPDATE_SKIP_DURATION = 1000;  // クリック後のタスク更新スキップ時間（ミリ秒）
+
 let taskBarItems = [];
 let draggedTask = null;
 let draggedElement = null;
+let lastClickTime = 0;
 
 // 開始
 function start() {
@@ -21,16 +25,16 @@ async function updateTaskWindows() {
         // タスクリストの順序のみを更新
         updateTaskListOrder();
 
-        // 100ms後に再実行
+        // UPDATE_INTERVAL後に再実行
         setTimeout(() => {
             updateTaskWindows();
-        }, 100);
+        }, UPDATE_INTERVAL);
     } catch (error) {
         console.error('Error in WindowManager.updateTaskWindows():', error);
         // エラーが発生した場合も継続
         setTimeout(() => {
             updateTaskWindows();
-        }, 100);
+        }, UPDATE_INTERVAL);
     }
 }
 
@@ -356,7 +360,7 @@ async function requestIsWindowOnCurrentVirtualDesktop(windowHandle) {
     });
 }
 
-// タスクリストの順序のみを更新（データの再取得なし）
+// タスクリストの順序のみを更新
 function updateTaskListOrder() {
 
     // タスクバー一覧をアプリケーション名でトポロジカルソートする
@@ -520,6 +524,9 @@ function onClick(item, task, e) {
 
     // クリックされたアイテムに foreground クラスを追加
     item.classList.add('foreground');
+
+    // クリック時刻を記録（UPDATE_INTERVAL後まで全タスクのforeground更新をスキップするため）
+    lastClickTime = Date.now();
 
     // Chromeタブの場合は、tabIdとwindowIdを送信
     if (task.isChrome) {
@@ -851,17 +858,18 @@ function getTaskKey(task) {
 
 // タスク要素の内容を更新（変更がある場合のみ）
 function updateTaskItemContent(item, task) {
-    let needsUpdate = false;
-
-    // isForegroundクラスの更新
-    const hasForeground = item.classList.contains('foreground');
-    if (hasForeground !== task.isForeground) {
-        if (task.isForeground) {
-            item.classList.add('foreground');
-        } else {
-            item.classList.remove('foreground');
+    // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ（定期的な通信による上書きを防ぐため）
+    const timeSinceClick = Date.now() - lastClickTime;
+    const shouldSkipForegroundUpdate = (timeSinceClick < FOREGROUND_UPDATE_SKIP_DURATION);
+    if (!shouldSkipForegroundUpdate) {
+        const hasForeground = item.classList.contains('foreground');
+        if (hasForeground !== task.isForeground) {
+            if (task.isForeground) {
+                item.classList.add('foreground');
+            } else {
+                item.classList.remove('foreground');
+            }
         }
-        needsUpdate = true;
     }
 
     // タイトルの更新
@@ -869,7 +877,6 @@ function updateTaskItemContent(item, task) {
     if (textElement && textElement.textContent !== task.title) {
         textElement.textContent = task.title || 'Unknown';
         textElement.title = task.title || 'Unknown';
-        needsUpdate = true;
     }
 
     // アイコンの更新（iconDataが変わった場合）
@@ -893,7 +900,6 @@ function updateTaskItemContent(item, task) {
                     (task.title || 'Unknown').split(' ')[0];
                 iconElement.textContent = processName.charAt(0).toUpperCase();
             }
-            needsUpdate = true;
         }
     }
 
@@ -906,12 +912,9 @@ function updateTaskItemContent(item, task) {
 
             if (currentFaviconSrc !== newFaviconSrc) {
                 faviconElement.src = newFaviconSrc;
-                needsUpdate = true;
             }
         }
     }
-
-    return needsUpdate;
 }
 
 // アプリケーショングループ全体でのマウス位置判定
