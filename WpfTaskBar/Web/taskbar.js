@@ -25,16 +25,9 @@ function createTaskItem(task) {
     const icon = document.createElement('div');
     icon.className = 'task-icon';
 
-    if (task.isChrome && task.iconData) {
-        // Chromeタブの場合：Chromeアイコンを表示
-        const chromeIcon = document.createElement('img');
-        chromeIcon.src = `data:image/png;base64,${task.iconData}`;
-        chromeIcon.className = 'chrome-base-icon';
-        icon.appendChild(chromeIcon);
-    } else if (task.iconData) {
-        // 通常のアプリケーションアイコン
+    if (task.iconData) {
         const img = document.createElement('img');
-        img.src = `data:image/png;base64,${task.iconData}`;
+        img.src = task.iconData;
         img.style.width = '100%';
         img.style.height = '100%';
         icon.appendChild(img);
@@ -536,20 +529,14 @@ function updateTaskItemContent(item, task) {
     const iconElement = item.querySelector('.task-icon');
     if (iconElement) {
         const currentIconSrc = iconElement.querySelector('img')?.src || '';
-        const newIconSrc = task.iconData ? `data:image/png;base64,${task.iconData}` : '';
 
-        if (currentIconSrc !== newIconSrc) {
+        if (currentIconSrc !== task.iconData) {
             // アイコンを再構築
             iconElement.innerHTML = '';
 
-            if (task.isChrome && task.iconData) {
-                const chromeIcon = document.createElement('img');
-                chromeIcon.src = `data:image/png;base64,${task.iconData}`;
-                chromeIcon.className = 'chrome-base-icon';
-                iconElement.appendChild(chromeIcon);
-            } else if (task.iconData) {
+            if (task.iconData) {
                 const img = document.createElement('img');
-                img.src = `data:image/png;base64,${task.iconData}`;
+                img.src = task.iconData;
                 img.style.width = '100%';
                 img.style.height = '100%';
                 iconElement.appendChild(img);

@@ -494,7 +494,7 @@ namespace WpfTaskBar
 									title = tab.Title,
 									url = tab.Url,
 									index = tab.Index,
-									iconData = chromeIconData,
+									iconData = "data:image/png;base64," + chromeIconData,
 									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
 									isActive = tab.IsActive
 								}).ToList();
@@ -523,7 +523,7 @@ namespace WpfTaskBar
 						windowHandle = handle.ToInt32(),
 						moduleFileName = processName,
 						title,
-						iconData,
+						iconData = "data:image/png;base64," + iconData,
 						chromeTabs = (object[]?)null
 					};
 
@@ -546,7 +546,7 @@ namespace WpfTaskBar
 					return cachedBase64;
 				}
 
-				string? dataUrlResult = null;
+				string dataUrlResult;
 
 				// data:image形式のURLの場合、既にdata URL形式なのでそのまま返す
 				if (faviconUrl.StartsWith("data:image"))
@@ -576,10 +576,7 @@ namespace WpfTaskBar
 				}
 
 				// 結果をキャッシュに保存
-				if (dataUrlResult != null)
-				{
-					_faviconCache[faviconUrl] = dataUrlResult;
-				}
+				_faviconCache[faviconUrl] = dataUrlResult;
 
 				return dataUrlResult;
 			}
