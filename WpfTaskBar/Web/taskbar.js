@@ -4,48 +4,8 @@ let draggedElement = null;
 
 // タスクリストの更新
 function updateTaskList(newTasks) {
-    newTasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, (task) => {
-        if (task.isChrome) {
-            return `${task.handle}-${task.windowId}-${task.tabId}`
-        } else {
-            return `${task.handle}`
-        }
-    })
-
-    // 変更がない場合は処理をスキップ
-    if (areTasksEqual(tasks, newTasks)) {
-        return;
-    }
-
-    tasks = newTasks;
-
+    tasks = window.applicationOrder.sortByRelations(newTasks, (task) => task.moduleFileName, getTaskKey)
     updateTaskListOrder();
-}
-
-// タスクリストの比較関数
-function areTasksEqual(oldTasks, newTasks) {
-    if (oldTasks.length !== newTasks.length) {
-        return false;
-    }
-
-    for (let i = 0; i < oldTasks.length; i++) {
-        const oldTask = oldTasks[i];
-        const newTask = newTasks[i];
-
-        if (oldTask.handle !== newTask.handle ||
-            oldTask.tabId !== newTask.tabId ||
-            oldTask.windowId !== newTask.windowId ||
-            oldTask.index !== newTask.index ||
-            oldTask.title !== newTask.title ||
-            oldTask.moduleFileName !== newTask.moduleFileName ||
-            oldTask.isForeground !== newTask.isForeground ||
-            oldTask.iconData !== newTask.iconData ||
-            oldTask.faviconData !== newTask.faviconData) {
-            return false;
-        }
-    }
-
-    return true;
 }
 
 // タスクアイテムの作成
@@ -425,21 +385,8 @@ function onDrop(item, e) {
 function reorderTasks(draggedTask, targetTask, dropAbove) {
     
     // targetTaskがdatasetオブジェクトの場合とtaskオブジェクトの場合を考慮
-    const targetIndex = tasks.findIndex(t => {
-        if (t.isChrome) {
-            return t.handle === targetTask.handle && t.tabId === targetTask.tabId && t.windowId === targetTask.windowId;
-        } else {
-            return t.handle === targetTask.handle;
-        }
-    });
-
-    const draggedIndex = tasks.findIndex(t => {
-        if (t.isChrome) {
-            return t.handle === draggedTask.handle && t.tabId === draggedTask.tabId && t.windowId === draggedTask.windowId;
-        } else {
-            return t.handle === draggedTask.handle;
-        }
-    });
+    const targetIndex = tasks.findIndex(t => getTaskKey(t) === getTaskKey(targetTask));
+    const draggedIndex = tasks.findIndex(t => getTaskKey(t) === getTaskKey(draggedTask));
 
     if (targetIndex === -1 || draggedIndex === -1 || draggedIndex === targetIndex) {
         return;
@@ -475,7 +422,10 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
     updateTaskListOrder();
 
     window.applicationOrder.updateOrderFromList(tasks.map(task => task.moduleFileName))
-    window.applicationOrder.updateWindowOrder(tasks.map(task => ({ handle: `${task.handle}`, moduleFileName: task.moduleFileName })))
+    
+    // アプリケーションのグルーピングを行っていますが、ここはgetTaskKeyで判定しません。
+    // ここでChromeのwindowIdとtabIdでソートしてしまうと、Chrome側でタブを並び替えたときに反映されません。
+    window.applicationOrder.updateWindowOrder(tasks.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName })))
 }
 
 // 同種アプリケーションの一括移動
@@ -550,13 +500,143 @@ function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
     reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove);
 }
 
+// タスクの一意なキーを生成
+function getTaskKey(task) {
+    if (task.isChrome) {
+        return `${task.handle}-${task.windowId}-${task.tabId}`;
+    } else {
+        return `${task.handle}`;
+    }
+}
+
+// タスク要素の内容を更新（変更がある場合のみ）
+function updateTaskItemContent(item, task) {
+    let needsUpdate = false;
+
+    // isForegroundクラスの更新
+    const hasForeground = item.classList.contains('foreground');
+    if (hasForeground !== task.isForeground) {
+        if (task.isForeground) {
+            item.classList.add('foreground');
+        } else {
+            item.classList.remove('foreground');
+        }
+        needsUpdate = true;
+    }
+
+    // タイトルの更新
+    const textElement = item.querySelector('.task-text');
+    if (textElement && textElement.textContent !== task.title) {
+        textElement.textContent = task.title || 'Unknown';
+        textElement.title = task.title || 'Unknown';
+        needsUpdate = true;
+    }
+
+    // アイコンの更新（iconDataが変わった場合）
+    const iconElement = item.querySelector('.task-icon');
+    if (iconElement) {
+        const currentIconSrc = iconElement.querySelector('img')?.src || '';
+        const newIconSrc = task.iconData ? `data:image/png;base64,${task.iconData}` : '';
+
+        if (currentIconSrc !== newIconSrc) {
+            // アイコンを再構築
+            iconElement.innerHTML = '';
+
+            if (task.isChrome && task.iconData) {
+                const chromeIcon = document.createElement('img');
+                chromeIcon.src = `data:image/png;base64,${task.iconData}`;
+                chromeIcon.className = 'chrome-base-icon';
+                iconElement.appendChild(chromeIcon);
+            } else if (task.iconData) {
+                const img = document.createElement('img');
+                img.src = `data:image/png;base64,${task.iconData}`;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                iconElement.appendChild(img);
+            } else {
+                const processName = task.moduleFileName ?
+                    task.moduleFileName.split('\\').pop().split('.')[0] :
+                    (task.title || 'Unknown').split(' ')[0];
+                iconElement.textContent = processName.charAt(0).toUpperCase();
+            }
+            needsUpdate = true;
+        }
+    }
+
+    // Favicon の更新（Chrome タブの場合）
+    if (task.isChrome) {
+        const faviconElement = item.querySelector('.chrome-favicon');
+        if (faviconElement) {
+            const currentFaviconSrc = faviconElement.src || '';
+            const newFaviconSrc = task.faviconData || '';
+
+            if (currentFaviconSrc !== newFaviconSrc) {
+                faviconElement.src = newFaviconSrc;
+                needsUpdate = true;
+            }
+        }
+    }
+
+    return needsUpdate;
+}
+
 // タスクリストの順序のみを更新（データの再取得なし）
 function updateTaskListOrder() {
     const taskList = document.getElementById('taskList');
-    taskList.innerHTML = '';
+
+    // 既存の要素をキーでマップに保存
+    const existingItems = new Map();
+    Array.from(taskList.children).forEach(item => {
+        const handle = item.dataset.handle;
+        const windowId = item.dataset.windowId;
+        const tabId = item.dataset.tabId;
+
+        let key;
+        if (windowId !== undefined && tabId !== undefined) {
+            key = `${handle}-${windowId}-${tabId}`;
+        } else {
+            key = `${handle}`;
+        }
+        existingItems.set(key, item);
+    });
+
+    // 新しいタスクリストに基づいて要素を配置
+    const newChildren = [];
+    const usedKeys = new Set();
 
     tasks.forEach(task => {
-        const taskItem = createTaskItem(task);
-        taskList.appendChild(taskItem);
+        const key = getTaskKey(task);
+        usedKeys.add(key);
+
+        let item = existingItems.get(key);
+
+        if (item) {
+            // 既存の要素を再利用し、内容を更新
+            updateTaskItemContent(item, task);
+        } else {
+            // 新しい要素を作成
+            item = createTaskItem(task);
+        }
+
+        newChildren.push(item);
+    });
+
+    // 削除された要素をクリーンアップ
+    existingItems.forEach((item, key) => {
+        if (!usedKeys.has(key)) {
+            item.remove();
+        }
+    });
+
+    // 要素の順序を更新（変更がある場合のみDOM操作）
+    newChildren.forEach((item, index) => {
+        const currentItem = taskList.children[index];
+        if (currentItem !== item) {
+            if (currentItem) {
+                taskList.insertBefore(item, currentItem);
+            } else {
+                taskList.appendChild(item);
+            }
+        }
     });
 }
