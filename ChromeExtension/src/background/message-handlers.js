@@ -1,4 +1,4 @@
-import { steamClient } from './background.js';
+import { webSocketClient } from './background.js';
 
 // メッセージ処理のメインハンドラー
 export function handleMessage(message) {
@@ -39,7 +39,7 @@ async function handleQueryAllTabs() {
             index: tab.index || 0
         }));
 
-        steamClient.sendMessage({
+        webSocketClient.sendMessage({
             action: 'updateTabs',
             data: {
                 tabs: tabsInfo

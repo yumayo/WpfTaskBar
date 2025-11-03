@@ -1,6 +1,6 @@
 // タブ登録機能を処理するモジュール
 
-import { steamClient } from '../background/background.js';
+import { webSocketClient } from '../background/background.js';
 
 // 現在のタブ情報を登録
 export function registerCurrentTabs() {
@@ -13,7 +13,7 @@ export function registerCurrentTabs() {
 
 // タブ情報を登録
 export function registerTab(tab) {
-    if (!steamClient.getConnectionStatus()) return;
+    if (!webSocketClient.getConnectionStatus()) return;
 
     const tabInfo = {
         tabId: tab.id,
@@ -25,7 +25,7 @@ export function registerTab(tab) {
         index: tab.index || 0
     };
 
-    steamClient.sendMessage({
+    webSocketClient.sendMessage({
         action: 'registerTab',
         data: tabInfo
     });
@@ -35,9 +35,9 @@ export function registerTab(tab) {
 
 // タブ情報を登録解除
 export function unregisterTab(tabId) {
-    if (!steamClient.getConnectionStatus()) return;
+    if (!webSocketClient.getConnectionStatus()) return;
 
-    steamClient.sendMessage({
+    webSocketClient.sendMessage({
         action: 'unregisterTab',
         data: {
             tabId: tabId

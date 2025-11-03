@@ -1,6 +1,6 @@
 // タブ管理とイベント処理を行うモジュール
 
-import { steamClient } from '../background/background.js';
+import { webSocketClient } from '../background/background.js';
 import { registerTab, unregisterTab } from './tab-registration.js';
 
 // 通知を送信（テスト用）
@@ -11,7 +11,7 @@ export function sendTestNotification(tabId) {
             return;
         }
 
-        if (!steamClient.getConnectionStatus()) {
+        if (!webSocketClient.getConnectionStatus()) {
             console.log('HTTP/2 not connected, skipping page loaded notification');
             return;
         }
@@ -26,7 +26,7 @@ export function sendTestNotification(tabId) {
             timestamp: new Date().toISOString()
         };
 
-        steamClient.sendMessage({
+        webSocketClient.sendMessage({
             action: 'sendNotification',
             data: notification
         });
@@ -92,8 +92,8 @@ export function setupTabEventListeners() {
 
 // すべてのタブ情報を送信する汎用関数
 function notifyTabsChange() {
-    if (!steamClient.getConnectionStatus()) {
-        console.log('HTTP/2 not connected, skipping tabs change notification');
+    if (!webSocketClient.getConnectionStatus()) {
+        console.log('WebSocket not connected, skipping tabs change notification');
         return;
     }
 
@@ -109,7 +109,7 @@ function notifyTabsChange() {
             index: t.index || 0
         }));
 
-        steamClient.sendMessage({
+        webSocketClient.sendMessage({
             action: 'updateTabs',
             data: {
                 tabs: tabsInfo
