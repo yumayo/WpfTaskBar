@@ -2,8 +2,7 @@
 // 勤怠記録管理
 const timeRecord = {
     clockInDate: null,
-    clockOutDate: null,
-    lastUpdateDate: null
+    clockOutDate: null
 };
 
 // 時刻エリアの更新
@@ -27,15 +26,38 @@ function updateDateTime() {
 // 日付変更チェック（DateTimeItem.csの機能を移植）
 function checkDateChange() {
     const now = new Date();
-    if (timeRecord.lastUpdateDate) {
-        // 現在が午前4時以降で、前回更新時が午前4時前の場合、勤怠をリセット
-        if (now.getHours() >= 4 && timeRecord.lastUpdateDate.getHours() < 4) {
+
+    // 現在時刻の「業務日」を取得（午前4時を基準とする）
+    const getCurrentBusinessDay = (date) => {
+        const businessDay = new Date(date);
+        if (businessDay.getHours() < 4) {
+            // 午前4時前なら前日の業務日とする
+            businessDay.setDate(businessDay.getDate() - 1);
+        }
+        // 時刻を0:00:00にして日付のみで比較
+        businessDay.setHours(0, 0, 0, 0);
+        return businessDay;
+    };
+
+    const currentBusinessDay = getCurrentBusinessDay(now);
+
+    // clockInDateが存在し、業務日が異なっていたらnullにする
+    if (timeRecord.clockInDate) {
+        const clockInBusinessDay = getCurrentBusinessDay(timeRecord.clockInDate);
+        if (clockInBusinessDay.getTime() !== currentBusinessDay.getTime()) {
             timeRecord.clockInDate = null;
-            timeRecord.clockOutDate = null;
-            console.log('日付が更新されました。出勤・退勤時刻をリセットします。');
+            console.log('出勤時刻が昨日の業務日のためリセットします。');
         }
     }
-    timeRecord.lastUpdateDate = now;
+
+    // clockOutDateが存在し、業務日が異なっていたらnullにする
+    if (timeRecord.clockOutDate) {
+        const clockOutBusinessDay = getCurrentBusinessDay(timeRecord.clockOutDate);
+        if (clockOutBusinessDay.getTime() !== currentBusinessDay.getTime()) {
+            timeRecord.clockOutDate = null;
+            console.log('退勤時刻が昨日の業務日のためリセットします。');
+        }
+    }
 }
 
 // 警告表示の更新
