@@ -527,6 +527,8 @@ function createTaskItem(task) {
         const favicon = document.createElement('img');
         if (task.faviconData) {
             favicon.src = task.faviconData;
+        } else {
+            delete favicon.src;
         }
         favicon.className = 'chrome-favicon';
         item.appendChild(icon);
@@ -1020,7 +1022,7 @@ function updateTaskItemContent(item, task) {
     // アイコンの更新（iconDataが変わった場合）
     const iconElement = item.querySelector('.task-icon');
     if (iconElement) {
-        const currentIconSrc = iconElement.querySelector('img')?.src || '';
+        const currentIconSrc = iconElement.querySelector('img')?.src;
 
         if (currentIconSrc !== task.iconData) {
             // アイコンを再構築
@@ -1049,7 +1051,11 @@ function updateTaskItemContent(item, task) {
             const newFaviconSrc = task.faviconData || '';
 
             if (currentFaviconSrc !== newFaviconSrc) {
-                faviconElement.src = newFaviconSrc;
+                if (newFaviconSrc === '') {
+                    delete faviconElement.src;
+                } else {
+                    faviconElement.src = newFaviconSrc;
+                }
             }
         }
     }
