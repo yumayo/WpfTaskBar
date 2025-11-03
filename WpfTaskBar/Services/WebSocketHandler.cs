@@ -48,7 +48,7 @@ namespace WpfTaskBar
                 });
 
                 // メッセージ受信ループ
-                var buffer = new byte[1 * 1024 * 1024];
+                var buffer = new byte[64 * 1024 * 1024];
                 while (webSocket.State == WebSocketState.Open)
                 {
                     var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
