@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -478,7 +479,23 @@ namespace WpfTaskBar
 					// HTTPからダウンロードしてdata URL形式に変換
 					var httpClient = _httpClientFactory.CreateClient();
 					httpClient.Timeout = TimeSpan.FromSeconds(10);
-					var imageBytes = httpClient.GetByteArrayAsync(faviconUrl).Result;
+
+					// レスポンス全体を取得してContent-Encodingを確認
+					var response = httpClient.GetAsync(faviconUrl).Result;
+					response.EnsureSuccessStatusCode();
+
+					var imageBytes = response.Content.ReadAsByteArrayAsync().Result;
+
+					// Content-Encodingがgzipの場合は解凍
+					if (response.Content.Headers.ContentEncoding.Contains("gzip"))
+					{
+						using var compressedStream = new MemoryStream(imageBytes);
+						using var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress);
+						using var decompressedStream = new MemoryStream();
+						gzipStream.CopyTo(decompressedStream);
+						imageBytes = decompressedStream.ToArray();
+					}
+
 					var base64String = Convert.ToBase64String(imageBytes);
 
 					// MIMEタイプを判定（簡易的にPNGとして扱う、必要に応じて拡張可能）
