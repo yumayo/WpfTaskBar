@@ -9,9 +9,6 @@ const currentTabInfo = document.getElementById('currentTabInfo');
 updateConnectionStatus();
 updateCurrentTabInfo();
 
-// イベントリスナーを設定
-sendNotificationBtn.addEventListener('click', sendTestNotification);
-
 // 1秒ごとに接続確認を実行
 setInterval(updateConnectionStatus, 1000);
 
@@ -59,45 +56,5 @@ function updateCurrentTabInfo() {
             currentTabInfo.textContent = 'タブが見つかりません';
         }
     });
-}
-
-// テスト通知を送信
-function sendTestNotification() {
-    sendNotificationBtn.disabled = true;
-    sendNotificationBtn.textContent = '送信中...';
-    
-    chrome.runtime.sendMessage({ action: 'sendTestNotification' }, (response) => {
-        sendNotificationBtn.disabled = false;
-        sendNotificationBtn.textContent = 'テスト通知を送信';
-        
-        if (chrome.runtime.lastError) {
-            showMessage('エラー: ' + chrome.runtime.lastError.message, 'error');
-            return;
-        }
-        
-        if (response && response.success) {
-            showMessage('テスト通知が正常に送信されました！', 'success');
-        } else {
-            showMessage('通知の送信に失敗しました', 'error');
-        }
-    });
-}
-
-// メッセージを表示
-function showMessage(text, type) {
-    const message = document.createElement('div');
-    message.className = `message ${type}`;
-    message.textContent = text;
-    
-    // 既存のメッセージをクリア
-    messageArea.innerHTML = '';
-    messageArea.appendChild(message);
-    
-    // 3秒後にメッセージを自動削除
-    setTimeout(() => {
-        if (message.parentNode) {
-            message.parentNode.removeChild(message);
-        }
-    }, 3000);
 }
 

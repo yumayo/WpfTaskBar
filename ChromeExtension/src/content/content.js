@@ -81,14 +81,11 @@
     // WindowHandleをバインドする
     const message = {
         action: 'bindWindowHandle',
-        data: {
-            tabId: tabInfo.tabId,
-            windowId: tabInfo.windowId
-        }
+        data: tabInfo
     };
     const jsonMessage = JSON.stringify(message);
     ws.send(jsonMessage);
-    console.log(`[Content] Request bindWindowHandle windowId:${tabInfo.windowId} tabInfo:${tabInfo.tabId}`);
+    console.log('[Content] Request bindWindowHandle tabInfo:', tabInfo);
 
     await closeWebSocket(ws);
 })();

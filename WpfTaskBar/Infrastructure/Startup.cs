@@ -22,7 +22,8 @@ namespace WpfTaskBar
 
             services.AddHttpClient();
 
-            services.AddSingleton<ChromeTabManager>();
+            services.AddSingleton<FaviconCache>();
+            services.AddSingleton<ChromeHelper>();
             services.AddSingleton<WebSocketHandler>();
             services.AddSingleton<WebView2Handler>();
         }

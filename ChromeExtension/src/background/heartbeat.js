@@ -1,12 +1,8 @@
-// ハートビート機能を処理するモジュール
-
-import { webSocketClient } from './background.js';
-
 let heartbeatTimer = null;
 let heartbeatInterval = 10000; // 10秒ごとにping送信
 
 // ハートビートを開始
-export function startHeartbeat() {
+export function startHeartbeat(webSocketClient) {
     stopHeartbeat(); // 既存のタイマーをクリア
 
     heartbeatTimer = setInterval(() => {

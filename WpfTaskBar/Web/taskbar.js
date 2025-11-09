@@ -108,71 +108,15 @@ async function updateTaskBarWindows(windowHandles) {
                     // または異なる仮想デスクトップに移動されたため削除
                     taskBarItems = taskBarItems.filter(item => item.handle !== windowHandle);
                 } else {
-                    // 既存アイテムの更新（IsForegroundプロパティを更新）
-                    const updatedItemOrItems = await createTaskBarItem(windowHandle, foregroundHwnd);
-                    // createTaskBarItemがChromeタブの配列を返す場合がある
-                    if (Array.isArray(updatedItemOrItems)) {
-                        // 新しいタブリストに存在しないタブを削除
-                        taskBarItems = taskBarItems.filter(item => {
-                            // 異なるwindowHandleのアイテムは残す
-                            if (item.handle !== windowHandle) {
-                                return true;
-                            }
-                            // 同じwindowHandleのChromeタブの場合、updatedItemOrItemsに含まれるかチェック
-                            return updatedItemOrItems.some(updatedItem =>
-                                updatedItem.tabId === item.tabId &&
-                                updatedItem.windowId === item.windowId
-                            );
-                        });
-                        // 各タブを更新または追加
-                        for (let updatedItem of updatedItemOrItems) {
-                            const index = taskBarItems.findIndex(item =>
-                                item.handle === updatedItem.handle &&
-                                item.tabId === updatedItem.tabId &&
-                                item.windowId === updatedItem.windowId
-                            );
-                            if (index >= 0) {
-                                taskBarItems[index] = updatedItem;
-                            } else {
-                                taskBarItems.push(updatedItem);
-                            }
-                        }
-
-                        // taskbarItemsのChrome要素をindex順でソート
-                        taskBarItems.sort((a, b) => {
-                            // 両方Chromeタブの場合、index順でソート
-                            if (a.isChrome && b.isChrome) {
-                                // 同じwindowIdの場合はindex順
-                                if (a.windowId === b.windowId) {
-                                    return a.index - b.index;
-                                }
-                                // 異なるwindowIdの場合はwindowId順
-                                return a.windowId - b.windowId;
-                            }
-                            // Chromeタブとそうでないものは元の順序を維持
-                            if (a.isChrome && !b.isChrome) return -1;
-                            if (!a.isChrome && b.isChrome) return 1;
-                            return 0;
-                        });
-
-                    } else {
-                        const index = taskBarItems.findIndex(item => item.handle === updatedItemOrItems.handle);
-                        taskBarItems[index] = updatedItemOrItems;
-                    }
+                    const taskBarItem = await createTaskBarItem(windowHandle, foregroundHwnd);
+                    const index = taskBarItems.findIndex(item => item.handle === taskBarItem.handle);
+                    taskBarItems[index] = taskBarItem;
                 }
             } else {
                 // 新しいアイテム
                 if (isTaskBarWindow) {
-                    const newItemOrItems = await createTaskBarItem(windowHandle, foregroundHwnd);
-                    // createTaskBarItemがChromeタブの配列を返す場合がある
-                    if (Array.isArray(newItemOrItems)) {
-                        // 各タブを追加
-                        for (let newItem of newItemOrItems) {
-                            taskBarItems.push(newItem);
-                        }
-                    } else {
-                        taskBarItems.push(newItemOrItems);
-                    }
+                    const taskBarItem = await createTaskBarItem(windowHandle, foregroundHwnd);
+                    taskBarItems.push(taskBarItem);
                 }
             }
         }
@@ -251,36 +195,17 @@ async function requestIsTaskBarWindow(windowHandle) {
 async function createTaskBarItem(windowHandle, foregroundHwnd) {
     try {
         const windowInfo = await requestWindowInfo(windowHandle);
-
-        // Chromeウィンドウで、タブ情報がある場合は各タブをタスクバーアイテムにする
-        if (windowInfo?.chromeTabs?.length > 0) {
-            // 各タブを個別のタスクバーアイテムとして返す
-            return windowInfo.chromeTabs.map(tab => ({
-                handle: windowHandle,
-                moduleFileName: windowInfo.moduleFileName,
-                title: tab.title || 'Untitled',
-                // Chromeウィンドウがフォアグラウンドで、かつタブがアクティブな場合のみハイライト
-                isForeground: windowHandle === foregroundHwnd && tab.isActive,
-                iconData: tab.iconData || null,
-                faviconData: tab.faviconData || null,
-                // Chromeタブ専用のプロパティ
-                isChrome: true,
-                tabId: tab.tabId,
-                windowId: tab.windowId,
-                index: tab.index,
-                url: tab.url
-            }));
-        } else {
-            // 通常のウィンドウの場合
-            return {
-                handle: windowHandle,
-                moduleFileName: windowInfo?.moduleFileName || '',
-                title: windowInfo?.title || '',
-                isForeground: windowHandle === foregroundHwnd,
-                iconData: windowInfo?.iconData || null,
-                isChrome: false
-            };
-        }
+        return {
+            handle: windowHandle,
+            moduleFileName: windowInfo?.moduleFileName || '',
+            title: windowInfo?.title || '',
+            isForeground: windowHandle === foregroundHwnd,
+            iconData: windowInfo?.iconData || null,
+            favIconData: windowInfo.favIconData || null,
+            tabId: windowInfo?.tabId || 0,
+            windowId: windowInfo?.windowId || 0,
+            url: windowInfo?.url || '',
+        };
     } catch (error) {
         console.error('Error creating TaskBarItem:', error);
         return {
@@ -289,7 +214,6 @@ async function createTaskBarItem(windowHandle, foregroundHwnd) {
             title: '',
             isForeground: false,
             iconData: null,
-            isChrome: false
         };
     }
 }
@@ -430,7 +354,7 @@ async function requestNextWindowToActivate(handle) {
 function updateTaskListOrder() {
 
     // タスクバー一覧をアプリケーション名でトポロジカルソートする
-    taskBarItems = window.applicationOrder.sortByRelations(taskBarItems, (task) => task.moduleFileName, getTaskKey)
+    taskBarItems = window.applicationOrder.sortByRelations(taskBarItems, (task) => task.moduleFileName, (task) => task.handle)
     
     const taskList = document.getElementById('taskList');
 
@@ -438,27 +362,17 @@ function updateTaskListOrder() {
     const existingItems = new Map();
     Array.from(taskList.children).forEach(item => {
         const handle = item.dataset.handle;
-        const windowId = item.dataset.windowId;
-        const tabId = item.dataset.tabId;
-
-        let key;
-        if (windowId !== undefined && tabId !== undefined) {
-            key = `${handle}-${windowId}-${tabId}`;
-        } else {
-            key = `${handle}`;
-        }
-        existingItems.set(key, item);
+        existingItems.set(parseInt(handle, 10), item);
     });
 
     // 新しいタスクリストに基づいて要素を配置
     const newChildren = [];
-    const usedKeys = new Set();
+    const usedHandles = new Set();
 
     taskBarItems.forEach(task => {
-        const key = getTaskKey(task);
-        usedKeys.add(key);
+        usedHandles.add(task.handle);
 
-        let item = existingItems.get(key);
+        let item = existingItems.get(task.handle);
 
         if (item) {
             // 既存の要素を再利用し、内容を更新
@@ -472,8 +386,8 @@ function updateTaskListOrder() {
     });
 
     // 削除された要素をクリーンアップ
-    existingItems.forEach((item, key) => {
-        if (!usedKeys.has(key)) {
+    existingItems.forEach((item, handle) => {
+        if (!usedHandles.has(handle)) {
             item.remove();
         }
     });
@@ -497,11 +411,6 @@ function createTaskItem(task) {
     item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
     item.dataset.handle = task.handle;
     item.dataset.moduleFileName = task.moduleFileName;
-    // Chromeタブの場合はtabIdとwindowIdも設定
-    if (task.isChrome) {
-        item.dataset.tabId = task.tabId;
-        item.dataset.windowId = task.windowId;
-    }
     item.draggable = true; // ドラッグ可能にする
 
     // アイコン
@@ -514,27 +423,15 @@ function createTaskItem(task) {
         img.style.width = '100%';
         img.style.height = '100%';
         icon.appendChild(img);
-    } else {
-        // デフォルトアイコン（プロセス名の最初の文字）
-        const processName = task.moduleFileName ?
-            task.moduleFileName.split('\\').pop().split('.')[0] :
-            (task.title || 'Unknown').split(' ')[0];
-        icon.textContent = processName.charAt(0).toUpperCase();
     }
 
-    // Chromeタブの場合のFavicon（アイコンとタイトルの間）
-    if (task.isChrome) {
+    item.appendChild(icon);
+
+    if (task.favIconData) {
         const favicon = document.createElement('img');
-        if (task.faviconData) {
-            favicon.src = task.faviconData;
-        } else {
-            delete favicon.src;
-        }
+        favicon.src = task.favIconData;
         favicon.className = 'chrome-favicon';
-        item.appendChild(icon);
         item.appendChild(favicon);
-    } else {
-        item.appendChild(icon);
     }
 
     // テキスト
@@ -603,79 +500,36 @@ async function onClick(item, task, e) {
 
             // クリックされたアイテムに foreground クラスを追加
             item.classList.add('foreground');
-
-            // Chromeタブの場合は、タブもアクティブにする
-            if (task.isChrome) {
-                sendMessageToHost('focus_chrome_tab', {
-                    tabId: task.tabId,
-                    windowId: task.windowId
-                });
-            }
         } else {
             // 現在のフォアグラウンドウィンドウを取得
             const foregroundWindow = await requestForegroundWindow();
 
             // クリックされたウィンドウが既にアクティブな場合
             if (task.handle === foregroundWindow) {
-                // Chromeタブの場合は、タブIDも比較する
-                let shouldMinimize = true;
-                if (task.isChrome) {
-                    // 現在アクティブなタブを取得
-                    const activeTab = taskBarItems.find(item =>
-                        item.windowId === task.windowId && item.isForeground
-                    );
 
-                    // 現在アクティブなタブと異なるタブの場合は最小化しない
-                    if (activeTab && activeTab.tabId !== task.tabId) {
-                        shouldMinimize = false;
-                    }
-                }
+                // 次にアクティブになるウィンドウを取得
+                const nextHandle = await requestNextWindowToActivate(task.handle);
 
-                if (shouldMinimize) {
-                    // 次にアクティブになるウィンドウを取得
-                    const nextHandle = await requestNextWindowToActivate(task.handle);
-
-                    // 次にアクティブになるitemを探してforegroundクラスを付与
-                    if (nextHandle && nextHandle !== 0) {
-                        const nextItem = taskBarItems.find(t => t.handle === nextHandle);
-                        if (nextItem) {
-                            const nextKey = getTaskKey(nextItem);
-                            const nextElementSelector = nextItem.isChrome
-                                ? `.task-item[data-handle="${nextItem.handle}"][data-window-id="${nextItem.windowId}"][data-tab-id="${nextItem.tabId}"]`
-                                : `.task-item[data-handle="${nextItem.handle}"]`;
-                            const nextElement = document.querySelector(nextElementSelector);
-                            if (nextElement) {
-                                nextElement.classList.add('foreground');
-                            }
+                // 次にアクティブになるitemを探してforegroundクラスを付与
+                if (nextHandle && nextHandle !== 0) {
+                    const nextItem = taskBarItems.find(t => t.handle === nextHandle);
+                    if (nextItem) {
+                        const nextElementSelector = `.task-item[data-handle="${nextItem.handle}"]`;
+                        const nextElement = document.querySelector(nextElementSelector);
+                        if (nextElement) {
+                            nextElement.classList.add('foreground');
                         }
                     }
-
-                    // ウィンドウを最小化
-                    sendMessageToHost('minimize_window', { handle: task.handle });
-                } else {
-                    // クリックされたアイテムに foreground クラスを追加
-                    item.classList.add('foreground');
-                    
-                    // 別のタブをアクティブにする
-                    sendMessageToHost('focus_chrome_tab', {
-                        tabId: task.tabId,
-                        windowId: task.windowId
-                    });
                 }
+
+                // ウィンドウを最小化
+                sendMessageToHost('minimize_window', { handle: task.handle });
             } else {
                 // ウィンドウをアクティブにする
                 sendMessageToHost('activate_window', { handle: task.handle });
 
                 // クリックされたアイテムに foreground クラスを追加
                 item.classList.add('foreground');
-
-                // Chromeタブの場合は、タブもアクティブにする
-                if (task.isChrome) {
-                    sendMessageToHost('focus_chrome_tab', {
-                        tabId: task.tabId,
-                        windowId: task.windowId
-                    });
-                }
             }
         }
     } catch (error) {
@@ -687,20 +541,10 @@ async function onClick(item, task, e) {
 function onMouseDown(item, task, e) {
     if (e.button === 1) { // 中クリック
         e.preventDefault();
-        if (task.isChrome) {
-            sendMessageToHost('task_middle_click', {
-                handle: task.handle,
-                moduleFileName: task.moduleFileName,
-                tabId: task.tabId,
-                windowId: task.windowId,
-                isChrome: true
-            });
-        } else {
-            sendMessageToHost('task_middle_click', {
-                handle: task.handle,
-                moduleFileName: task.moduleFileName
-            });
-        }
+        sendMessageToHost('task_middle_click', {
+            handle: task.handle,
+            moduleFileName: task.moduleFileName
+        });
     }
 }
 
@@ -871,8 +715,8 @@ function onDrop(item, e) {
 function reorderTasks(draggedTask, targetTask, dropAbove) {
 
     // targetTaskがdatasetオブジェクトの場合とtaskオブジェクトの場合を考慮
-    const targetIndex = taskBarItems.findIndex(t => getTaskKey(t) === getTaskKey(targetTask));
-    const draggedIndex = taskBarItems.findIndex(t => getTaskKey(t) === getTaskKey(draggedTask));
+    const targetIndex = taskBarItems.findIndex(t => t.handle === targetTask.handle);
+    const draggedIndex = taskBarItems.findIndex(t => t.handle === draggedTask.handle);
 
     if (targetIndex === -1 || draggedIndex === -1 || draggedIndex === targetIndex) {
         return;
@@ -890,24 +734,15 @@ function reorderTasks(draggedTask, targetTask, dropAbove) {
         differentApplication = true;
     }
 
-    // Chromeタブの場合の特別な処理
-    const isBothChrome = draggedTaskObj.isChrome && targetTaskObj.isChrome;
-
     // 異なるアプリケーション間での移動の場合のみ一括移動を実行
     if (differentApplication) {
         reorderTasksWithSameApp(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
-    } else if (isBothChrome) {
-        // Chromeタブ同士の移動は個別のタブとして扱う（tabIdとwindowIdを使用）
-        reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove);
     } else {
         // 同じアプリケーション内での移動は従来通り
         reorderSingleTask(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
     }
 
     window.applicationOrder.updateOrderFromList(taskBarItems.map(task => task.moduleFileName))
-
-    // アプリケーションのグルーピングを行っていますが、ここはgetTaskKeyで判定しません。
-    // ここでChromeのwindowIdとtabIdでソートしてしまうと、Chrome側でタブを並び替えたときに反映されません。
     window.applicationOrder.updateWindowOrder(taskBarItems.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName })))
 
     // UIを更新
@@ -986,15 +821,6 @@ function reorderSingleTask(draggedHandle, targetHandle, dropAbove) {
     reorderSingleTaskByIndex(draggedIndex, targetIndex, dropAbove);
 }
 
-// タスクの一意なキーを生成
-function getTaskKey(task) {
-    if (task.isChrome) {
-        return `${task.handle}-${task.windowId}-${task.tabId}`;
-    } else {
-        return `${task.handle}`;
-    }
-}
-
 // タスク要素の内容を更新（変更がある場合のみ）
 function updateTaskItemContent(item, task) {
     // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ
@@ -1043,20 +869,30 @@ function updateTaskItemContent(item, task) {
         }
     }
 
-    // Favicon の更新（Chrome タブの場合）
-    if (task.isChrome) {
+    // Favicon の更新
+    if (task.favIconData) {
+        let faviconElement = item.querySelector('.chrome-favicon');
+        if (!faviconElement) {
+            faviconElement = document.createElement('img');
+            faviconElement.src = task.favIconData;
+            faviconElement.className = 'chrome-favicon';
+            item.insertBefore(faviconElement, iconElement.nextSibling);
+        }
+        
+        const currentFaviconSrc = faviconElement.src || '';
+        const newFaviconSrc = task.favIconData || '';
+
+        if (currentFaviconSrc !== newFaviconSrc) {
+            if (newFaviconSrc === '') {
+                delete faviconElement.src;
+            } else {
+                faviconElement.src = newFaviconSrc;
+            }
+        }
+    } else {
         const faviconElement = item.querySelector('.chrome-favicon');
         if (faviconElement) {
-            const currentFaviconSrc = faviconElement.src || '';
-            const newFaviconSrc = task.faviconData || '';
-
-            if (currentFaviconSrc !== newFaviconSrc) {
-                if (newFaviconSrc === '') {
-                    delete faviconElement.src;
-                } else {
-                    faviconElement.src = newFaviconSrc;
-                }
-            }
+            faviconElement.remove();
         }
     }
 }

@@ -16,16 +16,13 @@ namespace WpfTaskBar
 	{
 		private Dispatcher _dispatcher;
 		private WebView2 _webView2;
-		private ChromeTabManager _chromeTabManager;
-		private WebSocketHandler _webSocketHandler;
-		private readonly IHttpClientFactory _httpClientFactory;
-		private readonly Dictionary<string, string?> _faviconCache = new Dictionary<string, string?>();
+		private readonly ChromeHelper _chromeHelper;
+		private readonly FaviconCache _faviconCache;
 
-		public WebView2Handler(ChromeTabManager chromeTabManager, WebSocketHandler webSocketHandler, IHttpClientFactory httpClientFactory)
+		public WebView2Handler(ChromeHelper chromeHelper, FaviconCache faviconCache)
 		{
-			_chromeTabManager = chromeTabManager;
-			_webSocketHandler = webSocketHandler;
-			_httpClientFactory = httpClientFactory;
+			_chromeHelper = chromeHelper;
+			_faviconCache = faviconCache;
 		}
 
 		public async Task Initialize(Dispatcher dispatcher, WebView2 webView2)
@@ -168,14 +165,6 @@ namespace WpfTaskBar
 								HandleActivateWindow(root);
 								break;
 
-							case "focus_chrome_tab":
-								HandleFocusChromeTab(root);
-								break;
-
-							case "notification_click":
-								HandleNotificationClick(root);
-								break;
-
 							case "file_write_request":
 								HandleFileWriteRequest(root);
 								break;
@@ -216,29 +205,6 @@ namespace WpfTaskBar
 				if (root.TryGetProperty("data", out var dataElement) &&
 				    dataElement.TryGetProperty("handle", out var handleElement))
 				{
-					// Chromeタブの場合の処理
-					bool isChrome = false;
-					int? tabId = null;
-					int? windowId = null;
-
-					if (dataElement.TryGetProperty("isChrome", out var isChromeElement))
-					{
-						isChrome = isChromeElement.GetBoolean();
-					}
-
-					if (isChrome &&
-					    dataElement.TryGetProperty("tabId", out var tabIdElement) &&
-					    dataElement.TryGetProperty("windowId", out var windowIdElement))
-					{
-						tabId = tabIdElement.GetInt32();
-						windowId = windowIdElement.GetInt32();
-
-						// Chromeのタブを閉じる
-						_ = _webSocketHandler.CloseTab(tabId.Value, windowId.Value);
-						Logger.Info($"Chromeタブを閉じるメッセージを送信: TabId={tabId.Value}, WindowId={windowId.Value}");
-						return;
-					}
-
 					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
 
 					// handleのプロセスIDを取得
@@ -246,12 +212,14 @@ namespace WpfTaskBar
 
 					// 全ウィンドウのhandleを一旦配列に格納
 					var allHandles = new List<IntPtr>();
-					NativeMethods.EnumWindows((hwnd, lParam) =>
+					NativeMethods.EnumWindows(
+						(hwnd, lParam) =>
 						{
 							allHandles.Add(hwnd);
 							return true;
 						},
-						0);
+						0
+					);
 
 					// タスクバーに表示されているウィンドウのみ抽出
 					var taskbarHandles = allHandles.Where(NativeMethodUtility.IsTaskBarWindow).ToList();
@@ -277,28 +245,6 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "タスク中クリック処理時にエラーが発生しました。");
-			}
-		}
-
-		private void HandleNotificationClick(JsonElement root)
-		{
-			try
-			{
-				if (root.TryGetProperty("data", out var dataElement) &&
-				    dataElement.TryGetProperty("windowHandle", out var handleElement))
-				{
-					var handleValue = handleElement.GetInt64();
-					if (handleValue > 0)
-					{
-						var handle = new IntPtr(handleValue);
-						NativeMethods.SetForegroundWindow(handle);
-						Logger.Info($"通知クリックでウィンドウをアクティブにしました: {handle}");
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "通知クリック処理時にエラーが発生しました。");
 			}
 		}
 
@@ -390,194 +336,47 @@ namespace WpfTaskBar
 					var sb = new StringBuilder(255);
 					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 					var title = sb.ToString();
-
-					if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
-					{
-						var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
-
-						// Chromeアプリケーションのアイコンを取得
-						var chromeIconData = GetIconAsBase64(processName);
-
-						// WindowIdでフィルタリング（同じChromeウィンドウのタブのみ）
-						// hwndから対応するWindowIdを探す
-						var targetWindowId = FindWindowIdByHwnd(handle);
-						IEnumerable<dynamic> chromeTabs;
-
-						if (targetWindowId.HasValue)
-						{
-							// WindowIdが特定できた場合は、そのウィンドウのタブのみをフィルタリング
-							chromeTabs = allTabs
-								.Where(tab => tab.WindowId == targetWindowId.Value)
-								.Select(tab => new
-								{
-									tabId = tab.TabId,
-									windowId = tab.WindowId,
-									title = tab.Title,
-									url = tab.Url,
-									index = tab.Index,
-									iconData = "data:image/png;base64," + chromeIconData,
-									faviconData = ConvertFaviconUrlToBase64(tab.FaviconUrl),
-									isActive = tab.IsActive
-								}).ToList();
-
-							var response = new
-							{
-								type = "window_info_response",
-								windowHandle = handle.ToInt32(),
-								moduleFileName = processName,
-								title,
-								iconData = chromeIconData,
-								chromeTabs = chromeTabs.ToArray()
-							};
-
-							SendMessageToWebView(response);
-							return;
-						}
-					}
-
-					// Chrome以外の通常のウィンドウ
+					
 					var iconData = GetIconAsBase64(processName);
 
-					var normalResponse = new
+					TabInfo? tabInfo = null;
+					if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
 					{
-						type = "window_info_response",
-						windowHandle = handle.ToInt32(),
-						moduleFileName = processName,
-						title,
-						iconData = "data:image/png;base64," + iconData,
-						chromeTabs = (object[]?)null
-					};
-
-					SendMessageToWebView(normalResponse);
+						tabInfo = _chromeHelper.GetActiveTabInfoByHwnd(handle);
+					}
+					
+					if (tabInfo != null)
+					{
+						var response = new
+						{
+							type = "window_info_response",
+							windowHandle = handle.ToInt32(),
+							moduleFileName = processName,
+							title,
+							iconData = "data:image/png;base64," + iconData,
+							url = tabInfo.Url,
+							favIconData = _faviconCache.ConvertFaviconUrlToBase64(tabInfo.FavIconUrl),
+						};
+						SendMessageToWebView(response);
+					}
+					else
+					{
+						var response = new
+						{
+							type = "window_info_response",
+							windowHandle = handle.ToInt32(),
+							moduleFileName = processName,
+							title,
+							iconData = "data:image/png;base64," + iconData,
+						};
+						SendMessageToWebView(response);
+					}
 				}
 			}
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ウィンドウ情報取得時にエラーが発生しました。");
 			}
-		}
-
-		private string? ConvertFaviconUrlToBase64(string faviconUrl)
-		{
-			try
-			{
-				// キャッシュに存在する場合はキャッシュから返す
-				if (_faviconCache.TryGetValue(faviconUrl, out var cachedBase64))
-				{
-					return cachedBase64;
-				}
-
-				string dataUrlResult;
-
-				// data:image形式のURLの場合、既にdata URL形式なのでそのまま返す
-				if (faviconUrl.StartsWith("data:image"))
-				{
-					dataUrlResult = faviconUrl;
-				}
-				else
-				{
-					// HTTPからダウンロードしてdata URL形式に変換
-					var httpClient = _httpClientFactory.CreateClient();
-					httpClient.Timeout = TimeSpan.FromSeconds(10);
-
-					// レスポンス全体を取得してContent-Encodingを確認
-					var response = httpClient.GetAsync(faviconUrl).Result;
-					response.EnsureSuccessStatusCode();
-
-					var imageBytes = response.Content.ReadAsByteArrayAsync().Result;
-
-					// Content-Encodingがgzipの場合は解凍
-					if (response.Content.Headers.ContentEncoding.Contains("gzip"))
-					{
-						using var compressedStream = new MemoryStream(imageBytes);
-						using var gzipStream = new GZipStream(compressedStream, CompressionMode.Decompress);
-						using var decompressedStream = new MemoryStream();
-						gzipStream.CopyTo(decompressedStream);
-						imageBytes = decompressedStream.ToArray();
-					}
-
-					var base64String = Convert.ToBase64String(imageBytes);
-
-					// MIMEタイプを判定（簡易的にPNGとして扱う、必要に応じて拡張可能）
-					string mimeType = "image/png";
-					if (faviconUrl.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
-					{
-						mimeType = "image/svg+xml";
-					}
-					else if (faviconUrl.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
-					{
-						mimeType = "image/x-icon";
-					}
-
-					dataUrlResult = $"data:{mimeType};base64,{base64String}";
-				}
-
-				// 結果をキャッシュに保存
-				_faviconCache[faviconUrl] = dataUrlResult;
-
-				return dataUrlResult;
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, $"Favicon URLの変換に失敗しました: {faviconUrl}");
-
-				// 一時的なネットワークエラーかどうかを判定
-				bool isTemporaryError = IsTemporaryNetworkError(ex);
-
-				// 一時的なエラーでない場合のみキャッシュに保存
-				if (!isTemporaryError)
-				{
-					_faviconCache[faviconUrl] = null;
-					Logger.Info($"Faviconのエラーをキャッシュしました: {faviconUrl}");
-				}
-				else
-				{
-					Logger.Info($"一時的なネットワークエラーのためキャッシュしません: {faviconUrl}");
-				}
-
-				return null;
-			}
-		}
-
-		private bool IsTemporaryNetworkError(Exception ex)
-		{
-			// 一時的なネットワークエラーと判定する条件
-			// 1. TaskCanceledException (タイムアウト)
-			// 2. HttpRequestException のうち特定のもの (接続失敗など)
-			// 3. AggregateException の内部例外を確認
-
-			if (ex is TaskCanceledException || ex is OperationCanceledException)
-			{
-				return true;
-			}
-
-			if (ex is System.Net.Http.HttpRequestException httpEx)
-			{
-				// 接続エラーやDNS解決失敗などは一時的なエラーとみなす
-				var message = httpEx.Message.ToLower();
-				if (message.Contains("timeout") ||
-				    message.Contains("connection") ||
-				    message.Contains("network") ||
-				    message.Contains("dns"))
-				{
-					return true;
-				}
-			}
-
-			if (ex is AggregateException aggEx)
-			{
-				// AggregateExceptionの内部例外をチェック
-				foreach (var innerEx in aggEx.InnerExceptions)
-				{
-					if (IsTemporaryNetworkError(innerEx))
-					{
-						return true;
-					}
-				}
-			}
-
-			// その他のエラー（404, 403など）は永続的なエラーとみなす
-			return false;
 		}
 
 		private string? GetIconAsBase64(string? moduleFileName)
@@ -658,25 +457,6 @@ namespace WpfTaskBar
 					NativeMethods.DeleteObject(hBitmap);
 				}
 			}
-		}
-
-		private int? FindWindowIdByHwnd(IntPtr hwnd)
-		{
-			// _chromeTabManagerの全タブから、対応するwindowIdを探す
-			var allTabs = _chromeTabManager.GetAllTabsSorted().ToList();
-
-			var uniqueWindowIds = allTabs.Select(tab => tab.WindowId).Distinct();
-
-			foreach (var windowId in uniqueWindowIds)
-			{
-				var mappedHwnd = _webSocketHandler.GetHwndByWindowId(windowId);
-				if (mappedHwnd == hwnd)
-				{
-					return windowId;
-				}
-			}
-
-			return null;
 		}
 
 		private void HandleRequestIsWindowOnCurrentVirtualDesktop(JsonElement root)
@@ -826,26 +606,6 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ウィンドウアクティブ化時にエラーが発生しました。");
-			}
-		}
-
-		private void HandleFocusChromeTab(JsonElement root)
-		{
-			try
-			{
-				if (root.TryGetProperty("data", out var dataElement) &&
-				    dataElement.TryGetProperty("tabId", out var tabIdElement) &&
-				    dataElement.TryGetProperty("windowId", out var windowIdElement))
-				{
-					var tabId = tabIdElement.GetInt32();
-					var windowId = windowIdElement.GetInt32();
-					_ = _webSocketHandler.FocusTab(tabId, windowId);
-					Logger.Info($"Chromeタブをフォーカスしました: TabId={tabId}, WindowId={windowId}");
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "Chromeタブフォーカス時にエラーが発生しました。");
 			}
 		}
 
