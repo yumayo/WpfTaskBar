@@ -9,6 +9,8 @@ artifact:
 	git.exe tag ${APP_VERSION} || true
 	git.exe push origin master
 	git.exe push origin --tags
+	explorer.exe .
+	echo https://github.com/yumayo/WpfTaskBar/releases/new
 
 clock-in:
 	WINDOWS_IP=$$(grep nameserver /etc/resolv.conf | awk '{print $$2}'); \
