@@ -427,13 +427,6 @@ function createTaskItem(task) {
 
     item.appendChild(icon);
 
-    if (task.favIconData) {
-        const favicon = document.createElement('img');
-        favicon.src = task.favIconData;
-        favicon.className = 'chrome-favicon';
-        item.appendChild(favicon);
-    }
-
     // テキスト
     const text = document.createElement('div');
     text.className = 'task-text';
@@ -848,51 +841,13 @@ function updateTaskItemContent(item, task) {
     // アイコンの更新（iconDataが変わった場合）
     const iconElement = item.querySelector('.task-icon');
     if (iconElement) {
-        const currentIconSrc = iconElement.querySelector('img')?.src;
-
-        if (currentIconSrc !== task.iconData) {
-            // アイコンを再構築
-            iconElement.innerHTML = '';
-
-            if (task.iconData) {
-                const img = document.createElement('img');
-                img.src = task.iconData;
-                img.style.width = '100%';
-                img.style.height = '100%';
-                iconElement.appendChild(img);
-            } else {
-                const processName = task.moduleFileName ?
-                    task.moduleFileName.split('\\').pop().split('.')[0] :
-                    (task.title || 'Unknown').split(' ')[0];
-                iconElement.textContent = processName.charAt(0).toUpperCase();
+        const imgElement = iconElement.querySelector('img')
+        const currentIconSrc = imgElement.src;
+        const iconData = task.favIconData ? task.favIconData : task.iconData;
+        if (currentIconSrc !== iconData) {
+            if (iconData) {
+                imgElement.src = iconData;
             }
-        }
-    }
-
-    // Favicon の更新
-    if (task.favIconData) {
-        let faviconElement = item.querySelector('.chrome-favicon');
-        if (!faviconElement) {
-            faviconElement = document.createElement('img');
-            faviconElement.src = task.favIconData;
-            faviconElement.className = 'chrome-favicon';
-            item.insertBefore(faviconElement, iconElement.nextSibling);
-        }
-        
-        const currentFaviconSrc = faviconElement.src || '';
-        const newFaviconSrc = task.favIconData || '';
-
-        if (currentFaviconSrc !== newFaviconSrc) {
-            if (newFaviconSrc === '') {
-                delete faviconElement.src;
-            } else {
-                faviconElement.src = newFaviconSrc;
-            }
-        }
-    } else {
-        const faviconElement = item.querySelector('.chrome-favicon');
-        if (faviconElement) {
-            faviconElement.remove();
         }
     }
 }
