@@ -2,8 +2,8 @@ let heartbeatTimer = null;
 let heartbeatInterval = 10000; // 10秒ごとにping送信
 
 // ハートビートを開始
-export function startHeartbeat(webSocketClient) {
-    stopHeartbeat(); // 既存のタイマーをクリア
+export function heartbeatStart(webSocketClient) {
+    heartbeatStop(); // 既存のタイマーをクリア
 
     heartbeatTimer = setInterval(() => {
         if (webSocketClient.getConnectionStatus()) {
@@ -16,7 +16,7 @@ export function startHeartbeat(webSocketClient) {
 }
 
 // ハートビートを停止
-export function stopHeartbeat() {
+export function heartbeatStop() {
     if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;

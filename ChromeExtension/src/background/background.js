@@ -1,9 +1,9 @@
 // メイン背景スクリプト - モジュール化されたファイルをまとめる
 
 import { WebSocketClient } from './websocket-client.js';
-import { registerCurrentTabs, setupTabEventListeners } from './tab-manager.js';
+import { tabManagerRegisterCurrentTabs, tabManagerSetupTabEventListeners } from './tab-manager.js';
 import { setupPopupMessageListener } from '../popup/popup-handler.js';
-import { startHeartbeat, stopHeartbeat } from './heartbeat.js';
+import { heartbeatStart, heartbeatStop } from './heartbeat.js';
 
 // WebSocketクライアントのインスタンスを作成
 const webSocketClient = new WebSocketClient();
@@ -12,17 +12,18 @@ const webSocketClient = new WebSocketClient();
 setupPopupMessageListener(() => webSocketClient.getConnectionStatus());
 
 // タブイベントリスナー設定
-setupTabEventListeners(webSocketClient);
+tabManagerSetupTabEventListeners(webSocketClient);
 
 // WebSocketコールバックを登録
 webSocketClient.onConnected(() => {
     // ハートビートを開始
-    startHeartbeat(webSocketClient);
+    heartbeatStart(webSocketClient);
 
     // 既存のタブ情報を登録
-    registerCurrentTabs(webSocketClient);
+    tabManagerRegisterCurrentTabs(webSocketClient);
 });
 
+// C#バックエンドとの通信 (ChromeExtension外の通信)
 webSocketClient.onMessage((message) => {
     switch (message.action) {
         case 'pong':
@@ -34,6 +35,7 @@ webSocketClient.onMessage((message) => {
     }
 });
 
+// content.jsとの通信 (ChromeExtension内の通信)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
         case 'getTabInfo':
@@ -59,7 +61,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 webSocketClient.onDisconnected(() => {
     // ハートビートを停止
-    stopHeartbeat();
+    heartbeatStop();
 });
 
 // 初期化
