@@ -148,6 +148,38 @@
             color: #777;
         }
 
+        /* ピン留めされたタブ */
+        .pinned-tabs-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #333841;
+        }
+
+        .pinned-tab-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            background-color: #2c313a;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .pinned-tab-icon:hover {
+            background-color: #333841;
+        }
+
+        .pinned-tab-icon img {
+            width: 24px;
+            height: 24px;
+            border-radius: 3px;
+            object-fit: contain;
+        }
+
         /* 時刻表示エリア */
         .time-area {
             background-color: #21252b;

@@ -185,6 +185,10 @@ namespace WpfTaskBar
 								HandleRequestTimeRecordStatus();
 								break;
 
+							case "request_pinned_tabs":
+								HandleRequestPinnedTabs();
+								break;
+
 							default:
 								Logger.Info($"未知のメッセージタイプ: {messageType}");
 								break;
@@ -336,7 +340,7 @@ namespace WpfTaskBar
 					var sb = new StringBuilder(255);
 					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 					var title = sb.ToString();
-					
+
 					var iconData = GetIconAsBase64(processName);
 
 					TabInfo? tabInfo = null;
@@ -344,7 +348,7 @@ namespace WpfTaskBar
 					{
 						tabInfo = _chromeHelper.GetActiveTabInfoByHwnd(handle);
 					}
-					
+
 					if (tabInfo != null)
 					{
 						var response = new
@@ -790,6 +794,32 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "時刻記録の状態取得時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleRequestPinnedTabs()
+		{
+			try
+			{
+				var pinnedTabs = _chromeHelper.GetPinnedTabs();
+				var pinnedTabsData = pinnedTabs.Select(tab => new
+				{
+					tabId = tab.TabId,
+					title = tab.Title,
+					url = tab.Url,
+					favIconUrl = tab.FavIconUrl,
+					favIconData = _faviconCache.ConvertFaviconUrlToBase64(tab.FavIconUrl)
+				}).ToList();
+
+				SendMessageToWebView(new
+				{
+					type = "pinned_tabs_response",
+					tabs = pinnedTabsData
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ピン留めされたタブの取得時にエラーが発生しました。");
 			}
 		}
 	}

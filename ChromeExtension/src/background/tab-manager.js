@@ -1,5 +1,5 @@
 // タブイベントリスナーを設定
-import {webSocketRequestRegisterTab} from "./websocket-controller";
+import {webSocketRequestRegisterTab} from "./websocket-controller.js";
 
 export function tabManagerSetupTabEventListeners(webSocketClient) {
     chrome.tabs.onCreated.addListener((tab) => {

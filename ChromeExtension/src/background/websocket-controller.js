@@ -9,6 +9,7 @@ export function webSocketRequestRegisterTab(webSocketClient, tab) {
         title: tab.title || 'Untitled',
         favIconUrl: tab.favIconUrl || '',
         active: tab.active || false,
+        pinned: tab.pinned || false,
         index: tab.index || 0,
     };
 

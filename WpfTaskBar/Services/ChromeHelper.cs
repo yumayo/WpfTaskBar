@@ -22,6 +22,14 @@ namespace WpfTaskBar
 			}
 		}
 
+		public List<TabInfo> GetPinnedTabs()
+		{
+			lock (_sync)
+			{
+				return _tabInfoList.Where(x => x.Pinned).ToList();
+			}
+		}
+
 		public void UpdateTab(TabInfo tabInfo, HttpContext context)
 		{
 			try
@@ -45,6 +53,7 @@ namespace WpfTaskBar
 						oldTabInfo.Url = tabInfo.Url;
 						oldTabInfo.Title = tabInfo.Title;
 						oldTabInfo.Active = tabInfo.Active;
+						oldTabInfo.Pinned = tabInfo.Pinned;
 						oldTabInfo.Hwnd = tabInfo.Hwnd;
 					}
 					else
@@ -80,6 +89,7 @@ namespace WpfTaskBar
 					oldTabInfo.Url = tabInfo.Url;
 					oldTabInfo.Title = tabInfo.Title;
 					oldTabInfo.Active = tabInfo.Active;
+					oldTabInfo.Pinned = tabInfo.Pinned;
 					Logger.Info($"Chrome Update: {JsonSerializer.Serialize(oldTabInfo)}");
 				}
 				else
