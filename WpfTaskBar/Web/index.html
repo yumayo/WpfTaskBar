@@ -110,17 +110,19 @@
             -webkit-box-orient: vertical;
         }
 
-        /* 通知エリア */
-        .notification-area {
+        /* システムトレイ */
+        .system-tray {
             background-color: #21252b;
             border-top: 1px solid #333841;
-            height: 600px;
+            max-height: 400px;
             overflow-y: auto;
             display: none;
+            flex-direction: column-reverse;
+            padding-bottom: 8px;
         }
 
-        .notification-area.visible {
-            display: block;
+        .system-tray.visible {
+            display: flex;
         }
 
         .notification-item {
@@ -153,8 +155,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            padding: 8px;
-            border-bottom: 1px solid #333841;
+            padding: 8px 8px 0 8px;
         }
 
         .pinned-tab-icon {
@@ -288,9 +289,9 @@
             <!-- タスクアイテムがここに動的に追加されます -->
         </div>
 
-        <!-- 通知エリア -->
-        <div class="notification-area" id="notificationArea">
-            <!-- 通知がここに動的に追加されます -->
+        <!-- システムトレイ -->
+        <div class="system-tray" id="systemTray">
+            <!-- ピン留めタブなどがここに動的に追加されます -->
         </div>
 
         <!-- 時刻表示エリア -->
@@ -319,7 +320,7 @@
     <script src="network.js"></script>
     <script src="application-order.js"></script>
     <script src="taskbar.js"></script>
-    <script src="notification.js"></script>
+    <script src="system-tray.js"></script>
     <script src="clock.js"></script>
     <script src="context-menu.js"></script>
     <script>
