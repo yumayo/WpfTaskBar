@@ -97,7 +97,7 @@ public partial class MainWindow : Window
 		// DIコンテナからサービスを取得
 		_webView2 = _host.Services.GetRequiredService<WebView2Handler>();
 
-		_webView2.Initialize(App.Current.Dispatcher, webView2);
+		_ = _webView2!.InitializeAsync(App.Current.Dispatcher, webView2);
 
 		Logger.Info("Services obtained from DI container");
 		

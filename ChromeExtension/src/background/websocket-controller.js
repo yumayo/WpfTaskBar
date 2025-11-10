@@ -6,11 +6,11 @@ export function webSocketRequestRegisterTab(webSocketClient, tab) {
         tabId: tab.id,
         windowId: tab.windowId,
         url: tab.url,
-        title: tab.title || 'Untitled',
-        favIconUrl: tab.favIconUrl || '',
-        active: tab.active || false,
-        pinned: tab.pinned || false,
-        index: tab.index || 0,
+        title: tab.title,
+        favIconUrl: tab.favIconUrl,
+        active: tab.active,
+        pinned: tab.pinned,
+        index: tab.index,
     };
 
     webSocketClient.sendMessage({

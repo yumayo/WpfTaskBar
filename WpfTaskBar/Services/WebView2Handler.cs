@@ -14,8 +14,8 @@ namespace WpfTaskBar
 {
 	public class WebView2Handler
 	{
-		private Dispatcher _dispatcher;
-		private WebView2 _webView2;
+		private Dispatcher? _dispatcher;
+		private WebView2? _webView2;
 		private readonly ChromeHelper _chromeHelper;
 		private readonly FaviconCache _faviconCache;
 
@@ -25,7 +25,7 @@ namespace WpfTaskBar
 			_faviconCache = faviconCache;
 		}
 
-		public async Task Initialize(Dispatcher dispatcher, WebView2 webView2)
+		public async Task InitializeAsync(Dispatcher dispatcher, WebView2 webView2)
 		{
 			_dispatcher = dispatcher;
 			_webView2 = webView2;
@@ -63,9 +63,9 @@ namespace WpfTaskBar
 
 		public void SendMessageToWebView(object data)
 		{
-			_dispatcher.Invoke(() =>
+			_dispatcher?.Invoke(() =>
 			{
-				if (_webView2.CoreWebView2 != null)
+				if (_webView2?.CoreWebView2 != null)
 				{
 					var options = new JsonSerializerOptions
 					{
@@ -359,7 +359,7 @@ namespace WpfTaskBar
 							title,
 							iconData = "data:image/png;base64," + iconData,
 							url = tabInfo.Url,
-							favIconData = _faviconCache.ConvertFaviconUrlToBase64(tabInfo.FavIconUrl),
+							favIconData = tabInfo.FavIconUrl != null ? _faviconCache.ConvertFaviconUrlToBase64(tabInfo.FavIconUrl) : null,
 						};
 						SendMessageToWebView(response);
 					}
@@ -617,7 +617,7 @@ namespace WpfTaskBar
 		{
 			try
 			{
-				if (_webView2.CoreWebView2 != null)
+				if (_webView2?.CoreWebView2 != null)
 				{
 					_webView2.CoreWebView2.OpenDevToolsWindow();
 					Logger.Info("開発者ツールを開きました");
@@ -808,7 +808,7 @@ namespace WpfTaskBar
 					title = tab.Title,
 					url = tab.Url,
 					favIconUrl = tab.FavIconUrl,
-					favIconData = _faviconCache.ConvertFaviconUrlToBase64(tab.FavIconUrl)
+					favIconData = tab.FavIconUrl != null ? _faviconCache.ConvertFaviconUrlToBase64(tab.FavIconUrl) : null,
 				}).ToList();
 
 				SendMessageToWebView(new

@@ -18,7 +18,7 @@ namespace WpfTaskBar
 			}
 			lock (_sync)
 			{
-				return _tabInfoList.FirstOrDefault(x => x.Active && x.Hwnd == hwnd);
+				return _tabInfoList.FirstOrDefault(x => x.Active == true && x.Hwnd == hwnd);
 			}
 		}
 
@@ -26,7 +26,7 @@ namespace WpfTaskBar
 		{
 			lock (_sync)
 			{
-				return _tabInfoList.Where(x => x.Pinned).ToList();
+				return _tabInfoList.Where(x => x.Pinned == true).ToList();
 			}
 		}
 
@@ -38,7 +38,7 @@ namespace WpfTaskBar
 				tabInfo.Hwnd = (int)chromeHwnd;
 				lock (_sync)
 				{
-					if (tabInfo.Active)
+					if (tabInfo.Active == true)
 					{
 						foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId))
 						{
@@ -49,11 +49,11 @@ namespace WpfTaskBar
 					var oldTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.TabId == tabInfo.TabId);
 					if (oldTabInfo != null)
 					{
-						oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
-						oldTabInfo.Url = tabInfo.Url;
-						oldTabInfo.Title = tabInfo.Title;
-						oldTabInfo.Active = tabInfo.Active;
-						oldTabInfo.Pinned = tabInfo.Pinned;
+						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
+						if (tabInfo.Url != null) oldTabInfo.Url = tabInfo.Url;
+						if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
+						if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
+						if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
 						oldTabInfo.Hwnd = tabInfo.Hwnd;
 					}
 					else
@@ -74,7 +74,7 @@ namespace WpfTaskBar
 		{
 			lock (_sync)
 			{
-				if (tabInfo.Active)
+				if (tabInfo.Active == true)
 				{
 					foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId))
 					{
@@ -85,11 +85,11 @@ namespace WpfTaskBar
 				var oldTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.TabId == tabInfo.TabId);
 				if (oldTabInfo != null)
 				{
-					oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
-					oldTabInfo.Url = tabInfo.Url;
-					oldTabInfo.Title = tabInfo.Title;
-					oldTabInfo.Active = tabInfo.Active;
-					oldTabInfo.Pinned = tabInfo.Pinned;
+					if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
+					if (tabInfo.Url != null) oldTabInfo.Url = tabInfo.Url;
+					if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
+					if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
+					if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
 					Logger.Info($"Chrome Update: {JsonSerializer.Serialize(oldTabInfo)}");
 				}
 				else

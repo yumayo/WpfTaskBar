@@ -10,11 +10,11 @@
 	{
 		public int TabId { get; set; }
 		public int WindowId { get; set; }
-		public string Url { get; set; } = "";
-		public string Title { get; set; } = "";
-		public string FavIconUrl { get; set; } = "";
-		public bool Active { get; set; }
-		public bool Pinned { get; set; }
+		public string? Url { get; set; }
+		public string? Title { get; set; }
+		public string? FavIconUrl { get; set; }
+		public bool? Active { get; set; }
+		public bool? Pinned { get; set; }
 		public int Hwnd { get; set; }
 	}
 }
