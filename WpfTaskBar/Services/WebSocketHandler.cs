@@ -105,6 +105,9 @@ namespace WpfTaskBar
                     case "bindWindowHandle":
                         HandleBindWindowHandle(context, payload.Data);
                         break;
+                    case "focusTab":
+                        await HandleFocusTab(payload.Data);
+                        break;
                     default:
                         Logger.Info($"Unknown action: {payload.Action}");
                         break;
@@ -160,6 +163,29 @@ namespace WpfTaskBar
             }
         }
 
+        private async Task HandleFocusTab(object data)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                var focusTabData = JsonSerializer.Deserialize<FocusTabData>(json, JsonOptions);
+
+                if (focusTabData != null)
+                {
+                    Logger.Info($"Sending focusTab request for tabId: {focusTabData.TabId}");
+                    await BroadcastMessage(new Payload
+                    {
+                        Action = "focusTab",
+                        Data = new { tabId = focusTabData.TabId }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error handling focusTab");
+            }
+        }
+
         private async Task BroadcastMessage(Payload payload)
         {
             var tasks = new List<Task>();
@@ -187,6 +213,15 @@ namespace WpfTaskBar
             {
                 Logger.Error(ex, "Error sending message");
             }
+        }
+
+        public async Task SendFocusTabMessage(int tabId)
+        {
+            await BroadcastMessage(new Payload
+            {
+                Action = "focusTab",
+                Data = new { tabId }
+            });
         }
 
         public void Dispose()

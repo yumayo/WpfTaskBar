@@ -17,4 +17,9 @@
 		public bool? Pinned { get; set; }
 		public int Hwnd { get; set; }
 	}
+
+	public class FocusTabData
+	{
+		public int TabId { get; set; }
+	}
 }

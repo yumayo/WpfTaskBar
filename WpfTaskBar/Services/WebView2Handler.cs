@@ -18,11 +18,13 @@ namespace WpfTaskBar
 		private WebView2? _webView2;
 		private readonly ChromeHelper _chromeHelper;
 		private readonly FaviconCache _faviconCache;
+		private readonly WebSocketHandler _webSocketHandler;
 
-		public WebView2Handler(ChromeHelper chromeHelper, FaviconCache faviconCache)
+		public WebView2Handler(ChromeHelper chromeHelper, FaviconCache faviconCache, WebSocketHandler webSocketHandler)
 		{
 			_chromeHelper = chromeHelper;
 			_faviconCache = faviconCache;
+			_webSocketHandler = webSocketHandler;
 		}
 
 		public async Task InitializeAsync(Dispatcher dispatcher, WebView2 webView2)
@@ -187,6 +189,10 @@ namespace WpfTaskBar
 
 							case "request_pinned_tabs":
 								HandleRequestPinnedTabs();
+								break;
+
+							case "activate_tab":
+								HandleActivateTab(root);
 								break;
 
 							default:
@@ -820,6 +826,28 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ピン留めされたタブの取得時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleActivateTab(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("tabId", out var tabIdElement))
+				{
+					var tabId = tabIdElement.GetInt32();
+					Logger.Info($"Activating tab: {tabId}");
+
+					// WebSocketHandlerを使ってChrome extensionにfocusTabメッセージを送信
+					Task.Run(async () =>
+					{
+						await _webSocketHandler.SendFocusTabMessage(tabId);
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タブアクティブ化時にエラーが発生しました。");
 			}
 		}
 	}

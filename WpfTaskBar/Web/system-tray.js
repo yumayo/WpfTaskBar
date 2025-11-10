@@ -91,7 +91,22 @@ function createPinnedTabIcon(tab) {
 
     icon.appendChild(img);
 
+    // クリックイベントを追加
+    icon.addEventListener('click', () => {
+        activateTab(tab.tabId);
+    });
+
     return icon;
+}
+
+// タブをアクティブ化
+function activateTab(tabId) {
+    if (window.chrome?.webview) {
+        window.chrome.webview.postMessage({
+            type: 'activate_tab',
+            tabId: tabId
+        });
+    }
 }
 
 // ピン留めされたタブのアイコンを更新
