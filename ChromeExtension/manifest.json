@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "WpfTaskBar Test Extension",
+  "name": "WpfTaskBar Extension",
   "version": "1.0",
-  "description": "Chrome extension for testing communication with WpfTaskBar",
+  "description": "FavIconをタスクバーに表示し、固定化されたタブのアイコンを通知領域に表示するための情報を転送します。",
   
   "background": {
     "service_worker": "src/background/background.js",
@@ -17,7 +17,7 @@
   
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "WpfTaskBar Test"
+    "default_title": "WpfTaskBar"
   },
 
   "content_scripts": [
