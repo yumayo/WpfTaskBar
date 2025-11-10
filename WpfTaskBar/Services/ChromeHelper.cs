@@ -30,6 +30,14 @@ namespace WpfTaskBar
 			}
 		}
 
+		public TabInfo? GetTabByTabId(int tabId)
+		{
+			lock (_sync)
+			{
+				return _tabInfoList.FirstOrDefault(x => x.TabId == tabId);
+			}
+		}
+
 		public void UpdateTab(TabInfo tabInfo, HttpContext context)
 		{
 			try

@@ -838,6 +838,17 @@ namespace WpfTaskBar
 					var tabId = tabIdElement.GetInt32();
 					Logger.Info($"Activating tab: {tabId}");
 
+					// タブ情報を取得してChromeのhwndを取得
+					var tabInfo = _chromeHelper.GetTabByTabId(tabId);
+					if (tabInfo != null && tabInfo.Hwnd != 0)
+					{
+						var hwnd = new IntPtr(tabInfo.Hwnd);
+						Logger.Info($"Bringing Chrome window to foreground: hwnd={hwnd}");
+
+						// Chromeウィンドウを最前面にする
+						NativeMethods.SetForegroundWindow(hwnd);
+					}
+
 					// WebSocketHandlerを使ってChrome extensionにfocusTabメッセージを送信
 					Task.Run(async () =>
 					{
