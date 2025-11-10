@@ -1,11 +1,4 @@
-let notifications = [];
 let pinnedTabs = [];
-
-// 通知エリアの更新
-function updateNotifications(notificationData) {
-    notifications = notificationData || [];
-    renderNotificationArea();
-}
 
 // ピン留めされたタブを更新
 function updatePinnedTabs(tabsData) {
@@ -16,11 +9,6 @@ function updatePinnedTabs(tabsData) {
 // 通知エリアをレンダリング
 function renderNotificationArea() {
     const notificationArea = document.getElementById('notificationArea');
-
-    if (notifications.length === 0 && pinnedTabs.length === 0) {
-        notificationArea.classList.remove('visible');
-        return;
-    }
 
     notificationArea.classList.add('visible');
     notificationArea.innerHTML = '';
@@ -37,12 +25,6 @@ function renderNotificationArea() {
 
         notificationArea.appendChild(pinnedTabsContainer);
     }
-
-    // 通知を表示
-    notifications.forEach(notification => {
-        const notificationItem = createNotificationItem(notification);
-        notificationArea.appendChild(notificationItem);
-    });
 }
 
 // ピン留めされたタブのアイコンを作成
@@ -69,52 +51,6 @@ function createPinnedTabIcon(tab) {
     return icon;
 }
 
-// 通知アイテムの作成
-function createNotificationItem(notification) {
-    const item = document.createElement('div');
-    item.className = 'notification-item';
-    item.style.userSelect = 'none';
-
-    const title = document.createElement('div');
-    title.className = 'notification-title';
-
-    const titleText = document.createElement('span');
-    titleText.textContent = notification.title;
-
-    const time = document.createElement('span');
-    time.className = 'notification-time';
-    time.textContent = formatTime(new Date(notification.timestamp));
-
-    title.appendChild(titleText);
-    title.appendChild(time);
-
-    const message = document.createElement('div');
-    message.className = 'notification-message';
-    message.textContent = notification.message;
-
-    item.appendChild(title);
-    item.appendChild(message);
-
-    // マウスイベント
-    item.addEventListener('mouseenter', () => {
-        item.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-    });
-
-    item.addEventListener('mouseleave', () => {
-        item.style.backgroundColor = '';
-    });
-
-    // クリックイベント
-    item.addEventListener('click', () => {
-        sendMessageToHost('notification_click', {
-            id: notification.id,
-            windowHandle: notification.windowHandle
-        });
-    });
-
-    return item;
-}
-
 window.chrome?.webview?.addEventListener('message', function(event) {
     let data;
 
@@ -127,13 +63,14 @@ window.chrome?.webview?.addEventListener('message', function(event) {
     if (!data) {
         return;
     }
-
-    if (data.type === 'notification_update') {
-        console.log('notification_update');
-        updateNotifications(data.notifications);
-    } else if (data.type === 'pinned_tabs_response') {
-        console.log('pinned_tabs_response');
-        updatePinnedTabs(data.tabs);
+    
+    switch (data.type) {
+        case 'pinned_tabs_response':
+            console.log('pinned_tabs_response');
+            updatePinnedTabs(data.tabs);
+            break;
+        default:
+            break;
     }
 });
 
