@@ -811,6 +811,7 @@ namespace WpfTaskBar
 				var pinnedTabsData = pinnedTabs.Select(tab => new
 				{
 					tabId = tab.TabId,
+					index = tab.Index,
 					title = tab.Title,
 					url = tab.Url,
 					favIconUrl = tab.FavIconUrl,

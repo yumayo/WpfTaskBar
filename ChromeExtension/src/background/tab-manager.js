@@ -3,11 +3,12 @@ import {webSocketRequestRegisterTab} from "./websocket-controller.js";
 
 export function tabManagerSetupTabEventListeners(webSocketClient) {
     chrome.tabs.onCreated.addListener((tab) => {
+        console.log('【OnUpdated】Tab created, registering tab:', tab);
         tabManagerRegisterCurrentTabs(webSocketClient, tab);
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        console.log('【OnUpdated】 Tab updated:', tab, 'changeInfo:', changeInfo);
+        console.log('【OnUpdated】Tab updated:', tab, 'changeInfo:', changeInfo);
 
         if (changeInfo.url || changeInfo.title || changeInfo.favIconUrl) {
             console.log('【OnUpdated】Tab property changed (url/title/favicon), registering tab:', tab);
@@ -31,12 +32,25 @@ export function tabManagerSetupTabEventListeners(webSocketClient) {
             webSocketRequestRegisterTab(webSocketClient, tab);
         });
     });
+
+    // タブが移動された時にタブ情報を再登録
+    chrome.tabs.onMoved.addListener((tabId, moveInfo) => {
+        chrome.tabs.get(tabId, (tab) => {
+            if (chrome.runtime.lastError) {
+                console.error('Failed to get tab:', chrome.runtime.lastError);
+                return;
+            }
+            console.log('【OnMoved】Tab moved:', tab, 'moveInfo:', moveInfo);
+            webSocketRequestRegisterTab(webSocketClient, tab);
+        });
+    });
 }
 
 // 現在のタブ情報を登録
 export function tabManagerRegisterCurrentTabs(webSocketClient) {
     chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
+            console.log('【OnUpdated】Tab created, registering tab:', tab);
             webSocketRequestRegisterTab(webSocketClient, tab);
         });
     });

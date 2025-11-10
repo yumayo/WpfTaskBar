@@ -1,6 +1,19 @@
-﻿// タブ情報を登録
-export function webSocketRequestRegisterTab(webSocketClient, tab) {
-    if (!webSocketClient.getConnectionStatus()) return;
+﻿// タブ情報を登録（リトライ処理付き）
+export function webSocketRequestRegisterTab(webSocketClient, tab, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1秒
+
+    if (!webSocketClient.getConnectionStatus()) {
+        if (retryCount < maxRetries) {
+            console.log(`WebSocket not connected. Retrying in ${retryDelay}ms... (${retryCount + 1}/${maxRetries})`);
+            setTimeout(() => {
+                webSocketRequestRegisterTab(webSocketClient, tab, retryCount + 1);
+            }, retryDelay);
+        } else {
+            console.warn(`Failed to register tab after ${maxRetries} retries:`, tab);
+        }
+        return;
+    }
 
     const tabInfo = {
         tabId: tab.id,
@@ -17,6 +30,4 @@ export function webSocketRequestRegisterTab(webSocketClient, tab) {
         action: 'registerTab',
         data: tabInfo
     });
-
-    console.log('Tab registered:', tabInfo);
 }

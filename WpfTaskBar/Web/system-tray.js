@@ -36,8 +36,9 @@ function renderSystemTray() {
             }
         });
 
-        // タブアイコンを更新または追加
-        pinnedTabs.forEach((tab, index) => {
+        // tab.indexでソートしてからタブアイコンを更新または追加
+        const sortedTabs = [...pinnedTabs].sort((a, b) => (a.index || 0) - (b.index || 0));
+        sortedTabs.forEach((tab, index) => {
             const tabId = String(tab.tabId);
             let tabIcon = pinnedTabsContainer.querySelector(`[data-tab-id="${tabId}"]`);
 
