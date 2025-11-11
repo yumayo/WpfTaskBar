@@ -71,6 +71,7 @@ namespace WpfTaskBar
 						if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
 						if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
 						if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
+						if (tabInfo.Index != null) oldTabInfo.Index = tabInfo.Index;
 						oldTabInfo.Hwnd = tabInfo.Hwnd;
 					}
 					else
@@ -107,6 +108,7 @@ namespace WpfTaskBar
 					if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
 					if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
 					if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
+					if (tabInfo.Index != null) oldTabInfo.Index = tabInfo.Index;
 					Logger.Info($"Chrome Update: {JsonSerializer.Serialize(oldTabInfo)}");
 				}
 				else
