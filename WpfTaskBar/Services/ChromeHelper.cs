@@ -97,13 +97,27 @@ namespace WpfTaskBar
 							}
 						}
 
-						// Title または FavIcon が変更された場合、固定タブであれば通知フラグを立てる
-						bool titleChanged = tabInfo.Title != null && oldTabInfo.Title != tabInfo.Title;
-						bool favIconChanged = tabInfo.FavIconUrl != null && oldTabInfo.FavIconUrl != tabInfo.FavIconUrl;
-
-						if ((titleChanged || favIconChanged) && oldTabInfo.Pinned == true)
+						// URL が同じ場合に限り、Title または FavIcon が変更されたら通知フラグを立てる
+						// Statusがないと、Urlだけ先に更新されてその後タイトルが変わったときに赤ポチがついてしまいます。
+						if (tabInfo.Status == "stable")
 						{
-							oldTabInfo.HasNotification = true;
+							if (oldTabInfo.Snapshot != null)
+							{
+								var snapShotTabInfo = oldTabInfo.Snapshot;
+								
+								bool urlSame = tabInfo.Url != null && snapShotTabInfo.Url == tabInfo.Url;
+								bool titleChanged = tabInfo.Title != null && snapShotTabInfo.Title != tabInfo.Title;
+								bool favIconChanged = tabInfo.FavIconUrl != null && snapShotTabInfo.FavIconUrl != tabInfo.FavIconUrl;
+
+								if (urlSame && (titleChanged || favIconChanged) && snapShotTabInfo.Pinned == true)
+								{
+									oldTabInfo.HasNotification = true;
+								}
+							}
+						}
+						else if (tabInfo.Status != oldTabInfo.Status)
+						{
+							oldTabInfo.Snapshot = tabInfo.Clone();
 						}
 
 						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;

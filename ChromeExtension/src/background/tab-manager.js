@@ -4,22 +4,12 @@ import {webSocketRequestRegisterTab} from "./websocket-controller.js";
 export function tabManagerSetupTabEventListeners(webSocketClient) {
     chrome.tabs.onCreated.addListener((tab) => {
         console.log('【OnUpdated】Tab created, registering tab:', tab);
-        tabManagerRegisterCurrentTabs(webSocketClient, tab);
+        webSocketRequestRegisterTab(webSocketClient, tab);
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         console.log('【OnUpdated】Tab updated:', tab, 'changeInfo:', changeInfo);
-
-        if (changeInfo.url || changeInfo.title || changeInfo.favIconUrl) {
-            console.log('【OnUpdated】Tab property changed (url/title/favicon), registering tab:', tab);
-            webSocketRequestRegisterTab(webSocketClient, tab);
-        }
-
-        // ページの読み込みが完了した時にfaviconが確定するのでタブを再登録
-        if (changeInfo.status === 'complete') {
-            console.log('【OnUpdated】Tab loading complete, notifying tabs change and re-registering:', tab);
-            webSocketRequestRegisterTab(webSocketClient, tab);
-        }
+        webSocketRequestRegisterTab(webSocketClient, tab);
     });
 
     // アクティブなタブが変更された時にタブ情報を再登録し、すぐに通知

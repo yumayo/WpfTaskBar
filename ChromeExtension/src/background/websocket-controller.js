@@ -1,5 +1,5 @@
 ﻿// タブ情報を登録（リトライ処理付き）
-export function webSocketRequestRegisterTab(webSocketClient, tab, retryCount = 0) {
+export function webSocketRequestRegisterTab(webSocketClient, tab, status = null, retryCount = 0) {
     const maxRetries = 3;
     const retryDelay = 1000; // 1秒
 
@@ -24,6 +24,7 @@ export function webSocketRequestRegisterTab(webSocketClient, tab, retryCount = 0
         active: tab.active,
         pinned: tab.pinned,
         index: tab.index,
+        status: tab.status,
     };
 
     webSocketClient.sendMessage({
