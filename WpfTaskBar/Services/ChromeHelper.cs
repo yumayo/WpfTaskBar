@@ -53,7 +53,16 @@ namespace WpfTaskBar
 							t.Active = false;
 						}
 					}
-					
+
+					// ChromeのWindowIdが同じであれば同じHwndを持っているはずです。
+					if (tabInfo.Hwnd > 0)
+					{
+						foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId))
+						{
+							t.Hwnd = tabInfo.Hwnd;
+						}
+					}
+
 					var oldTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.TabId == tabInfo.TabId);
 					if (oldTabInfo != null)
 					{
