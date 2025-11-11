@@ -181,6 +181,7 @@
         }
 
         .pinned-tab-icon {
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -201,6 +202,18 @@
             height: 24px;
             border-radius: 3px;
             object-fit: contain;
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ff4444;
+            border: 2px solid #1e2329;
+            pointer-events: none;
         }
 
         /* 時刻表示エリア */

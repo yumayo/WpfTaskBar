@@ -195,6 +195,10 @@ namespace WpfTaskBar
 								HandleActivateTab(root);
 								break;
 
+							case "clear_notification":
+								HandleClearNotification(root);
+								break;
+
 							default:
 								Logger.Info($"未知のメッセージタイプ: {messageType}");
 								break;
@@ -816,6 +820,7 @@ namespace WpfTaskBar
 					url = tab.Url,
 					favIconUrl = tab.FavIconUrl,
 					favIconData = tab.FavIconUrl != null ? _faviconCache.ConvertFaviconUrlToBase64(tab.FavIconUrl) : null,
+					hasNotification = tab.HasNotification
 				}).ToList();
 
 				SendMessageToWebView(new
@@ -827,6 +832,23 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ピン留めされたタブの取得時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleClearNotification(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("tabId", out var tabIdElement))
+				{
+					var tabId = tabIdElement.GetInt32();
+					Logger.Info($"Clearing notification for tab: {tabId}");
+					_chromeHelper.ClearNotification(tabId);
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "通知のクリア時にエラーが発生しました。");
 			}
 		}
 

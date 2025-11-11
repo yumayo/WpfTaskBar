@@ -92,9 +92,17 @@ function createPinnedTabIcon(tab) {
 
     icon.appendChild(img);
 
+    // 通知バッジを追加
+    if (tab.hasNotification) {
+        const badge = document.createElement('div');
+        badge.className = 'notification-badge';
+        icon.appendChild(badge);
+    }
+
     // クリックイベントを追加
     icon.addEventListener('click', () => {
         activateTab(tab.tabId);
+        clearNotification(tab.tabId);
     });
 
     return icon;
@@ -105,6 +113,16 @@ function activateTab(tabId) {
     if (window.chrome?.webview) {
         window.chrome.webview.postMessage({
             type: 'activate_tab',
+            tabId: tabId
+        });
+    }
+}
+
+// 通知をクリア
+function clearNotification(tabId) {
+    if (window.chrome?.webview) {
+        window.chrome.webview.postMessage({
+            type: 'clear_notification',
             tabId: tabId
         });
     }
@@ -129,6 +147,16 @@ function updatePinnedTabIcon(icon, tab) {
         if (img.src !== newSrc) {
             img.src = newSrc;
         }
+    }
+
+    // 通知バッジを更新
+    const existingBadge = icon.querySelector('.notification-badge');
+    if (tab.hasNotification && !existingBadge) {
+        const badge = document.createElement('div');
+        badge.className = 'notification-badge';
+        icon.appendChild(badge);
+    } else if (!tab.hasNotification && existingBadge) {
+        icon.removeChild(existingBadge);
     }
 }
 

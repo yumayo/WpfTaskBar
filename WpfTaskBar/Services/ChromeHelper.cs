@@ -38,6 +38,18 @@ namespace WpfTaskBar
 			}
 		}
 
+		public void ClearNotification(int tabId)
+		{
+			lock (_sync)
+			{
+				var tab = _tabInfoList.FirstOrDefault(x => x.TabId == tabId);
+				if (tab != null)
+				{
+					tab.HasNotification = false;
+				}
+			}
+		}
+
 		public void UpdateTabWithHttpContext(TabInfo tabInfo, HttpContext context)
 		{
 			var chromeHwnd = FindChromeHwndByConnection(context);
@@ -83,6 +95,15 @@ namespace WpfTaskBar
 							{
 								movedTabInfo.Index = oldTabInfo.Index;
 							}
+						}
+
+						// Title または FavIcon が変更された場合、固定タブであれば通知フラグを立てる
+						bool titleChanged = tabInfo.Title != null && oldTabInfo.Title != tabInfo.Title;
+						bool favIconChanged = tabInfo.FavIconUrl != null && oldTabInfo.FavIconUrl != tabInfo.FavIconUrl;
+
+						if ((titleChanged || favIconChanged) && oldTabInfo.Pinned == true)
+						{
+							oldTabInfo.HasNotification = true;
 						}
 
 						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;

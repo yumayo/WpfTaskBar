@@ -17,6 +17,7 @@
 		public bool? Active { get; set; }
 		public bool? Pinned { get; set; }
 		public int Hwnd { get; set; }
+		public bool HasNotification { get; set; }
 	}
 
 	public class FocusTabData
