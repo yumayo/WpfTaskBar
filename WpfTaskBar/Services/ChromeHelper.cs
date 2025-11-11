@@ -38,12 +38,21 @@ namespace WpfTaskBar
 			}
 		}
 
-		public void UpdateTab(TabInfo tabInfo, HttpContext context)
+		public void UpdateTabWithHttpContext(TabInfo tabInfo, HttpContext context)
 		{
-			try
+			var chromeHwnd = FindChromeHwndByConnection(context);
+			UpdateTab(tabInfo, chromeHwnd);
+		}
+
+		public void UpdateTab(TabInfo tabInfo, IntPtr? hwnd)
+		{
+			lock (_sync)
 			{
-				var chromeHwnd = FindChromeHwndByConnection(context);
-				tabInfo.Hwnd = (int)chromeHwnd;
+				if (hwnd.HasValue)
+				{
+					tabInfo.Hwnd = (int)hwnd.Value;
+				}
+
 				lock (_sync)
 				{
 					if (tabInfo.Active == true)
@@ -62,60 +71,35 @@ namespace WpfTaskBar
 							t.Hwnd = tabInfo.Hwnd;
 						}
 					}
-
+					
 					var oldTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.TabId == tabInfo.TabId);
 					if (oldTabInfo != null)
 					{
+						// タブの入れ替え
+						if (oldTabInfo.Index != tabInfo.Index)
+						{
+							var movedTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.Index == tabInfo.Index);
+							if (movedTabInfo != null)
+							{
+								movedTabInfo.Index = oldTabInfo.Index;
+							}
+						}
+
 						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
 						if (tabInfo.Url != null) oldTabInfo.Url = tabInfo.Url;
 						if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
 						if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
 						if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
 						if (tabInfo.Index != null) oldTabInfo.Index = tabInfo.Index;
-						oldTabInfo.Hwnd = tabInfo.Hwnd;
+						if (tabInfo.Hwnd > 0) oldTabInfo.Hwnd = tabInfo.Hwnd;
 					}
 					else
 					{
 						_tabInfoList.Add(tabInfo);
 					}
 				}
-				
-				Logger.Info($"Chrome Update With HttpContext: {JsonSerializer.Serialize(tabInfo)}");
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "Error handling bindWindowHandle");
-			}
-		}
-		
-		public void UpdateTab(TabInfo tabInfo)
-		{
-			lock (_sync)
-			{
-				if (tabInfo.Active == true)
-				{
-					foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId))
-					{
-						t.Active = false;
-					}
-				}
 
-				var oldTabInfo = _tabInfoList.FirstOrDefault(x => x.WindowId == tabInfo.WindowId && x.TabId == tabInfo.TabId);
-				if (oldTabInfo != null)
-				{
-					if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
-					if (tabInfo.Url != null) oldTabInfo.Url = tabInfo.Url;
-					if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
-					if (tabInfo.Active != null) oldTabInfo.Active = tabInfo.Active;
-					if (tabInfo.Pinned != null) oldTabInfo.Pinned = tabInfo.Pinned;
-					if (tabInfo.Index != null) oldTabInfo.Index = tabInfo.Index;
-					Logger.Info($"Chrome Update: {JsonSerializer.Serialize(oldTabInfo)}");
-				}
-				else
-				{
-					_tabInfoList.Add(tabInfo);
-					Logger.Info($"Chrome Add: {JsonSerializer.Serialize(tabInfo)}");
-				}
+				Logger.Info($"Chrome Update: {JsonSerializer.Serialize(tabInfo)}");
 			}
 		}
 

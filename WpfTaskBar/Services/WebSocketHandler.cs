@@ -132,7 +132,7 @@ namespace WpfTaskBar
                 var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
-                    _chromeHelper.UpdateTab(tabInfo);
+                    _chromeHelper.UpdateTab(tabInfo, null);
                     Logger.Info($"Tab registered: {tabInfo.TabId} - {json}");
                 }
             }
@@ -150,7 +150,7 @@ namespace WpfTaskBar
                 var tabInfo = JsonSerializer.Deserialize<TabInfo>(json, JsonOptions);
                 if (tabInfo != null)
                 {
-                    _chromeHelper.UpdateTab(tabInfo, context);
+                    _chromeHelper.UpdateTabWithHttpContext(tabInfo, context);
                 }
                 else
                 {
