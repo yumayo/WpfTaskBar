@@ -133,6 +133,12 @@ namespace WpfTaskBar
 							oldTabInfo.Snapshot = tabInfo.Clone();
 						}
 
+						// アクティブになったら通知フラグをクリア
+						if (tabInfo.Active == true)
+						{
+							oldTabInfo.HasNotification = false;
+						}
+
 						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;
 						if (tabInfo.Url != null) oldTabInfo.Url = tabInfo.Url;
 						if (tabInfo.Title != null) oldTabInfo.Title = tabInfo.Title;
