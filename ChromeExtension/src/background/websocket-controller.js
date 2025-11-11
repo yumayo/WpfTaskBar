@@ -32,3 +32,19 @@ export function webSocketRequestRegisterTab(webSocketClient, tab, status = null,
         data: tabInfo
     });
 }
+
+// タブ削除を通知
+export function webSocketRequestRemoveTab(webSocketClient, tabId, windowId) {
+    if (!webSocketClient.getConnectionStatus()) {
+        console.warn('WebSocket not connected. Cannot send remove tab notification.');
+        return;
+    }
+
+    webSocketClient.sendMessage({
+        action: 'removeTab',
+        data: {
+            tabId: tabId,
+            windowId: windowId
+        }
+    });
+}

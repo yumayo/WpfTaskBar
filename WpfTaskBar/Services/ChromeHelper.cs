@@ -50,6 +50,19 @@ namespace WpfTaskBar
 			}
 		}
 
+		public void RemoveTab(int tabId, int windowId)
+		{
+			lock (_sync)
+			{
+				var tab = _tabInfoList.FirstOrDefault(x => x.TabId == tabId && x.WindowId == windowId);
+				if (tab != null)
+				{
+					_tabInfoList.Remove(tab);
+					Logger.Info($"Tab removed: TabId={tabId}, WindowId={windowId}");
+				}
+			}
+		}
+
 		public void UpdateTabWithHttpContext(TabInfo tabInfo, HttpContext context)
 		{
 			var chromeHwnd = FindChromeHwndByConnection(context);

@@ -1,5 +1,5 @@
 // タブイベントリスナーを設定
-import {webSocketRequestRegisterTab} from "./websocket-controller.js";
+import {webSocketRequestRegisterTab, webSocketRequestRemoveTab} from "./websocket-controller.js";
 
 export function tabManagerSetupTabEventListeners(webSocketClient) {
     chrome.tabs.onCreated.addListener((tab) => {
@@ -33,6 +33,12 @@ export function tabManagerSetupTabEventListeners(webSocketClient) {
             console.log('【OnMoved】Tab moved:', tab, 'moveInfo:', moveInfo);
             webSocketRequestRegisterTab(webSocketClient, tab);
         });
+    });
+
+    // タブが削除された時に通知
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+        console.log('【OnRemoved】Tab removed:', tabId, 'removeInfo:', removeInfo);
+        webSocketRequestRemoveTab(webSocketClient, tabId, removeInfo.windowId);
     });
 }
 

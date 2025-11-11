@@ -99,6 +99,9 @@ namespace WpfTaskBar
                     case "registerTab":
                         HandleRegisterTab(payload.Data);
                         break;
+                    case "removeTab":
+                        HandleRemoveTab(payload.Data);
+                        break;
                     case "ping":
                         await HandlePing();
                         break;
@@ -141,7 +144,30 @@ namespace WpfTaskBar
                 Logger.Error(ex, "Error registering tab");
             }
         }
-        
+
+        private void HandleRemoveTab(object data)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(data, JsonOptions);
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+
+                if (root.TryGetProperty("tabId", out var tabIdElement) &&
+                    root.TryGetProperty("windowId", out var windowIdElement))
+                {
+                    var tabId = tabIdElement.GetInt32();
+                    var windowId = windowIdElement.GetInt32();
+                    _chromeHelper.RemoveTab(tabId, windowId);
+                    Logger.Info($"Tab removed: TabId={tabId}, WindowId={windowId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Error removing tab");
+            }
+        }
+
         private void HandleBindWindowHandle(HttpContext context, object data)
         {
             try
