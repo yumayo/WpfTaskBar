@@ -417,25 +417,12 @@ function createTaskItem(task) {
     const icon = document.createElement('div');
     icon.className = 'task-icon';
 
-    // 常にiconDataを使用
     if (task.iconData) {
         const img = document.createElement('img');
         img.src = task.iconData;
         img.style.width = '100%';
         img.style.height = '100%';
         icon.appendChild(img);
-    }
-
-    // favIconDataがある場合は上に重ねて表示
-    if (task.favIconData) {
-        const favIcon = document.createElement('div');
-        favIcon.className = 'fav-icon';
-
-        const favImg = document.createElement('img');
-        favImg.src = task.favIconData;
-        favIcon.appendChild(favImg);
-
-        icon.appendChild(favIcon);
     }
 
     item.appendChild(icon);
@@ -861,31 +848,6 @@ function updateTaskItemContent(item, task) {
             if (currentIconSrc !== task.iconData && task.iconData) {
                 imgElement.src = task.iconData;
             }
-        }
-
-        // favIconの更新
-        let favIconElement = iconElement.querySelector('.fav-icon');
-        if (task.favIconData) {
-            if (!favIconElement) {
-                // favIconがまだない場合は作成
-                favIconElement = document.createElement('div');
-                favIconElement.className = 'fav-icon';
-
-                const favImg = document.createElement('img');
-                favImg.src = task.favIconData;
-                favIconElement.appendChild(favImg);
-
-                iconElement.appendChild(favIconElement);
-            } else {
-                // favIconがある場合は更新
-                const favImg = favIconElement.querySelector('img');
-                if (favImg && favImg.src !== task.favIconData) {
-                    favImg.src = task.favIconData;
-                }
-            }
-        } else if (favIconElement) {
-            // favIconDataがない場合は削除
-            favIconElement.remove();
         }
     }
 }
