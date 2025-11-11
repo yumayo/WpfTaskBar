@@ -1,5 +1,5 @@
 ﻿// タブ情報を登録（リトライ処理付き）
-export function webSocketRequestRegisterTab(webSocketClient, tab, status = null, retryCount = 0) {
+export function webSocketRequestUpdateTab(webSocketClient, tab, status = null, retryCount = 0) {
     const maxRetries = 3;
     const retryDelay = 1000; // 1秒
 
@@ -7,7 +7,7 @@ export function webSocketRequestRegisterTab(webSocketClient, tab, status = null,
         if (retryCount < maxRetries) {
             console.log(`WebSocket not connected. Retrying in ${retryDelay}ms... (${retryCount + 1}/${maxRetries})`);
             setTimeout(() => {
-                webSocketRequestRegisterTab(webSocketClient, tab, retryCount + 1);
+                webSocketRequestUpdateTab(webSocketClient, tab, retryCount + 1);
             }, retryDelay);
         } else {
             console.warn(`Failed to register tab after ${maxRetries} retries:`, tab);
@@ -28,7 +28,7 @@ export function webSocketRequestRegisterTab(webSocketClient, tab, status = null,
     };
 
     webSocketClient.sendMessage({
-        action: 'registerTab',
+        action: 'updateTab',
         data: tabInfo
     });
 }

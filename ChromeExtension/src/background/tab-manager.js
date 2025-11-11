@@ -1,15 +1,15 @@
 // タブイベントリスナーを設定
-import {webSocketRequestRegisterTab, webSocketRequestRemoveTab} from "./websocket-controller.js";
+import {webSocketRequestUpdateTab, webSocketRequestRemoveTab} from "./websocket-controller.js";
 
 export function tabManagerSetupTabEventListeners(webSocketClient) {
     chrome.tabs.onCreated.addListener((tab) => {
         console.log('【OnUpdated】Tab created, registering tab:', tab);
-        webSocketRequestRegisterTab(webSocketClient, tab);
+        webSocketRequestUpdateTab(webSocketClient, tab);
     });
 
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         console.log('【OnUpdated】Tab updated:', tab, 'changeInfo:', changeInfo);
-        webSocketRequestRegisterTab(webSocketClient, tab);
+        webSocketRequestUpdateTab(webSocketClient, tab);
     });
 
     // アクティブなタブが変更された時にタブ情報を再登録し、すぐに通知
@@ -19,7 +19,7 @@ export function tabManagerSetupTabEventListeners(webSocketClient) {
                 console.error('Failed to get tab:', chrome.runtime.lastError);
                 return;
             }
-            webSocketRequestRegisterTab(webSocketClient, tab);
+            webSocketRequestUpdateTab(webSocketClient, tab);
         });
     });
 
@@ -31,7 +31,7 @@ export function tabManagerSetupTabEventListeners(webSocketClient) {
                 return;
             }
             console.log('【OnMoved】Tab moved:', tab, 'moveInfo:', moveInfo);
-            webSocketRequestRegisterTab(webSocketClient, tab);
+            webSocketRequestUpdateTab(webSocketClient, tab);
         });
     });
 
@@ -47,7 +47,7 @@ export function tabManagerRegisterCurrentTabs(webSocketClient) {
     chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
             console.log('【OnUpdated】Tab created, registering tab:', tab);
-            webSocketRequestRegisterTab(webSocketClient, tab);
+            webSocketRequestUpdateTab(webSocketClient, tab);
         });
     });
 }

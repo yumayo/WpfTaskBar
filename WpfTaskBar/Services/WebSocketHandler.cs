@@ -96,8 +96,8 @@ namespace WpfTaskBar
 
                 switch (payload.Action)
                 {
-                    case "registerTab":
-                        HandleRegisterTab(payload.Data);
+                    case "updateTab":
+                        HandleUpdateTab(payload.Data);
                         break;
                     case "removeTab":
                         HandleRemoveTab(payload.Data);
@@ -127,7 +127,7 @@ namespace WpfTaskBar
             return BroadcastMessage(new Payload { Action = "pong", Data = new { } });
         }
 
-        private void HandleRegisterTab(object data)
+        private void HandleUpdateTab(object data)
         {
             try
             {
