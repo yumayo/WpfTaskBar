@@ -82,7 +82,7 @@ namespace WpfTaskBar
 				{
 					if (tabInfo.Active == true)
 					{
-						foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId))
+						foreach (var t in _tabInfoList.Where(x => x.WindowId == tabInfo.WindowId && x.TabId != tabInfo.TabId))
 						{
 							t.Active = false;
 						}
@@ -110,33 +110,24 @@ namespace WpfTaskBar
 							}
 						}
 
-						// URL が同じ場合に限り、Title または FavIcon が変更されたら通知フラグを立てる
-						// Statusがないと、Urlだけ先に更新されてその後タイトルが変わったときに赤ポチがついてしまいます。
-						if (tabInfo.Status == "stable")
+						if (tabInfo.Pinned == true)
 						{
-							if (oldTabInfo.Snapshot != null)
+							// URL が同じ場合に限り、Title または FavIcon が変更されたら通知フラグを立てる
+							bool titleChanged = oldTabInfo.Title != null && tabInfo.Title != null && oldTabInfo.Title != tabInfo.Title;
+							bool favIconChanged = oldTabInfo.FavIconUrl != null && tabInfo.FavIconUrl != null && oldTabInfo.FavIconUrl != tabInfo.FavIconUrl;
+							
+							if (titleChanged || favIconChanged)
 							{
-								var snapShotTabInfo = oldTabInfo.Snapshot;
-								
-								bool urlSame = tabInfo.Url != null && snapShotTabInfo.Url == tabInfo.Url;
-								bool titleChanged = tabInfo.Title != null && snapShotTabInfo.Title != tabInfo.Title;
-								bool favIconChanged = tabInfo.FavIconUrl != null && snapShotTabInfo.FavIconUrl != tabInfo.FavIconUrl;
-
-								if (urlSame && (titleChanged || favIconChanged) && snapShotTabInfo.Pinned == true)
-								{
-									oldTabInfo.HasNotification = true;
-								}
+								oldTabInfo.HasNotification = true;
 							}
-						}
-						else if (tabInfo.Status != oldTabInfo.Status)
-						{
-							oldTabInfo.Snapshot = tabInfo.Clone();
-						}
 
-						// アクティブになったら通知フラグをクリア
-						if (tabInfo.Active == true)
-						{
-							oldTabInfo.HasNotification = false;
+							// アクティブになったら通知フラグをクリア
+							var foregroundWindow = NativeMethods.GetForegroundWindow();
+							var isForegroundWindow = oldTabInfo.Hwnd == (int)foregroundWindow;
+							if (isForegroundWindow && oldTabInfo.Active == true)
+							{
+								oldTabInfo.HasNotification = false;
+							}
 						}
 
 						if (tabInfo.FavIconUrl != null) oldTabInfo.FavIconUrl = tabInfo.FavIconUrl;

@@ -54,7 +54,6 @@ export function webSocketRequestUpdateTab(webSocketClient, tab, status = null, r
         active: tab.active,
         pinned: tab.pinned,
         index: tab.index,
-        status: tab.status,
     };
 
     webSocketClient.sendMessage({

@@ -9,7 +9,7 @@ artifact:
 	git.exe tag ${APP_VERSION} || true
 	git.exe push origin master
 	git.exe push origin --tags
-	explorer.exe .
+	explorer.exe . || true
 	echo https://github.com/yumayo/WpfTaskBar/releases/new
 
 clock-in:
