@@ -190,10 +190,8 @@ export function setupSystemTray(): void {
 
   // ピン留めされたタブを定期的に更新（500ms間隔）
   setInterval(() => {
-    if (window.chrome?.webview) {
-      window.chrome.webview.postMessage({
-        type: 'request_pinned_tabs'
-      });
-    }
+    window.chrome?.webview?.postMessage({
+      type: 'request_pinned_tabs'
+    });
   }, 500);
 }
