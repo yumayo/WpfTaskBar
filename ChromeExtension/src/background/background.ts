@@ -27,7 +27,6 @@ webSocketClient.onConnected(() => {
 webSocketClient.onMessage((message) => {
     switch (message.action) {
         case 'pong':
-            console.log('pong received.');
             break;
         case 'focusTab':
             handleFocusTab(message.data);

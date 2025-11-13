@@ -1,7 +1,7 @@
 import type { WebSocketClient } from './websocket-client';
 
 let heartbeatTimer: number | null = null;
-const heartbeatInterval = 10000; // 10秒ごとにping送信
+const heartbeatInterval = 1000;
 
 // ハートビートを開始
 export function heartbeatStart(webSocketClient: WebSocketClient): void {
@@ -9,7 +9,6 @@ export function heartbeatStart(webSocketClient: WebSocketClient): void {
 
     heartbeatTimer = setInterval(() => {
         if (webSocketClient.getConnectionStatus()) {
-            console.log('Sending heartbeat ping...');
             webSocketClient.sendMessage({ action: 'ping', data: {} }, false);
         }
     }, heartbeatInterval) as unknown as number;

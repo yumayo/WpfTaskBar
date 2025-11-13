@@ -83,8 +83,6 @@ namespace WpfTaskBar
             string connectionId = context.Connection.Id;
             try
             {
-                Logger.Info($"Raw message from {connectionId}: {message}");
-
                 var payload = JsonSerializer.Deserialize<Payload>(message, JsonOptions);
                 if (payload == null)
                 {
@@ -92,7 +90,10 @@ namespace WpfTaskBar
                     return;
                 }
 
-                Logger.Info($"Parsed message from {connectionId}: Action='{payload.Action}', Data={JsonSerializer.Serialize(payload.Data, JsonOptions)}");
+                if (payload.Action != "ping")
+                {
+                    Logger.Info($"Parsed message from {connectionId}: Action='{payload.Action}', Data={JsonSerializer.Serialize(payload.Data, JsonOptions)}");
+                }
 
                 switch (payload.Action)
                 {
