@@ -25,18 +25,16 @@ function renderSystemTray(): void {
       systemTray.appendChild(pinnedTabsContainer);
     }
 
-    // 既存のタブIDを取得
-    const existingTabIds = new Set(
-      Array.from(pinnedTabsContainer.children).map(child => (child as HTMLElement).dataset.tabId)
-    );
-
     // 新しいタブIDのセット
     const newTabIds = new Set(pinnedTabs.map(tab => String(tab.tabId)));
 
     // 不要なタブアイコンを削除
     Array.from(pinnedTabsContainer.children).forEach(child => {
-      if (!newTabIds.has((child as HTMLElement).dataset.tabId)) {
-        pinnedTabsContainer.removeChild(child);
+      const tabId = (child as HTMLElement).dataset.tabId;
+      if (tabId) {
+        if (!newTabIds.has(tabId)) {
+          pinnedTabsContainer.removeChild(child);
+        }
       }
     });
 

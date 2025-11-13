@@ -44,7 +44,7 @@ namespace WpfTaskBar
 				_webView2.CoreWebView2.Navigate("http://localhost:5173");
 #else
 				// HTMLファイルのパスを取得
-				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Web", "index.html");
+				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView", "index.html");
 				var htmlUri = new Uri($"file:///{htmlPath.Replace('\\', '/')}");
 				Logger.Info($"Loading HTML from: {htmlUri}");
 

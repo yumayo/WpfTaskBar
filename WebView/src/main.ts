@@ -5,15 +5,18 @@ import { setupContextMenu } from './context-menu';
 import { setupSystemTray } from './system-tray';
 import { startTaskbar } from './taskbar';
 
-// グローバルなApplicationOrderインスタンスを作成して公開
-const applicationOrder = new ApplicationOrder();
-await applicationOrder.setup();
-window.applicationOrder = applicationOrder;
+// 初期化処理を非同期関数でラップ
+(async () => {
+  // グローバルなApplicationOrderインスタンスを作成して公開
+  const applicationOrder = new ApplicationOrder();
+  await applicationOrder.setup();
+  window.applicationOrder = applicationOrder;
 
-// 各モジュールの初期化
-setupClockListeners();
-setupContextMenu();
-setupSystemTray();
-startTaskbar();
+  // 各モジュールの初期化
+  setupClockListeners();
+  setupContextMenu();
+  setupSystemTray();
+  startTaskbar();
 
-console.log('WebView initialized');
+  console.log('WebView initialized');
+})();

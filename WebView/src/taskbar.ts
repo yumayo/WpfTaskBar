@@ -475,7 +475,7 @@ function setupDragAndDrop(item: HTMLElement, task: TaskBarItem): void {
 }
 
 // タスクアイテムのクリック処理
-async function onClick(item: HTMLElement, task: TaskBarItem, e: MouseEvent): Promise<void> {
+async function onClick(item: HTMLElement, task: TaskBarItem, _e: MouseEvent): Promise<void> {
   // ドラッグ中のクリックは無視
   if (item.classList.contains('dragging')) {
     return;
@@ -536,7 +536,7 @@ async function onClick(item: HTMLElement, task: TaskBarItem, e: MouseEvent): Pro
 }
 
 // タスクアイテムの中クリック処理
-function onMouseDown(item: HTMLElement, task: TaskBarItem, e: MouseEvent): void {
+function onMouseDown(_item: HTMLElement, task: TaskBarItem, e: MouseEvent): void {
   if (e.button === 1) {
     // 中クリック
     e.preventDefault();
