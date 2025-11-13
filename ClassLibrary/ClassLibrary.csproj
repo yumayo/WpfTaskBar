@@ -8,6 +8,13 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <!-- Releaseビルド時の設定 -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
     <ItemGroup>
       <PackageReference Include="System.Management" Version="9.0.3" />
     </ItemGroup>

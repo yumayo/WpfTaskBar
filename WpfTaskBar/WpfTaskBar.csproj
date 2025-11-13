@@ -8,6 +8,13 @@
         <UseWPF>true</UseWPF>
     </PropertyGroup>
 
+    <!-- Releaseビルド時の設定 -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
@@ -24,6 +31,36 @@
 
     <ItemGroup>
       <None Include="Web\**\*" CopyToOutputDirectory="Always" />
+    </ItemGroup>
+
+    <!-- DLLをlibsサブディレクトリに移動（アプリ本体のDLLは除く） -->
+    <Target Name="MoveDllsToSubdirectory" AfterTargets="Build">
+        <ItemGroup>
+            <DllFiles Include="$(OutputPath)\*.dll" Exclude="$(OutputPath)\$(AssemblyName).dll" />
+        </ItemGroup>
+        <MakeDir Directories="$(OutputPath)\libs" />
+        <Move SourceFiles="@(DllFiles)" DestinationFolder="$(OutputPath)\libs" />
+    </Target>
+
+    <!-- Releaseビルド時に不要なXMLファイルを削除 -->
+    <Target Name="DeleteUnnecessaryFiles" AfterTargets="MoveDllsToSubdirectory" Condition="'$(Configuration)' == 'Release'">
+        <ItemGroup>
+            <XmlFilesToDelete Include="$(OutputPath)\*.xml" />
+            <XmlFilesToDeleteInLibs Include="$(OutputPath)\libs\*.xml" />
+            <JsonFilesToDelete Include="$(OutputPath)\ClassLibrary.deps.json" />
+        </ItemGroup>
+        <Delete Files="@(XmlFilesToDelete)" />
+        <Delete Files="@(XmlFilesToDeleteInLibs)" />
+        <Delete Files="@(JsonFilesToDelete)" />
+    </Target>
+
+    <!-- アプリケーション設定でDLLの検索パスを追加 -->
+    <PropertyGroup>
+        <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="$(OutputPath)\libs\**\*" CopyToOutputDirectory="Always" LinkBase="libs" />
     </ItemGroup>
 
 </Project>

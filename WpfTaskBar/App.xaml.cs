@@ -12,6 +12,9 @@ public partial class App
 {
 	protected override void OnStartup(StartupEventArgs e)
 	{
+		// DLLの検索パスを追加
+		SetupAssemblyResolver();
+
 		ConsoleManager.Setup();
 
 		Logger.Setup();
@@ -23,6 +26,22 @@ public partial class App
 
 		base.OnStartup(e);
 		Logger.Info("WPF base.OnStartup completed");
+	}
+
+	private void SetupAssemblyResolver()
+	{
+		AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+		{
+			var assemblyName = new System.Reflection.AssemblyName(args.Name).Name;
+			var libsPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libs", $"{assemblyName}.dll");
+
+			if (System.IO.File.Exists(libsPath))
+			{
+				return System.Reflection.Assembly.LoadFrom(libsPath);
+			}
+
+			return null;
+		};
 	}
 
 	private void SetupGlobalExceptionHandlers()

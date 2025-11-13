@@ -3,6 +3,7 @@
 artifact:
 	rm -rf dist
 	rm -rf WpfTaskBar/log
+	rm -rf WpfTaskBar/bin
 	dotnet.exe build WpfTaskBar --configuration Release -o dist
 	(cd WebView && npm run build)
 	mkdir -p dist/WebView
