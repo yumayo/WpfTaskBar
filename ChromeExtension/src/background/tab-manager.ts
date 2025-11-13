@@ -1,13 +1,14 @@
 // タブイベントリスナーを設定
-import {webSocketRequestUpdateTab, webSocketRequestRemoveTab} from "./websocket-controller.js";
+import { webSocketRequestUpdateTab, webSocketRequestRemoveTab } from "./websocket-controller";
+import type { WebSocketClient } from "./websocket-client";
 
-export function tabManagerSetupTabEventListeners(webSocketClient) {
+export function tabManagerSetupTabEventListeners(webSocketClient: WebSocketClient): void {
     chrome.tabs.onCreated.addListener((tab) => {
         console.log('【OnUpdated】Tab created, registering tab:', tab);
         webSocketRequestUpdateTab(webSocketClient, tab);
     });
 
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
         console.log('【OnUpdated】Tab updated:', tab, 'changeInfo:', changeInfo);
         webSocketRequestUpdateTab(webSocketClient, tab);
     });
@@ -43,7 +44,7 @@ export function tabManagerSetupTabEventListeners(webSocketClient) {
 }
 
 // 現在のタブ情報を登録
-export function tabManagerRegisterCurrentTabs(webSocketClient) {
+export function tabManagerRegisterCurrentTabs(webSocketClient: WebSocketClient): void {
     chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
             console.log('【OnUpdated】Tab created, registering tab:', tab);

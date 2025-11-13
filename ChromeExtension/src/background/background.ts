@@ -1,9 +1,9 @@
 // メイン背景スクリプト - モジュール化されたファイルをまとめる
 
-import { WebSocketClient } from './websocket-client.js';
-import { tabManagerRegisterCurrentTabs, tabManagerSetupTabEventListeners } from './tab-manager.js';
-import { setupPopupMessageListener } from '../popup/popup-handler.js';
-import { heartbeatStart, heartbeatStop } from './heartbeat.js';
+import { WebSocketClient } from './websocket-client';
+import { tabManagerRegisterCurrentTabs, tabManagerSetupTabEventListeners } from './tab-manager';
+import { setupPopupMessageListener } from '../popup/popup-handler';
+import { heartbeatStart, heartbeatStop } from './heartbeat';
 
 // WebSocketクライアントのインスタンスを作成
 const webSocketClient = new WebSocketClient();
@@ -39,7 +39,7 @@ webSocketClient.onMessage((message) => {
 });
 
 // タブフォーカス処理
-function handleFocusTab(data) {
+function handleFocusTab(data: { tabId: number }): void {
     console.log('Focus tab request:', data);
 
     chrome.tabs.update(data.tabId, { active: true }, (tab) => {

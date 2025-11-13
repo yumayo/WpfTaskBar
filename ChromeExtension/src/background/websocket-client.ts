@@ -1,13 +1,23 @@
 // WebSocketを使用した通信クライアント
 
 export class WebSocketClient {
-    constructor(baseUrl = 'ws://127.0.0.1:5000') {
+    private baseUrl: string;
+    private isConnected: boolean;
+    private reconnectTimer: number | null;
+    private webSocket: WebSocket | null;
+
+    // コールバック関数を格納
+    private onConnectedCallback: (() => void) | null;
+    private onMessageCallback: ((message: any) => void) | null;
+    private onDisconnectedCallback: (() => void) | null;
+    private onErrorCallback: ((error: any) => void) | null;
+
+    constructor(baseUrl: string = 'ws://127.0.0.1:5000') {
         this.baseUrl = baseUrl;
         this.isConnected = false;
         this.reconnectTimer = null;
         this.webSocket = null;
 
-        // コールバック関数を格納
         this.onConnectedCallback = null;
         this.onMessageCallback = null;
         this.onDisconnectedCallback = null;
@@ -15,8 +25,7 @@ export class WebSocketClient {
     }
 
     // WebSocket接続を初期化
-    async initialize() {
-
+    async initialize(): Promise<void> {
         if (this.webSocket) {
             this.close();
         }
@@ -44,7 +53,7 @@ export class WebSocketClient {
             };
 
             // メッセージ受信イベント
-            this.webSocket.onmessage = (event) => {
+            this.webSocket.onmessage = (event: MessageEvent) => {
                 try {
                     const message = JSON.parse(event.data);
 
@@ -58,7 +67,7 @@ export class WebSocketClient {
             };
 
             // 切断イベント
-            this.webSocket.onclose = (event) => {
+            this.webSocket.onclose = (event: CloseEvent) => {
                 console.log('WebSocket connection closed', event.code, event.reason);
                 this.isConnected = false;
                 this.webSocket = null;
@@ -72,11 +81,11 @@ export class WebSocketClient {
                 this.reconnectTimer = setTimeout(() => {
                     console.log('Attempting to reconnect...');
                     this.initialize();
-                }, 1000);
+                }, 1000) as unknown as number;
             };
 
             // エラーイベント
-            this.webSocket.onerror = (error) => {
+            this.webSocket.onerror = (error: Event) => {
                 console.error('WebSocket error:', error);
 
                 // エラーコールバックを実行
@@ -95,12 +104,12 @@ export class WebSocketClient {
             }
 
             // 1秒後に再試行
-            this.reconnectTimer = setTimeout(() => this.initialize(), 1000);
+            this.reconnectTimer = setTimeout(() => this.initialize(), 1000) as unknown as number;
         }
     }
 
     // サーバーにメッセージを送信
-    async sendMessage(message) {
+    async sendMessage(message: any): Promise<void> {
         if (!this.isConnected || !this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
             console.warn('WebSocket is not connected, message not sent:', message);
             return;
@@ -120,29 +129,29 @@ export class WebSocketClient {
     }
 
     // 接続状態を取得
-    getConnectionStatus() {
+    getConnectionStatus(): boolean {
         return this.isConnected;
     }
 
     // コールバック登録関数
-    onConnected(callback) {
+    onConnected(callback: () => void): void {
         this.onConnectedCallback = callback;
     }
 
-    onMessage(callback) {
+    onMessage(callback: (message: any) => void): void {
         this.onMessageCallback = callback;
     }
 
-    onDisconnected(callback) {
+    onDisconnected(callback: () => void): void {
         this.onDisconnectedCallback = callback;
     }
 
-    onError(callback) {
+    onError(callback: (error: any) => void): void {
         this.onErrorCallback = callback;
     }
 
     // 接続をクローズ
-    close() {
+    close(): void {
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
