@@ -109,7 +109,7 @@ export class WebSocketClient {
     }
 
     // サーバーにメッセージを送信
-    async sendMessage(message: any): Promise<void> {
+    async sendMessage(message: any, enableLog: boolean = true): Promise<void> {
         if (!this.isConnected || !this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
             console.warn('WebSocket is not connected, message not sent:', message);
             return;
@@ -118,13 +118,17 @@ export class WebSocketClient {
         try {
             const jsonMessage = JSON.stringify(message);
 
-            console.log('Sending WebSocket Message:', message);
+            if (enableLog) {
+                console.log('[WebSocketClient] Start sendMessage:', message);
+            }
 
             this.webSocket.send(jsonMessage);
 
-            console.log('Message sent successfully:', message);
+            if (enableLog) {
+                console.log('[WebSocketClient] Finish sendMessage:', message);
+            }
         } catch (error) {
-            console.error('Failed to send message:', error);
+            console.error('[WebSocketClient] Failed sendMessage:', error);
         }
     }
 

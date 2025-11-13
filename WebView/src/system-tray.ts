@@ -181,7 +181,6 @@ export function setupSystemTray(): void {
 
     switch (data.type) {
       case 'pinned_tabs_response':
-        console.log('pinned_tabs_response');
         updatePinnedTabs(data.tabs as PinnedTab[]);
         break;
       default:

@@ -10,7 +10,7 @@ export function heartbeatStart(webSocketClient: WebSocketClient): void {
     heartbeatTimer = setInterval(() => {
         if (webSocketClient.getConnectionStatus()) {
             console.log('Sending heartbeat ping...');
-            webSocketClient.sendMessage({ action: 'ping', data: {} });
+            webSocketClient.sendMessage({ action: 'ping', data: {} }, false);
         }
     }, heartbeatInterval) as unknown as number;
 
