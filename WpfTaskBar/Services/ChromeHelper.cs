@@ -122,9 +122,9 @@ namespace WpfTaskBar
 							}
 
 							// アクティブになったら通知フラグをクリア
-							var foregroundWindow = NativeMethods.GetForegroundWindow();
-							var isForegroundWindow = oldTabInfo.Hwnd == (int)foregroundWindow;
-							if (isForegroundWindow && oldTabInfo.Active == true)
+							var foregroundWindow = (int)NativeMethods.GetForegroundWindow();
+							var isForegroundWindow = oldTabInfo.Hwnd == foregroundWindow;
+							if (isForegroundWindow && tabInfo.Active == true)
 							{
 								oldTabInfo.HasNotification = false;
 							}
