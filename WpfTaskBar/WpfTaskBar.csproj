@@ -63,4 +63,12 @@
         <None Include="$(OutputPath)\libs\**\*" CopyToOutputDirectory="Always" LinkBase="libs" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Page Update="MainWindow.xaml">
+        <Generator>MSBuild:Compile</Generator>
+        <XamlRuntime>Wpf</XamlRuntime>
+        <SubType>Designer</SubType>
+      </Page>
+    </ItemGroup>
+
 </Project>
