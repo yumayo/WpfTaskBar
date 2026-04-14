@@ -10,10 +10,14 @@ function openDevTools(): void {
   sendMessageToHost('open_dev_tools');
 }
 
+function isTaskListArea(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest('#taskList') !== null;
+}
+
 // コンテキストメニューの制御
 export function setupContextMenu(): void {
   document.addEventListener('contextmenu', (e) => {
-    if ((e.target as HTMLElement).closest('.task-item')) {
+    if (!isTaskListArea(e.target)) {
       return;
     }
 

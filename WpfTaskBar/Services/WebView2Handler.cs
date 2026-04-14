@@ -14,6 +14,7 @@ namespace WpfTaskBar
 {
 	public class WebView2Handler
 	{
+		private const string WebViewDevServerUrl = "http://localhost:13001";
 		private Dispatcher? _dispatcher;
 		private WebView2? _webView2;
 		private readonly ChromeHelper _chromeHelper;
@@ -41,7 +42,7 @@ namespace WpfTaskBar
 				_webView2.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
 #if DEBUG
-				_webView2.CoreWebView2.Navigate("http://localhost:5173");
+				_webView2.CoreWebView2.Navigate(WebViewDevServerUrl);
 #else
 				// HTMLファイルのパスを取得
 				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView", "index.html");

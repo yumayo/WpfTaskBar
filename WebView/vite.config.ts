@@ -35,6 +35,10 @@ if (process.env.NODE_ENV === 'production') {
 } else {
     config = {
         base: './',
+        server: {
+            port: 13001,
+            strictPort: true
+        },
         build: {
             outDir: '../dist',
             emptyOutDir: true,
