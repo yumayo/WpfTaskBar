@@ -17,6 +17,7 @@ public partial class AppxPackageUtility
         Console.WriteLine(sindent + "PublisherId            : " + package.PublisherId);
         Console.WriteLine(sindent + "Logo                   : " + package.Logo);
         Console.WriteLine(sindent + "Best Logo Path         : " + package.FindHighestScaleQualifiedImagePath(package.Logo));
+        Console.WriteLine(sindent + "Resolved Logo Path     : " + package.GetBestLogoPath());
         Console.WriteLine(sindent + "ProcessorArchitecture  : " + package.ProcessorArchitecture);
         Console.WriteLine(sindent + "Version                : " + package.Version);
         Console.WriteLine(sindent + "PublisherDisplayName   : " + package.PublisherDisplayName);
@@ -44,6 +45,7 @@ public partial class AppxPackageUtility
             Console.WriteLine(sindent + " App [" + i + "] StartPage         : " + app.StartPage);
             Console.WriteLine(sindent + " App [" + i + "] Square150x150Logo : " + app.Square150x150Logo);
             Console.WriteLine(sindent + " App [" + i + "] Square30x30Logo   : " + app.Square30x30Logo);
+            Console.WriteLine(sindent + " App [" + i + "] Square44x44Logo   : " + app.Square44x44Logo);
             Console.WriteLine(sindent + " App [" + i + "] BackgroundColor   : " + app.BackgroundColor);
             Console.WriteLine(sindent + " App [" + i + "] ForegroundText    : " + app.ForegroundText);
             Console.WriteLine(sindent + " App [" + i + "] WideLogo          : " + app.WideLogo);

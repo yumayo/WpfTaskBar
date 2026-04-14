@@ -5,6 +5,9 @@ namespace WpfTaskBar;
 
 public class NativeMethods
 {
+	private const ushort VT_EMPTY = 0;
+	private const ushort VT_LPWSTR = 31;
+
 	public static readonly int GWL_STYLE = -16;
 	public static readonly ulong WS_VISIBLE = 0x10000000L;
 	public static readonly ulong WS_BORDER = 0x00800000L;
@@ -36,9 +39,15 @@ public class NativeMethods
 	public static readonly uint WM_CLOSE = 0x0010;
 	public static readonly uint WM_QUIT = 0x0012;
 	public static readonly uint WM_SYSCOMMAND = 0x0112;
+	public static readonly uint WM_GETICON = 0x007F;
 	public static readonly int SC_RESTORE = 0xF120;
 	public static readonly int SC_MINIMIZE = 0xF020;
 	public static readonly int SC_CLOSE = 0xF060;
+	public static readonly int ICON_SMALL = 0;
+	public static readonly int ICON_BIG = 1;
+	public static readonly int ICON_SMALL2 = 2;
+	public static readonly int GCL_HICON = -14;
+	public static readonly int GCL_HICONSM = -34;
 
 	// GetWindow用の定数
 	public static readonly uint GW_HWNDFIRST = 0;
@@ -117,6 +126,19 @@ public class NativeMethods
 	[DllImport("user32.dll", CharSet = CharSet.Auto)]
 	public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
+	[DllImport("user32.dll", EntryPoint = "GetClassLongPtr", SetLastError = true)]
+	public static extern IntPtr GetClassLongPtr64(IntPtr hWnd, int nIndex);
+
+	[DllImport("user32.dll", EntryPoint = "GetClassLong", SetLastError = true)]
+	public static extern uint GetClassLongPtr32(IntPtr hWnd, int nIndex);
+
+	public static IntPtr GetClassLongPtr(IntPtr hWnd, int nIndex)
+	{
+		return IntPtr.Size == 8
+			? GetClassLongPtr64(hWnd, nIndex)
+			: new IntPtr(unchecked((int)GetClassLongPtr32(hWnd, nIndex)));
+	}
+
 	[DllImport("user32.dll", CharSet = CharSet.Auto)]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
@@ -170,4 +192,55 @@ public class NativeMethods
 	[DllImport("gdi32.dll")]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public static extern bool DeleteObject(IntPtr hObject);
+
+	[DllImport("shell32.dll")]
+	public static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, [In] ref Guid riid, [Out, MarshalAs(UnmanagedType.Interface)] out IPropertyStore propertyStore);
+
+	[DllImport("ole32.dll")]
+	public static extern int PropVariantClear(ref PROPVARIANT pvar);
+
+	[StructLayout(LayoutKind.Sequential, Pack = 4)]
+	public struct PROPERTYKEY
+	{
+		public Guid fmtid;
+		public uint pid;
+
+		public PROPERTYKEY(Guid fmtid, uint pid)
+		{
+			this.fmtid = fmtid;
+			this.pid = pid;
+		}
+	}
+
+	[StructLayout(LayoutKind.Explicit)]
+	public struct PROPVARIANT
+	{
+		[FieldOffset(0)]
+		public ushort vt;
+		[FieldOffset(8)]
+		public IntPtr pointerValue;
+
+		public string? GetValue()
+		{
+			return vt == VT_LPWSTR && pointerValue != IntPtr.Zero
+				? Marshal.PtrToStringUni(pointerValue)
+				: null;
+		}
+
+		public bool IsEmpty => vt == VT_EMPTY;
+	}
+
+	[ComImport]
+	[Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+	public interface IPropertyStore
+	{
+		uint GetCount([Out] out uint cProps);
+		uint GetAt([In] uint iProp, out PROPERTYKEY pkey);
+		uint GetValue([In] ref PROPERTYKEY key, out PROPVARIANT pv);
+		uint SetValue([In] ref PROPERTYKEY key, [In] ref PROPVARIANT pv);
+		uint Commit();
+	}
+
+	public static readonly PROPERTYKEY PKEY_AppUserModel_ID = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
 }

@@ -68,12 +68,7 @@ namespace WpfTaskBar
 			// PNG画像を読み込む
 			using (Bitmap originalImage = new Bitmap(pngFilePath))
 			{
-				// 元のサイズが200x200でない場合はリサイズ
-				Bitmap resizedImage = originalImage;
-				// if (originalImage.Width != 200 || originalImage.Height != 200)
-				// {
-				// 	resizedImage = new Bitmap(originalImage, new Size(200, 200));
-				// }
+				using Bitmap normalizedImage = NormalizeIconBitmap(originalImage);
 
 				using (var iconStream = new MemoryStream())
 				{
@@ -88,8 +83,8 @@ namespace WpfTaskBar
 					iconStream.WriteByte(0); // 予約済み。常に0
 
 					// ディレクトリエントリ (16バイト)
-					iconStream.WriteByte((byte)resizedImage.Width); // 幅 (200は255より小さいのでそのまま)
-					iconStream.WriteByte((byte)resizedImage.Height); // 高さ
+					iconStream.WriteByte((byte)normalizedImage.Width); // 幅
+					iconStream.WriteByte((byte)normalizedImage.Height); // 高さ
 					iconStream.WriteByte(0); // パレットサイズ。0=パレットなし
 					iconStream.WriteByte(0); // 予約済み。常に0
 					iconStream.WriteByte(0); // カラープレーン。常に0
@@ -101,7 +96,7 @@ namespace WpfTaskBar
 					using (MemoryStream tempStream = new MemoryStream())
 					{
 						// 画像データをPNG形式で一時ストリームに書き込む
-						resizedImage.Save(tempStream, ImageFormat.Png);
+						normalizedImage.Save(tempStream, ImageFormat.Png);
 						byte[] imageData = tempStream.ToArray();
 						int dataSize = imageData.Length;
 
@@ -126,6 +121,55 @@ namespace WpfTaskBar
 					return new Icon(iconStream);
 				}
 			}
+		}
+
+		private static Bitmap NormalizeIconBitmap(Bitmap originalImage)
+		{
+			var opaqueBounds = FindOpaqueBounds(originalImage);
+			if (opaqueBounds == Rectangle.Empty)
+			{
+				return new Bitmap(originalImage);
+			}
+
+			var sideLength = Math.Max(opaqueBounds.Width, opaqueBounds.Height);
+			var canvas = new Bitmap(sideLength, sideLength, PixelFormat.Format32bppArgb);
+			using var graphics = Graphics.FromImage(canvas);
+			graphics.Clear(Color.Transparent);
+
+			var destination = new Rectangle(
+				(sideLength - opaqueBounds.Width) / 2,
+				(sideLength - opaqueBounds.Height) / 2,
+				opaqueBounds.Width,
+				opaqueBounds.Height);
+
+			graphics.DrawImage(originalImage, destination, opaqueBounds, GraphicsUnit.Pixel);
+			return canvas;
+		}
+
+		private static Rectangle FindOpaqueBounds(Bitmap bitmap)
+		{
+			int left = bitmap.Width;
+			int top = bitmap.Height;
+			int right = -1;
+			int bottom = -1;
+
+			for (var y = 0; y < bitmap.Height; y++)
+			{
+				for (var x = 0; x < bitmap.Width; x++)
+				{
+					if (bitmap.GetPixel(x, y).A == 0)
+						continue;
+
+					left = Math.Min(left, x);
+					top = Math.Min(top, y);
+					right = Math.Max(right, x);
+					bottom = Math.Max(bottom, y);
+				}
+			}
+
+			return right < left || bottom < top
+				? Rectangle.Empty
+				: Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
 		}
 	}
 }

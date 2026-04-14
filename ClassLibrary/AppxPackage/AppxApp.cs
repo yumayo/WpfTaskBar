@@ -39,6 +39,8 @@
 
 		public string Square30x30Logo { get; internal set; } = "";
 
+		public string Square44x44Logo { get; internal set; } = "";
+
 		public string BackgroundColor { get; internal set; } = "";
 
 		public string ForegroundText { get; internal set; } = "";

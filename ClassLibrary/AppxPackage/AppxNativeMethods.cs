@@ -82,6 +82,16 @@ namespace WpfTaskBar
 		[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
 		public static extern int GetApplicationUserModelId(IntPtr hProcess, ref int applicationUserModelIdLength, StringBuilder applicationUserModelId);
 
+		[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+		public static extern int FindPackagesByPackageFamily(
+			string packageFamilyName,
+			uint packageFilters,
+			ref uint count,
+			IntPtr packageFullNames,
+			ref uint bufferLength,
+			IntPtr buffer,
+			IntPtr packageProperties);
+
 		[Flags]
 		public enum PackageConstants
 		{

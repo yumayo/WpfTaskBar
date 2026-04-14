@@ -2,6 +2,7 @@
 // https://stackoverflow.com/questions/32001621/how-to-get-the-application-name-from-hwnd-for-windows-10-store-apps-e-g-edge
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -71,8 +72,12 @@ public class UwpUtility
 			NativeMethods.EnumChildWindows(hWnd, lpEnumFunc, pWindowinfo);
 
 			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO))!;
+			if (windowinfo.childpid != windowinfo.ownerpid)
+			{
+				return (IntPtr)windowinfo.childpid;
+			}
 
-			return (IntPtr)windowinfo.childpid;
+			return FindDescendantUwpProcessId(windowinfo.ownerpid);
 		}
 		finally
 		{
@@ -134,6 +139,10 @@ public class UwpUtility
 			NativeMethods.EnumChildWindows(hWnd, lpEnumFunc, pWindowinfo);
 
 			windowinfo = (WINDOWINFO)Marshal.PtrToStructure(pWindowinfo, typeof(WINDOWINFO))!;
+			if (windowinfo.childpid == windowinfo.ownerpid)
+			{
+				windowinfo.childpid = (int)FindDescendantUwpProcessId(windowinfo.ownerpid);
+			}
 
 			IntPtr proc;
 			if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)windowinfo.childpid)) == IntPtr.Zero)
@@ -177,5 +186,43 @@ public class UwpUtility
 		Marshal.StructureToPtr(info, lParam, true);
 
 		return true;
+	}
+
+	private static IntPtr FindDescendantUwpProcessId(int rootProcessId)
+	{
+		var descendantProcessIds = ProcessUtility.GetDescendantProcessIds(rootProcessId);
+		IntPtr fallbackProcessId = IntPtr.Zero;
+		foreach (var descendantProcessId in descendantProcessIds)
+		{
+			try
+			{
+				var process = Process.GetProcessById(descendantProcessId);
+				if (string.Equals(process.ProcessName, "ApplicationFrameHost", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				if (fallbackProcessId == IntPtr.Zero)
+				{
+					fallbackProcessId = (IntPtr)descendantProcessId;
+				}
+
+				if (AppxPackage.FromUwpProcess(descendantProcessId) != null)
+				{
+					return (IntPtr)descendantProcessId;
+				}
+			}
+			catch
+			{
+				// ignore stale/inaccessible child processes and continue searching
+			}
+		}
+
+		if (fallbackProcessId != IntPtr.Zero)
+		{
+			return fallbackProcessId;
+		}
+
+		return (IntPtr)rootProcessId;
 	}
 }
