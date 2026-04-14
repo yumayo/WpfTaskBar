@@ -78,39 +78,6 @@ body {
   position: relative;
 }
 
-.fav-icon {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  border: 1px solid #000000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.fav-icon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.chrome-base-icon {
-  width: 100%;
-  height: 100%;
-}
-
-.chrome-favicon {
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
 .task-text {
   flex: 1;
   overflow: hidden;
@@ -125,95 +92,10 @@ body {
   -webkit-box-orient: vertical;
 }
 
-/* システムトレイ */
-.system-tray {
-  background-color: #21252b;
-  border-top: 1px solid #333841;
-  max-height: 400px;
-  overflow-y: auto;
-  display: none;
-  flex-direction: column-reverse;
-  padding-bottom: 8px;
-}
-
-.system-tray.visible {
-  display: flex;
-}
-
-.notification-item {
-  padding: 12px;
-  margin: 2px;
-  border-radius: 3px;
-}
-
-.notification-title {
-  font-weight: bold;
-  font-size: 12px;
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: space-between;
-}
-
-.notification-message {
-  font-size: 11px;
-  color: #999;
-  line-height: 1.3;
-}
-
-.notification-time {
-  font-size: 11px;
-  color: #777;
-}
-
-/* ピン留めされたタブ */
-.pinned-tabs-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 8px 0 8px;
-}
-
-.pinned-tab-icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  background-color: #2c313a;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.pinned-tab-icon:hover {
-  background-color: #333841;
-}
-
-.pinned-tab-icon img {
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
-  object-fit: contain;
-}
-
-.notification-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #ff4444;
-  border: 2px solid #1e2329;
-  pointer-events: none;
-}
-
 /* 時刻表示エリア */
 .time-area {
   background-color: #21252b;
   padding: 10px;
-  border-top: 1px solid #333841;
   text-align: center;
 }
 

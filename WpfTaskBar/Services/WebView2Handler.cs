@@ -1,6 +1,4 @@
 ﻿using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -17,15 +15,9 @@ namespace WpfTaskBar
 		private const string WebViewDevServerUrl = "http://localhost:13001";
 		private Dispatcher? _dispatcher;
 		private WebView2? _webView2;
-		private readonly ChromeHelper _chromeHelper;
-		private readonly FaviconCache _faviconCache;
-		private readonly WebSocketHandler _webSocketHandler;
 
-		public WebView2Handler(ChromeHelper chromeHelper, FaviconCache faviconCache, WebSocketHandler webSocketHandler)
+		public WebView2Handler()
 		{
-			_chromeHelper = chromeHelper;
-			_faviconCache = faviconCache;
-			_webSocketHandler = webSocketHandler;
 		}
 
 		public async Task InitializeAsync(Dispatcher dispatcher, WebView2 webView2)
@@ -185,18 +177,6 @@ namespace WpfTaskBar
 								HandleRequestTimeRecordStatus();
 								break;
 
-							case "request_pinned_tabs":
-								HandleRequestPinnedTabs();
-								break;
-
-							case "activate_tab":
-								HandleActivateTab(root);
-								break;
-
-							case "clear_notification":
-								HandleClearNotification(root);
-								break;
-
 							default:
 								Logger.Info($"未知のメッセージタイプ: {messageType}");
 								break;
@@ -351,38 +331,15 @@ namespace WpfTaskBar
 
 					var iconData = GetIconAsBase64(processName);
 
-					TabInfo? tabInfo = null;
-					if (processName.Contains("chrome.exe", StringComparison.OrdinalIgnoreCase))
+					var response = new
 					{
-						tabInfo = _chromeHelper.GetActiveTabInfoByHwnd(handle);
-					}
-
-					if (tabInfo != null)
-					{
-						var response = new
-						{
-							type = "window_info_response",
-							windowHandle = handle.ToInt32(),
-							moduleFileName = processName,
-							title,
-							iconData = "data:image/png;base64," + iconData,
-							url = tabInfo.Url,
-							favIconData = tabInfo.FavIconUrl != null ? _faviconCache.ConvertFaviconUrlToBase64(tabInfo.FavIconUrl) : null,
-						};
-						SendMessageToWebView(response);
-					}
-					else
-					{
-						var response = new
-						{
-							type = "window_info_response",
-							windowHandle = handle.ToInt32(),
-							moduleFileName = processName,
-							title,
-							iconData = "data:image/png;base64," + iconData,
-						};
-						SendMessageToWebView(response);
-					}
+						type = "window_info_response",
+						windowHandle = handle.ToInt32(),
+						moduleFileName = processName,
+						title,
+						iconData = "data:image/png;base64," + iconData,
+					};
+					SendMessageToWebView(response);
 				}
 			}
 			catch (Exception ex)
@@ -805,82 +762,5 @@ namespace WpfTaskBar
 			}
 		}
 
-		private void HandleRequestPinnedTabs()
-		{
-			try
-			{
-				var pinnedTabs = _chromeHelper.GetPinnedTabs();
-				var pinnedTabsData = pinnedTabs.Select(tab => new
-				{
-					tabId = tab.TabId,
-					index = tab.Index,
-					title = tab.Title,
-					url = tab.Url,
-					favIconUrl = tab.FavIconUrl,
-					favIconData = tab.FavIconUrl != null ? _faviconCache.ConvertFaviconUrlToBase64(tab.FavIconUrl) : null,
-					hasNotification = tab.HasNotification
-				}).ToList();
-
-				SendMessageToWebView(new
-				{
-					type = "pinned_tabs_response",
-					tabs = pinnedTabsData
-				});
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "ピン留めされたタブの取得時にエラーが発生しました。");
-			}
-		}
-
-		private void HandleClearNotification(JsonElement root)
-		{
-			try
-			{
-				if (root.TryGetProperty("tabId", out var tabIdElement))
-				{
-					var tabId = tabIdElement.GetInt32();
-					Logger.Info($"Clearing notification for tab: {tabId}");
-					_chromeHelper.ClearNotification(tabId);
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "通知のクリア時にエラーが発生しました。");
-			}
-		}
-
-		private void HandleActivateTab(JsonElement root)
-		{
-			try
-			{
-				if (root.TryGetProperty("tabId", out var tabIdElement))
-				{
-					var tabId = tabIdElement.GetInt32();
-					Logger.Info($"Activating tab: {tabId}");
-
-					// タブ情報を取得してChromeのhwndを取得
-					var tabInfo = _chromeHelper.GetTabByTabId(tabId);
-					if (tabInfo != null && tabInfo.Hwnd != 0)
-					{
-						var hwnd = new IntPtr(tabInfo.Hwnd);
-						Logger.Info($"Bringing Chrome window to foreground: hwnd={hwnd}");
-
-						// Chromeウィンドウを最前面にする
-						NativeMethods.SetForegroundWindow(hwnd);
-					}
-
-					// WebSocketHandlerを使ってChrome extensionにfocusTabメッセージを送信
-					Task.Run(async () =>
-					{
-						await _webSocketHandler.SendFocusTabMessage(tabId);
-					});
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "タブアクティブ化時にエラーが発生しました。");
-			}
-		}
 	}
 }

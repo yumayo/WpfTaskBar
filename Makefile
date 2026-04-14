@@ -8,9 +8,6 @@ artifact:
 	(cd WebView && npm run build)
 	mkdir -p dist/WebView
 	cp -r WebView/dist/* dist/WebView
-	(cd ChromeExtension && npm run build)
-	mkdir -p dist/ChromeExtension
-	cp -r ChromeExtension/dist/* dist/ChromeExtension
 	(cd dist && zip -r ../WpfTaskBar_${APP_VERSION}.zip .)
 	git.exe tag ${APP_VERSION} || true
 	git.exe push origin master

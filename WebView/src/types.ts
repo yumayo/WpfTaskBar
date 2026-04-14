@@ -29,20 +29,7 @@ export interface TaskBarItem {
   title: string;
   isForeground: boolean;
   iconData: string | null;
-  favIconData?: string | null;
-  tabId?: number;
   windowId?: number;
-  url?: string;
-}
-
-// Pinned tab
-export interface PinnedTab {
-  tabId: number;
-  title: string;
-  favIconUrl?: string;
-  favIconData?: string;
-  hasNotification: boolean;
-  index?: number;
 }
 
 // Time record

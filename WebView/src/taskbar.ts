@@ -201,10 +201,7 @@ async function createTaskBarItem(windowHandle: number, foregroundHwnd: number): 
       title: (windowInfo?.title as string) || '',
       isForeground: windowHandle === foregroundHwnd,
       iconData: (windowInfo?.iconData as string) || null,
-      favIconData: (windowInfo?.favIconData as string) || null,
-      tabId: (windowInfo?.tabId as number) || 0,
       windowId: (windowInfo?.windowId as number) || 0,
-      url: (windowInfo?.url as string) || '',
     };
   } catch (error) {
     console.error('Error creating TaskBarItem:', error);
@@ -452,7 +449,7 @@ function setupDragAndDrop(item: HTMLElement, task: TaskBarItem): void {
   // イベントリスナー
   item.addEventListener('click', (e) => onClick(item, task, e));
 
-  // 中クリックでプロセス終了（Chromeの場合はタブを閉じる）
+  // 中クリックでプロセス終了
   item.addEventListener('mousedown', (e) => onMouseDown(item, task, e));
 
   // ドラッグ開始
@@ -687,7 +684,6 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
 
         const dropTargetTask = {
           handle: parseInt((isAbove ? firstElement : lastElement).dataset.handle!, 10),
-          tabId: parseInt((isAbove ? firstElement : lastElement).dataset.tabId || '0', 10),
           windowId: parseInt((isAbove ? firstElement : lastElement).dataset.windowId || '0', 10),
         };
 
@@ -703,7 +699,6 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
 
       const dropTargetTask = {
         handle: parseInt(item.dataset.handle!, 10),
-        tabId: parseInt(item.dataset.tabId || '0', 10),
         windowId: parseInt(item.dataset.windowId || '0', 10),
       };
 
@@ -716,7 +711,7 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
 // タスクの順序を変更（同種アプリケーションの一括移動対応）
 function reorderTasks(
   draggedTask: TaskBarItem,
-  targetTask: { handle: number; tabId: number; windowId: number },
+  targetTask: { handle: number; windowId: number },
   dropAbove: boolean
 ): void {
   // targetTaskがdatasetオブジェクトの場合とtaskオブジェクトの場合を考慮
@@ -789,7 +784,7 @@ function reorderTasksWithSameApp(draggedHandle: number, targetHandle: number, dr
   taskBarItems = newTasks;
 }
 
-// 単一タスクの移動（インデックスベース、Chromeタブ用）
+// 単一タスクの移動（インデックスベース）
 function reorderSingleTaskByIndex(draggedIndex: number, targetIndex: number, dropAbove: boolean): void {
   if (draggedIndex === -1 || targetIndex === -1) {
     return;
@@ -854,7 +849,7 @@ function updateTaskItemContent(item: HTMLElement, task: TaskBarItem): void {
   const iconElement = item.querySelector('.task-icon');
   if (iconElement) {
     // メインアイコン（iconData）の更新
-    const imgElement = iconElement.querySelector('img:not(.fav-icon img)') as HTMLImageElement;
+    const imgElement = iconElement.querySelector('img') as HTMLImageElement;
     if (imgElement) {
       const currentIconSrc = imgElement.src;
       if (currentIconSrc !== task.iconData && task.iconData) {
