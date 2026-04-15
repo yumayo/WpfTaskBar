@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -34,7 +35,8 @@ using Microsoft.Web.WebView2.Wpf;
 				_webView2.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
 #if DEBUG
-				_webView2.CoreWebView2.Navigate(WebViewDevServerUrl);
+				var devUrl = $"{WebViewDevServerUrl}/?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+				_webView2.CoreWebView2.Navigate(devUrl);
 #else
 				// HTMLファイルのパスを取得
 				var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView", "index.html");
@@ -167,6 +169,14 @@ using Microsoft.Web.WebView2.Wpf;
 
 							case "exit_application":
 								Application.Current.Shutdown();
+								break;
+
+							case "open_task_manager":
+								HandleOpenTaskManager();
+								break;
+
+							case "open_app_data_folder":
+								HandleOpenAppDataFolder();
 								break;
 
 							case "open_dev_tools":
@@ -657,7 +667,44 @@ using Microsoft.Web.WebView2.Wpf;
 					error = ex.Message,
 					data = ""
 				});
-				Logger.Error(ex, $"ファイル読み込み時にエラーが発生しました: {filename}");
+					Logger.Error(ex, $"ファイル読み込み時にエラーが発生しました: {filename}");
+				}
+			}
+
+		private void HandleOpenTaskManager()
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "taskmgr.exe",
+					UseShellExecute = true
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タスクマネージャーの起動に失敗しました。");
+			}
+		}
+
+		private void HandleOpenAppDataFolder()
+		{
+			try
+			{
+				var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+				var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
+				Directory.CreateDirectory(appFolder);
+
+				Process.Start(new ProcessStartInfo
+				{
+					FileName = "explorer.exe",
+					Arguments = appFolder,
+					UseShellExecute = true
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "保存データフォルダを開く処理に失敗しました。");
 			}
 		}
 

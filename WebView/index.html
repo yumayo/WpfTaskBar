@@ -31,8 +31,10 @@
 
     <!-- コンテキストメニュー -->
     <div class="context-menu" id="contextMenu">
-        <div class="context-menu-item" onclick="openDevTools()">開発者ツール</div>
-        <div class="context-menu-item" onclick="exitApplication()">Exit</div>
+        <div class="context-menu-item" data-action="openTaskManager">タスクマネージャー</div>
+        <div class="context-menu-item" data-action="openAppDataFolder">保存データをエクスプローラーで開く</div>
+        <div class="context-menu-item" data-action="openDevTools">開発者ツール</div>
+        <div class="context-menu-item" data-action="exitApplication">Exit</div>
     </div>
 
     <script type="module" src="src/main.ts"></script>

@@ -152,12 +152,19 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   display: none;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .context-menu-item {
   padding: 8px 8px;
   cursor: pointer;
   font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .context-menu-item:hover {

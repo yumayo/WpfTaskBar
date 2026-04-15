@@ -37,7 +37,12 @@ if (process.env.NODE_ENV === 'production') {
         base: './',
         server: {
             port: 13001,
-            strictPort: true
+            strictPort: true,
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+                Pragma: 'no-cache',
+                Expires: '0'
+            }
         },
         build: {
             outDir: '../dist',
