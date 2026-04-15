@@ -197,6 +197,7 @@ async function createTaskBarItem(windowHandle: number, foregroundHwnd: number): 
     const windowInfo = await requestWindowInfo(windowHandle);
     return {
       handle: windowHandle,
+      sortKey: (windowInfo?.sortKey as string) || (windowInfo?.moduleFileName as string) || '',
       moduleFileName: (windowInfo?.moduleFileName as string) || '',
       title: (windowInfo?.title as string) || '',
       isForeground: windowHandle === foregroundHwnd,
@@ -207,6 +208,7 @@ async function createTaskBarItem(windowHandle: number, foregroundHwnd: number): 
     console.error('Error creating TaskBarItem:', error);
     return {
       handle: windowHandle,
+      sortKey: '',
       moduleFileName: '',
       title: '',
       isForeground: false,
@@ -352,7 +354,7 @@ function updateTaskListOrder(): void {
   // タスクバー一覧をアプリケーション名でトポロジカルソートする
   taskBarItems = window.applicationOrder.sortByRelations(
     taskBarItems,
-    (task) => task.moduleFileName,
+    (task) => task.sortKey,
     (task) => task.handle
   );
 
@@ -379,6 +381,8 @@ function updateTaskListOrder(): void {
 
     if (item) {
       // 既存の要素を再利用し、内容を更新
+      item.dataset.sortKey = task.sortKey;
+      item.dataset.moduleFileName = task.moduleFileName;
       updateTaskItemContent(item, task);
     } else {
       // 新しい要素を作成
@@ -413,6 +417,7 @@ function createTaskItem(task: TaskBarItem): HTMLElement {
   const item = document.createElement('div');
   item.className = `task-item ${task.isForeground ? 'foreground' : ''}`;
   item.dataset.handle = String(task.handle);
+  item.dataset.sortKey = task.sortKey;
   item.dataset.moduleFileName = task.moduleFileName;
   item.draggable = true; // ドラッグ可能にする
 
@@ -581,13 +586,13 @@ function onDragOver(item: HTMLElement, e: DragEvent): void {
       e.dataTransfer.dropEffect = 'move';
     }
 
-    const draggedModuleName = draggedElement.dataset.moduleFileName!;
-    const targetModuleName = item.dataset.moduleFileName!;
+    const draggedSortKey = draggedElement.dataset.sortKey!;
+    const targetSortKey = item.dataset.sortKey!;
 
     // 異なるアプリケーション
-    if (draggedModuleName !== targetModuleName) {
+    if (draggedSortKey !== targetSortKey) {
       const mouseY = e.clientY;
-      const elements = getItems(targetModuleName);
+      const elements = getItems(targetSortKey);
 
       if (!elements) {
         return;
@@ -595,7 +600,7 @@ function onDragOver(item: HTMLElement, e: DragEvent): void {
 
       const { firstElement, lastElement } = elements;
 
-      const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY);
+      const isAbove = isDropAboveApplicationGroup(targetSortKey, mouseY);
       if (isAbove !== null) {
         // 既存のクラスを削除
         firstElement.classList.remove('drag-over-above', 'drag-over-below');
@@ -647,10 +652,10 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
   item.classList.remove('drag-over-above', 'drag-over-below');
 
   if (draggedTask && draggedElement && draggedElement !== item) {
-    const draggedModuleName = draggedElement.dataset.moduleFileName!;
-    const targetModuleName = item.dataset.moduleFileName!;
+    const draggedSortKey = draggedElement.dataset.sortKey!;
+    const targetSortKey = item.dataset.sortKey!;
 
-    let differentApplication = draggedModuleName !== targetModuleName;
+    let differentApplication = draggedSortKey !== targetSortKey;
 
     if (draggedElement.dataset.windowId !== undefined && item.dataset.windowId !== undefined) {
       if (parseInt(draggedElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
@@ -661,7 +666,7 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
     // 異なるアプリケーション
     if (differentApplication) {
       const mouseY = e.clientY;
-      const elements = getItems(targetModuleName);
+      const elements = getItems(targetSortKey);
 
       if (!elements) {
         return;
@@ -669,7 +674,7 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
 
       const { firstElement, lastElement } = elements;
 
-      const isAbove = isDropAboveApplicationGroup(targetModuleName, mouseY);
+      const isAbove = isDropAboveApplicationGroup(targetSortKey, mouseY);
       if (isAbove !== null) {
         // 既存のクラスを削除
         firstElement.classList.remove('drag-over-above', 'drag-over-below');
@@ -726,10 +731,10 @@ function reorderTasks(
   const draggedTaskObj = taskBarItems[draggedIndex];
 
   // 同種アプリケーション（同じmoduleFileName）のタスクを全て取得
-  const draggedModuleName = draggedTaskObj.moduleFileName;
-  const targetModuleName = targetTaskObj.moduleFileName;
+  const draggedSortKey = draggedTaskObj.sortKey;
+  const targetSortKey = targetTaskObj.sortKey;
 
-  let differentApplication = draggedModuleName !== targetModuleName;
+  let differentApplication = draggedSortKey !== targetSortKey;
   if (draggedTaskObj.windowId !== targetTaskObj.windowId) {
     differentApplication = true;
   }
@@ -742,9 +747,9 @@ function reorderTasks(
     reorderSingleTask(draggedTaskObj.handle, targetTaskObj.handle, dropAbove);
   }
 
-  window.applicationOrder.updateOrderFromList(taskBarItems.map(task => task.moduleFileName));
+  window.applicationOrder.updateOrderFromList(taskBarItems.map(task => task.sortKey));
   window.applicationOrder.updateWindowOrder(
-    taskBarItems.map(task => ({ handle: task.handle, moduleFileName: task.moduleFileName }))
+    taskBarItems.map(task => ({ handle: task.handle, applicationKey: task.sortKey }))
   );
 
   // UIを更新
@@ -757,10 +762,10 @@ function reorderTasksWithSameApp(draggedHandle: number, targetHandle: number, dr
   const draggedTask = taskBarItems[draggedIndex];
 
   // 同じmoduleFileNameを持つタスクを全て取得（元の順序を保持）
-  const sameAppTasks = taskBarItems.filter(task => task.moduleFileName === draggedTask.moduleFileName);
+  const sameAppTasks = taskBarItems.filter(task => task.sortKey === draggedTask.sortKey);
 
   // 他のアプリケーションのタスクだけを残したリストを作成
-  const otherTasks = taskBarItems.filter(task => task.moduleFileName !== draggedTask.moduleFileName);
+  const otherTasks = taskBarItems.filter(task => task.sortKey !== draggedTask.sortKey);
 
   // ターゲットタスクの新しい位置を計算
   const targetNewIndex = otherTasks.findIndex(t => t.handle === targetHandle);
@@ -860,8 +865,8 @@ function updateTaskItemContent(item: HTMLElement, task: TaskBarItem): void {
 }
 
 // アプリケーショングループ全体でのマウス位置判定
-function isDropAboveApplicationGroup(targetModuleName: string, mouseY: number): boolean | null {
-  const elements = getItems(targetModuleName);
+function isDropAboveApplicationGroup(targetSortKey: string, mouseY: number): boolean | null {
+  const elements = getItems(targetSortKey);
 
   if (!elements) {
     return null;
@@ -881,8 +886,8 @@ function isDropAboveApplicationGroup(targetModuleName: string, mouseY: number): 
 }
 
 // アプリケーショングループの開始・終了インデックスを取得
-function getItems(targetModuleName: string): { firstElement: HTMLElement; lastElement: HTMLElement } | null {
-  const range = getApplicationGroupRange(targetModuleName);
+function getItems(targetSortKey: string): { firstElement: HTMLElement; lastElement: HTMLElement } | null {
+  const range = getApplicationGroupRange(targetSortKey);
 
   if (range.startIndex === -1 || range.endIndex === -1) {
     return null;
@@ -903,12 +908,12 @@ function getItems(targetModuleName: string): { firstElement: HTMLElement; lastEl
 }
 
 // アプリケーショングループの開始・終了インデックスを取得
-function getApplicationGroupRange(targetModuleName: string): { startIndex: number; endIndex: number } {
+function getApplicationGroupRange(targetSortKey: string): { startIndex: number; endIndex: number } {
   let startIndex = -1;
   let endIndex = -1;
 
   for (let i = 0; i < taskBarItems.length; i++) {
-    if (taskBarItems[i].moduleFileName === targetModuleName) {
+    if (taskBarItems[i].sortKey === targetSortKey) {
       if (startIndex === -1) {
         startIndex = i;
       }

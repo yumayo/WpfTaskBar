@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -334,16 +335,27 @@ using Microsoft.Web.WebView2.Wpf;
 				    dataElement.TryGetProperty("windowHandle", out var handleElement))
 				{
 					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
-					var processName = UwpUtility.GetProcessName(handle) ?? "";
+					var rawProcessName = UwpUtility.GetRawProcessName(handle) ?? "";
+					var processName = UwpUtility.GetProcessName(handle) ?? rawProcessName;
+					var resolvedProcessId = UwpUtility.GetProcessId(handle);
+					var sortKey = GetStableSortKey(handle, rawProcessName, processName);
 					var sb = new StringBuilder(255);
 					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 					var title = sb.ToString();
 					var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
+					var rawFileName = Path.GetFileName(rawProcessName);
+					if (string.Equals(rawFileName, "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ||
+					    !string.Equals(rawProcessName, processName, StringComparison.OrdinalIgnoreCase))
+					{
+						Logger.Info(
+							$"WindowInfoTrace handle={handle.ToInt64()} rawProcess={rawProcessName} resolvedProcess={processName} resolvedProcessId={resolvedProcessId.ToInt64()} sortKey={sortKey} title={title}");
+					}
 
 					var response = new
 					{
 						type = "window_info_response",
 						windowHandle = handle.ToInt32(),
+						sortKey,
 						moduleFileName = processName,
 						title,
 						iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
@@ -725,6 +737,72 @@ using Microsoft.Web.WebView2.Wpf;
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "時刻記録の状態取得時にエラーが発生しました。");
+			}
+		}
+
+		private static string GetStableSortKey(IntPtr handle, string rawProcessName, string resolvedProcessName)
+		{
+			var aumid = GetWindowApplicationUserModelId(handle);
+			if (!string.IsNullOrWhiteSpace(aumid))
+			{
+				return $"aumid:{aumid}";
+			}
+
+			var package = AppxPackage.FromWindow(handle);
+			if (package != null)
+			{
+				if (!string.IsNullOrWhiteSpace(package.ApplicationUserModelId))
+				{
+					return $"aumid:{package.ApplicationUserModelId}";
+				}
+
+				if (!string.IsNullOrWhiteSpace(package.FamilyName))
+				{
+					return $"package:{package.FamilyName}";
+				}
+			}
+
+			if (!string.IsNullOrWhiteSpace(resolvedProcessName))
+			{
+				return $"process:{resolvedProcessName}";
+			}
+
+			if (!string.IsNullOrWhiteSpace(rawProcessName))
+			{
+				return $"process:{rawProcessName}";
+			}
+
+			return $"handle:{handle.ToInt64()}";
+		}
+
+		private static string? GetWindowApplicationUserModelId(IntPtr handle)
+		{
+			NativeMethods.IPropertyStore? propertyStore = null;
+			NativeMethods.PROPVARIANT value = default;
+			try
+			{
+				var propertyStoreGuid = typeof(NativeMethods.IPropertyStore).GUID;
+				var hr = NativeMethods.SHGetPropertyStoreForWindow(handle, ref propertyStoreGuid, out propertyStore);
+				if (hr != 0 || propertyStore == null)
+				{
+					return null;
+				}
+
+				var key = NativeMethods.PKEY_AppUserModel_ID;
+				var propertyHr = propertyStore.GetValue(ref key, out value);
+				return propertyHr == 0 ? value.GetValue() : null;
+			}
+			finally
+			{
+				if (!value.IsEmpty)
+				{
+					NativeMethods.PropVariantClear(ref value);
+				}
+
+				if (propertyStore != null)
+				{
+					Marshal.ReleaseComObject(propertyStore);
+				}
 			}
 		}
 

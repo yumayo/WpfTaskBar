@@ -118,6 +118,11 @@ public sealed class WindowIconService
 			return new IconPayload(null, $"{tracePrefix} path=(null) output=(null)");
 		}
 
+		if (ShouldSkipIconLookup(moduleFileName))
+		{
+			return new IconPayload(null, $"{tracePrefix} path={moduleFileName} output=skipped");
+		}
+
 		try
 		{
 			if (IsRasterImageFile(moduleFileName))
@@ -175,6 +180,23 @@ public sealed class WindowIconService
 			|| extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase)
 			|| extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
 			|| extension.Equals(".webp", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool ShouldSkipIconLookup(string path)
+	{
+		if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+		{
+			if (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+			{
+				var fileName = Path.GetFileName(uri.AbsolutePath);
+				return string.Equals(fileName, "favicon.ico", StringComparison.OrdinalIgnoreCase)
+					|| fileName.StartsWith("favicon", StringComparison.OrdinalIgnoreCase);
+			}
+		}
+
+		var localFileName = Path.GetFileName(path);
+		return string.Equals(localFileName, "favicon.ico", StringComparison.OrdinalIgnoreCase)
+			|| localFileName.StartsWith("favicon.", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static (System.Drawing.Icon? Icon, string Source, System.Drawing.Size Size) GetWindowIcon(IntPtr handle)

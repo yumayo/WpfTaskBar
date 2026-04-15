@@ -17,38 +17,29 @@ public struct WINDOWINFO
 
 public class UwpUtility
 {
+	public static string? GetRawProcessName(IntPtr hWnd)
+	{
+		return GetWindowProcessImagePath(hWnd);
+	}
+
 	public static IntPtr GetProcessId(IntPtr hWnd)
 	{
-		string? processName = null;
-
 		int pID;
 		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);
-
-		IntPtr proc;
-		if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)pID)) == IntPtr.Zero)
+		var processName = GetProcessImagePathFromProcessId(pID);
+		if (processName == null)
+		{
 			return IntPtr.Zero;
-
-		try
-		{
-			int capacity = 2000;
-			StringBuilder sb = new StringBuilder(capacity);
-			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
-
-			processName = sb.ToString(0, capacity);
-
-			// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
-			if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
-			{
-				var childProcId = UwpProcessId(hWnd, pID);
-				return childProcId;
-			}
-
-			return (IntPtr)pID;
 		}
-		finally
+
+		// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
+		if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
 		{
-			NativeMethods.CloseHandle(proc);
+			var childProcId = UwpProcessId(hWnd, pID);
+			return childProcId;
 		}
+
+		return (IntPtr)pID;
 	}
 
 	/// <summary>
@@ -87,35 +78,21 @@ public class UwpUtility
 	
 	public static string? GetProcessName(IntPtr hWnd)
 	{
-		string? processName = null;
-
 		int pID;
 		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);
-
-		IntPtr proc;
-		if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, (int)pID)) == IntPtr.Zero)
+		var processName = GetProcessImagePathFromProcessId(pID);
+		if (processName == null)
+		{
 			return null;
-
-		try
-		{
-			int capacity = 2000;
-			StringBuilder sb = new StringBuilder(capacity);
-			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
-
-			processName = sb.ToString(0, capacity);
-
-			// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
-			if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
-			{
-				processName = UWP_AppName(hWnd, pID);
-			}
-
-			return processName;
 		}
-		finally
+
+		// UWP apps are wrapped in another app called, if this has focus then try and find the child UWP process
+		if (Path.GetFileName(processName).Equals("ApplicationFrameHost.exe"))
 		{
-			NativeMethods.CloseHandle(proc);
+			processName = UWP_AppName(hWnd, pID);
 		}
+
+		return processName;
 	}
 
 	/// <summary>
@@ -224,5 +201,33 @@ public class UwpUtility
 		}
 
 		return (IntPtr)rootProcessId;
+	}
+
+	private static string? GetWindowProcessImagePath(IntPtr hWnd)
+	{
+		int pID;
+		NativeMethods.GetWindowThreadProcessId(hWnd, out pID);
+		return GetProcessImagePathFromProcessId(pID);
+	}
+
+	private static string? GetProcessImagePathFromProcessId(int processId)
+	{
+		IntPtr proc;
+		if ((proc = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_INFORMATION | NativeMethods.PROCESS_VM_READ, false, processId)) == IntPtr.Zero)
+		{
+			return null;
+		}
+
+		try
+		{
+			int capacity = 2000;
+			StringBuilder sb = new StringBuilder(capacity);
+			NativeMethods.QueryFullProcessImageName(proc, 0, sb, ref capacity);
+			return sb.ToString(0, capacity);
+		}
+		finally
+		{
+			NativeMethods.CloseHandle(proc);
+		}
 	}
 }

@@ -25,6 +25,7 @@ export interface MessageData {
 // Task bar item
 export interface TaskBarItem {
   handle: number;
+  sortKey: string;
   moduleFileName: string;
   title: string;
   isForeground: boolean;
@@ -41,8 +42,8 @@ export interface TimeRecord {
 // Application Order class interface
 export interface ApplicationOrder {
   setup(): Promise<void>;
-  updateOrderFromList(orderedPaths: string[]): void;
-  updateWindowOrder(orderedWindows: Array<{ handle: number; moduleFileName: string }>): void;
+  updateOrderFromList(orderedKeys: string[]): void;
+  updateWindowOrder(orderedWindows: Array<{ handle: number; applicationKey: string }>): void;
   sortByRelations<T>(
     items: T[],
     getExecutablePath: (item: T) => string,

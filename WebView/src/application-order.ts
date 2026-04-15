@@ -22,8 +22,8 @@ export class ApplicationOrder implements IApplicationOrder {
   /**
    * アプリケーションの順序を更新する
    */
-  updateOrderFromList(orderedPaths: string[]): void {
-    const pathList = orderedPaths.filter(p => p && p.trim() !== '');
+  updateOrderFromList(orderedKeys: string[]): void {
+    const pathList = orderedKeys.filter(p => p && p.trim() !== '');
 
     for (let i = 0; i < pathList.length; i++) {
       const currentApp = pathList[i];
@@ -48,22 +48,22 @@ export class ApplicationOrder implements IApplicationOrder {
   /**
    * ウィンドウの順序を更新する
    */
-  updateWindowOrder(orderedWindows: Array<{ handle: number; moduleFileName: string }>): void {
+  updateWindowOrder(orderedWindows: Array<{ handle: number; applicationKey: string }>): void {
     const windowsByApp = new Map<string, number[]>();
 
     // アプリケーションごとにウィンドウをグループ化
     orderedWindows
-      .filter(w => w.handle && w.moduleFileName && w.moduleFileName.trim() !== '')
+      .filter(w => w.handle && w.applicationKey && w.applicationKey.trim() !== '')
       .forEach(w => {
-        if (!windowsByApp.has(w.moduleFileName)) {
-          windowsByApp.set(w.moduleFileName, []);
+        if (!windowsByApp.has(w.applicationKey)) {
+          windowsByApp.set(w.applicationKey, []);
         }
-        windowsByApp.get(w.moduleFileName)!.push(w.handle);
+        windowsByApp.get(w.applicationKey)!.push(w.handle);
       });
 
     // ウィンドウ順序を更新
-    windowsByApp.forEach((handles, moduleFileName) => {
-      this.windowOrderByApplication.set(moduleFileName, handles);
+    windowsByApp.forEach((handles, applicationKey) => {
+      this.windowOrderByApplication.set(applicationKey, handles);
     });
 
     this.saveWindowOrder();
