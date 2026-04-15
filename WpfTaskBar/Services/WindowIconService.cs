@@ -12,6 +12,7 @@ public sealed class WindowIconService
 	public sealed record IconResult(string? Base64, string Trace);
 
 	private sealed record IconPayload(string? Base64, string Trace);
+	private sealed record CachedIconPayload(string? Base64, string TraceSuffix);
 	private sealed record ExeIconResult(BitmapSource? SelectedIcon, string ComparisonTrace);
 	private sealed record ResolvedIconSource(string? PreferredPath, string AppxTrace, string? ProcessPath);
 
@@ -20,6 +21,9 @@ public sealed class WindowIconService
 
 	private readonly ConcurrentDictionary<long, string> _lastIconTraceByHandle = new();
 	private readonly ConcurrentDictionary<string, string> _exeComparisonTraceByPath = new(StringComparer.OrdinalIgnoreCase);
+	private readonly ConcurrentDictionary<long, string?> _aumidByHandle = new();
+	private readonly ConcurrentDictionary<string, ResolvedIconSource> _resolvedIconSourceByKey = new(StringComparer.OrdinalIgnoreCase);
+	private readonly ConcurrentDictionary<string, CachedIconPayload> _iconPayloadByPath = new(StringComparer.OrdinalIgnoreCase);
 
 	public IconResult ResolveWindowIcon(IntPtr handle, string? processPath, string title)
 	{
@@ -123,6 +127,12 @@ public sealed class WindowIconService
 			return new IconPayload(null, $"{tracePrefix} path={moduleFileName} output=skipped");
 		}
 
+		var cachedPayload = _iconPayloadByPath.GetOrAdd(moduleFileName, CreateCachedIconPayload);
+		return new IconPayload(cachedPayload.Base64, $"{tracePrefix} {cachedPayload.TraceSuffix}");
+	}
+
+	private CachedIconPayload CreateCachedIconPayload(string moduleFileName)
+	{
 		try
 		{
 			if (IsRasterImageFile(moduleFileName))
@@ -131,9 +141,9 @@ public sealed class WindowIconService
 				using var imageStream = new MemoryStream(bytes);
 				var bitmap = BitmapFrame.Create(imageStream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
 				bitmap.Freeze();
-				return new IconPayload(
+				return new CachedIconPayload(
 					Convert.ToBase64String(bytes),
-					$"{tracePrefix} path={moduleFileName} kind=raster output={bitmap.PixelWidth}x{bitmap.PixelHeight}");
+					$"path={moduleFileName} kind=raster output={bitmap.PixelWidth}x{bitmap.PixelHeight}");
 			}
 
 			var traceSuffix = string.Empty;
@@ -152,7 +162,7 @@ public sealed class WindowIconService
 			if (icon == null)
 			{
 				Logger.Info($"GetIconAsBase64: アイコン取得失敗 {moduleFileName}");
-				return new IconPayload(null, $"{tracePrefix} path={moduleFileName} kind=icon output=(null){traceSuffix}");
+				return new CachedIconPayload(null, $"path={moduleFileName} kind=icon output=(null){traceSuffix}");
 			}
 
 			var encoder = new PngBitmapEncoder();
@@ -160,14 +170,14 @@ public sealed class WindowIconService
 
 			using var stream = new MemoryStream();
 			encoder.Save(stream);
-			return new IconPayload(
+			return new CachedIconPayload(
 				Convert.ToBase64String(stream.ToArray()),
-				$"{tracePrefix} path={moduleFileName} kind=icon output={icon.PixelWidth}x{icon.PixelHeight}{traceSuffix}");
+				$"path={moduleFileName} kind=icon output={icon.PixelWidth}x{icon.PixelHeight}{traceSuffix}");
 		}
 		catch (Exception ex)
 		{
 			Logger.Error(ex, $"アイコンの変換に失敗しました: {moduleFileName}");
-			return new IconPayload(null, $"{tracePrefix} path={moduleFileName} output=error");
+			return new CachedIconPayload(null, $"path={moduleFileName} output=error");
 		}
 	}
 
@@ -263,21 +273,28 @@ public sealed class WindowIconService
 		});
 	}
 
-	private static ResolvedIconSource ResolveIconSource(IntPtr handle, string? processPath)
+	private ResolvedIconSource ResolveIconSource(IntPtr handle, string? processPath)
 	{
-		var aumid = GetWindowApplicationUserModelId(handle);
-		var package = !string.IsNullOrWhiteSpace(aumid)
-			? AppxPackage.FromApplicationUserModelId(aumid)
-			: AppxPackage.FromWindow(handle);
-		var packageLogoSelection = package?.GetBestLogoSelection();
-		if (package is { } resolvedPackage && packageLogoSelection != null)
-		{
-			var appxTrace = $"appx=[aumid:{aumid ?? "(null)"},package:{resolvedPackage.FullName},label:{packageLogoSelection.Label},resource:{packageLogoSelection.Resource ?? "(null)"},preferred:{packageLogoSelection.PreferredSize},score:{packageLogoSelection.TargetSizeScore}/{packageLogoSelection.Scale}/{packageLogoSelection.Unplated}]";
-			return new ResolvedIconSource(packageLogoSelection.Path, appxTrace, processPath);
-		}
+		var aumid = _aumidByHandle.GetOrAdd(handle.ToInt64(), _ => GetWindowApplicationUserModelId(handle));
+		var cacheKey = !string.IsNullOrWhiteSpace(aumid)
+			? $"aumid:{aumid}"
+			: $"process:{processPath ?? string.Empty}";
 
-		var fallbackTrace = $"appx=[aumid:{aumid ?? "(null)"},package:{package?.FullName ?? "(null)"},label:(none),resource:(none),preferred:(none),score:(none)]";
-		return new ResolvedIconSource(processPath, fallbackTrace, processPath);
+		return _resolvedIconSourceByKey.GetOrAdd(cacheKey, _ =>
+		{
+			var package = !string.IsNullOrWhiteSpace(aumid)
+				? AppxPackage.FromApplicationUserModelId(aumid)
+				: AppxPackage.FromWindow(handle);
+			var packageLogoSelection = package?.GetBestLogoSelection();
+			if (package is { } resolvedPackage && packageLogoSelection != null)
+			{
+				var appxTrace = $"appx=[aumid:{aumid ?? "(null)"},package:{resolvedPackage.FullName},label:{packageLogoSelection.Label},resource:{packageLogoSelection.Resource ?? "(null)"},preferred:{packageLogoSelection.PreferredSize},score:{packageLogoSelection.TargetSizeScore}/{packageLogoSelection.Scale}/{packageLogoSelection.Unplated}]";
+				return new ResolvedIconSource(packageLogoSelection.Path, appxTrace, processPath);
+			}
+
+			var fallbackTrace = $"appx=[aumid:{aumid ?? "(null)"},package:{package?.FullName ?? "(null)"},label:(none),resource:(none),preferred:(none),score:(none)]";
+			return new ResolvedIconSource(processPath, fallbackTrace, processPath);
+		});
 	}
 
 	private static string? GetWindowApplicationUserModelId(IntPtr handle)

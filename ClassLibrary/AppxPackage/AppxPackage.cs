@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
@@ -10,11 +11,33 @@ namespace WpfTaskBar
 		public sealed record LogoSelection(string Label, string? Resource, string Path, int PreferredSize, int TargetSizeScore, int Scale, int Unplated);
 
 		private const int DefaultPreferredLogoSize = 64;
+		private static readonly ConcurrentDictionary<string, AppxPackage[]> QueryPackageInfoCache = new(StringComparer.OrdinalIgnoreCase);
+		private static readonly ConcurrentDictionary<string, string[]> PackageFullNamesByFamilyCache = new(StringComparer.OrdinalIgnoreCase);
 		private List<AppxApp> _apps = new List<AppxApp>();
 		private AppxNativeMethods.IAppxManifestProperties _properties = null!;
 
 		private AppxPackage()
 		{
+		}
+
+		private AppxPackage(AppxPackage source)
+		{
+			FullName = source.FullName;
+			Path = source.Path;
+			Publisher = source.Publisher;
+			PublisherId = source.PublisherId;
+			ResourceId = source.ResourceId;
+			FamilyName = source.FamilyName;
+			ApplicationUserModelId = source.ApplicationUserModelId;
+			Logo = source.Logo;
+			PublisherDisplayName = source.PublisherDisplayName;
+			Description = source.Description;
+			DisplayName = source.DisplayName;
+			IsFramework = source.IsFramework;
+			Version = source.Version;
+			ProcessorArchitecture = source.ProcessorArchitecture;
+			_properties = source._properties;
+			_apps = source._apps;
 		}
 
 		public string FullName { get; private set; } = "";
@@ -135,6 +158,11 @@ namespace WpfTaskBar
 		public override string ToString()
 		{
 			return FullName;
+		}
+
+		private AppxPackage Clone()
+		{
+			return new AppxPackage(this);
 		}
 
 		public static AppxPackage? FromWindow(IntPtr handle)
@@ -281,6 +309,16 @@ namespace WpfTaskBar
 
 		private static IEnumerable<AppxPackage> QueryPackageInfo(string fullName, AppxNativeMethods.PackageConstants flags)
 		{
+			var cacheKey = $"{flags}:{fullName}";
+			foreach (var package in QueryPackageInfoCache.GetOrAdd(cacheKey, _ => LoadPackageInfo(fullName, flags)))
+			{
+				yield return package.Clone();
+			}
+		}
+
+		private static AppxPackage[] LoadPackageInfo(string fullName, AppxNativeMethods.PackageConstants flags)
+		{
+			var packages = new List<AppxPackage>();
 			IntPtr infoRef;
 			AppxNativeMethods.OpenPackageInfoByFullName(fullName, 0, out infoRef);
 			if (infoRef != IntPtr.Zero)
@@ -353,7 +391,7 @@ namespace WpfTaskBar
 								}
 								Marshal.ReleaseComObject(strm);
 							}
-							yield return package;
+							packages.Add(package);
 						}
 						Marshal.ReleaseComObject(factory);
 					}
@@ -367,6 +405,8 @@ namespace WpfTaskBar
 					AppxNativeMethods.ClosePackageInfo(infoRef);
 				}
 			}
+
+			return packages.ToArray();
 		}
 
 		public static string? LoadResourceString(string packageFullName, string resource)
@@ -572,6 +612,15 @@ namespace WpfTaskBar
 
 		private static IEnumerable<string> FindPackageFullNamesByFamily(string familyName)
 		{
+			foreach (var fullName in PackageFullNamesByFamilyCache.GetOrAdd(familyName, LoadPackageFullNamesByFamily))
+			{
+				yield return fullName;
+			}
+		}
+
+		private static string[] LoadPackageFullNamesByFamily(string familyName)
+		{
+			var fullNames = new List<string>();
 			uint count = 0;
 			uint bufferLength = 0;
 			var result = AppxNativeMethods.FindPackagesByPackageFamily(
@@ -583,7 +632,7 @@ namespace WpfTaskBar
 				IntPtr.Zero,
 				IntPtr.Zero);
 			if (count == 0 || bufferLength == 0)
-				yield break;
+				return fullNames.ToArray();
 
 			var fullNamePointers = Marshal.AllocHGlobal(IntPtr.Size * (int)count);
 			var buffer = Marshal.AllocHGlobal(sizeof(char) * (int)bufferLength);
@@ -598,14 +647,14 @@ namespace WpfTaskBar
 					buffer,
 					IntPtr.Zero);
 				if (result != 0 || count == 0)
-					yield break;
+					return fullNames.ToArray();
 
 				for (var i = 0; i < count; i++)
 				{
 					var fullNamePtr = Marshal.ReadIntPtr(fullNamePointers, i * IntPtr.Size);
 					var fullName = Marshal.PtrToStringUni(fullNamePtr);
 					if (!string.IsNullOrWhiteSpace(fullName))
-						yield return fullName;
+						fullNames.Add(fullName);
 				}
 			}
 			finally
@@ -613,6 +662,8 @@ namespace WpfTaskBar
 				Marshal.FreeHGlobal(buffer);
 				Marshal.FreeHGlobal(fullNamePointers);
 			}
+
+			return fullNames.ToArray();
 		}
 
 
