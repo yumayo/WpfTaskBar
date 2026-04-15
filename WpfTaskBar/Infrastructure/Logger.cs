@@ -5,9 +5,19 @@ namespace WpfTaskBar;
 
 public class Logger
 {
+	private enum LogLevel
+	{
+		Trace = 0,
+		Debug = 1,
+		Info = 2,
+		Warning = 3,
+		Error = 4
+	}
+
 	private static Logger? _singleton;
 
 	private static readonly string LogName = "WpfTaskBar";
+	private static readonly LogLevel MinimumLogLevel = LogLevel.Info;
 
 	private readonly TextWriter _textWriterSynchronized;
 
@@ -35,28 +45,38 @@ public class Logger
 		_singleton = new Logger(textWriterSynchronized);
 	}
 
+	public static void Trace(object message)
+	{
+		_singleton?.InternalLog(LogLevel.Trace, "TRACE", message);
+	}
+
 	public static void Debug(object message)
 	{
-		_singleton?.InternalLog("DEBUG", message);
+		_singleton?.InternalLog(LogLevel.Debug, "DEBUG", message);
 	}
 
 	public static void Info(object message)
 	{
-		_singleton?.InternalLog(" INFO", message);
+		_singleton?.InternalLog(LogLevel.Info, " INFO", message);
 	}
 
 	public static void Warning(object message)
 	{
-		_singleton?.InternalLog(" WARN", message);
+		_singleton?.InternalLog(LogLevel.Warning, " WARN", message);
 	}
 
 	public static void Error(Exception? exception, object message)
 	{
-		_singleton?.InternalLog("ERROR", message, exception);
+		_singleton?.InternalLog(LogLevel.Error, "ERROR", message, exception);
 	}
 
-	private void InternalLog(string type, object message, Exception? exception = null)
+	private void InternalLog(LogLevel level, string type, object message, Exception? exception = null)
 	{
+		if (level < MinimumLogLevel)
+		{
+			return;
+		}
+
 		var now = DateTime.Now;
 		var dateTimeString = now.ToString("yyyy-MM-dd HH:mm:ss");
 		var sb = new StringBuilder();

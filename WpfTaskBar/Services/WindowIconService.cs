@@ -82,7 +82,7 @@ public sealed class WindowIconService
 		}
 
 		_lastIconTraceByHandle[key] = iconTrace;
-		Logger.Info($"IconTrace handle={key} process={processName ?? ""} title={title} source={iconTrace}");
+		Logger.Trace($"IconTrace handle={key} process={processName ?? ""} title={title} source={iconTrace}");
 	}
 
 	private IconPayload GetIconPayload(System.Drawing.Icon icon, string tracePrefix)

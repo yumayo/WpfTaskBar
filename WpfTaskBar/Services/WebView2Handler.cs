@@ -347,7 +347,7 @@ using Microsoft.Web.WebView2.Wpf;
 					if (string.Equals(rawFileName, "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ||
 					    !string.Equals(rawProcessName, processName, StringComparison.OrdinalIgnoreCase))
 					{
-						Logger.Info(
+						Logger.Trace(
 							$"WindowInfoTrace handle={handle.ToInt64()} rawProcess={rawProcessName} resolvedProcess={processName} resolvedProcessId={resolvedProcessId.ToInt64()} sortKey={sortKey} title={title}");
 					}
 
