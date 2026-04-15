@@ -20,6 +20,7 @@ namespace WpfTaskBar
                 });
             });
 
+            services.AddSingleton<WindowIconService>();
             services.AddSingleton<WebView2Handler>();
         }
 

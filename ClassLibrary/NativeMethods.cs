@@ -196,6 +196,21 @@ public class NativeMethods
 	[DllImport("shell32.dll")]
 	public static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, [In] ref Guid riid, [Out, MarshalAs(UnmanagedType.Interface)] out IPropertyStore propertyStore);
 
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	public static extern uint PrivateExtractIcons(
+		string szFileName,
+		int nIconIndex,
+		int cxIcon,
+		int cyIcon,
+		[Out] IntPtr[] phicon,
+		[Out] uint[] piconid,
+		uint nIcons,
+		uint flags);
+
+	[DllImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool DestroyIcon(IntPtr hIcon);
+
 	[DllImport("ole32.dll")]
 	public static extern int PropVariantClear(ref PROPVARIANT pvar);
 

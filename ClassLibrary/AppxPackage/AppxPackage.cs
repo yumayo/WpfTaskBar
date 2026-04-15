@@ -7,6 +7,8 @@ namespace WpfTaskBar
 {
 	public sealed class AppxPackage
 	{
+		public sealed record LogoSelection(string Label, string? Resource, string Path, int PreferredSize, int TargetSizeScore, int Scale, int Unplated);
+
 		private const int DefaultPreferredLogoSize = 64;
 		private List<AppxApp> _apps = new List<AppxApp>();
 		private AppxNativeMethods.IAppxManifestProperties _properties = null!;
@@ -105,15 +107,25 @@ namespace WpfTaskBar
 
 		public string? GetBestLogoPath()
 		{
-			return GetBestLogoPath(FindAppByApplicationUserModelId());
+			return GetBestLogoSelection(FindAppByApplicationUserModelId())?.Path;
 		}
 
 		public string? GetBestLogoPath(AppxApp? app)
 		{
+			return GetBestLogoSelection(app)?.Path;
+		}
+
+		public LogoSelection? GetBestLogoSelection()
+		{
+			return GetBestLogoSelection(FindAppByApplicationUserModelId());
+		}
+
+		public LogoSelection? GetBestLogoSelection(AppxApp? app)
+		{
 			foreach (var candidate in EnumerateLogoCandidates(app))
 			{
-				var resolved = ResolveBestImagePath(candidate.Resource);
-				if (!string.IsNullOrWhiteSpace(resolved))
+				var resolved = ResolveBestImageSelection(candidate.Label, candidate.Resource);
+				if (resolved != null)
 					return resolved;
 			}
 
@@ -392,24 +404,44 @@ namespace WpfTaskBar
 
 		private string? ResolveBestImagePath(string? resourceName)
 		{
+			return ResolveBestImageSelection("", resourceName)?.Path;
+		}
+
+		private LogoSelection? ResolveBestImageSelection(string label, string? resourceName)
+		{
 			if (string.IsNullOrWhiteSpace(resourceName) || resourceName.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase))
 				return null;
 
 			var normalizedResourceName = resourceName.Replace('/', System.IO.Path.DirectorySeparatorChar);
+			var preferredSize = GetPreferredLogoSize(normalizedResourceName);
 			if (System.IO.Path.IsPathRooted(normalizedResourceName))
-				return System.IO.File.Exists(normalizedResourceName) ? normalizedResourceName : null;
+			{
+				if (!System.IO.File.Exists(normalizedResourceName))
+					return null;
+
+				return new LogoSelection(label, resourceName, normalizedResourceName, preferredSize, 3000, 100, 0);
+			}
 
 			var exactPath = System.IO.Path.Combine(Path, normalizedResourceName);
 			var directory = System.IO.Path.GetDirectoryName(exactPath);
 			if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory))
-				return System.IO.File.Exists(exactPath) ? exactPath : null;
+			{
+				if (!System.IO.File.Exists(exactPath))
+					return null;
+
+				return new LogoSelection(label, resourceName, exactPath, preferredSize, 3000, 100, 0);
+			}
 
 			var baseName = System.IO.Path.GetFileNameWithoutExtension(normalizedResourceName);
 			var extension = System.IO.Path.GetExtension(normalizedResourceName);
 			if (string.IsNullOrWhiteSpace(baseName) || string.IsNullOrWhiteSpace(extension))
-				return System.IO.File.Exists(exactPath) ? exactPath : null;
+			{
+				if (!System.IO.File.Exists(exactPath))
+					return null;
 
-			var preferredSize = GetPreferredLogoSize(normalizedResourceName);
+				return new LogoSelection(label, resourceName, exactPath, preferredSize, 3000, 100, 0);
+			}
+
 			return System.IO.Directory
 				.EnumerateFiles(directory, $"{baseName}*{extension}")
 				.Where(file => IsQualifiedResourceMatch(file, baseName, extension))
@@ -422,7 +454,7 @@ namespace WpfTaskBar
 				.ThenByDescending(x => x.Score.Scale)
 				.ThenByDescending(x => x.Score.Unplated)
 				.ThenBy(x => x.Path.Length)
-				.Select(x => x.Path)
+				.Select(x => new LogoSelection(label, resourceName, x.Path, preferredSize, x.Score.TargetSizeScore, x.Score.Scale, x.Score.Unplated))
 				.FirstOrDefault();
 		}
 

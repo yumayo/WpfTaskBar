@@ -1,25 +1,24 @@
 ﻿using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Interop;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
-namespace WpfTaskBar
-{
-	public class WebView2Handler
+	namespace WpfTaskBar
 	{
-		private const string WebViewDevServerUrl = "http://localhost:13001";
-		private Dispatcher? _dispatcher;
-		private WebView2? _webView2;
-
-		public WebView2Handler()
+		public class WebView2Handler
 		{
-		}
+			private const string WebViewDevServerUrl = "http://localhost:13001";
+			private readonly WindowIconService _windowIconService;
+			private Dispatcher? _dispatcher;
+			private WebView2? _webView2;
+
+			public WebView2Handler(WindowIconService windowIconService)
+			{
+				_windowIconService = windowIconService;
+			}
 
 		public async Task InitializeAsync(Dispatcher dispatcher, WebView2 webView2)
 		{
@@ -329,22 +328,7 @@ namespace WpfTaskBar
 					var sb = new StringBuilder(255);
 					NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 					var title = sb.ToString();
-
-					var windowIcon = GetWindowIcon(handle);
-					string? iconPath = null;
-					string? iconData;
-					if (windowIcon != null)
-					{
-						using (windowIcon)
-						{
-							iconData = GetIconAsBase64(windowIcon);
-						}
-					}
-					else
-					{
-						iconPath = ResolveIconPath(handle, processName);
-						iconData = GetIconAsBase64(iconPath);
-					}
+					var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
 
 					var response = new
 					{
@@ -352,7 +336,7 @@ namespace WpfTaskBar
 						windowHandle = handle.ToInt32(),
 						moduleFileName = processName,
 						title,
-						iconData = iconData != null ? "data:image/png;base64," + iconData : null,
+						iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
 					};
 					SendMessageToWebView(response);
 				}
@@ -360,199 +344,6 @@ namespace WpfTaskBar
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ウィンドウ情報取得時にエラーが発生しました。");
-			}
-		}
-
-		private string? GetIconAsBase64(System.Drawing.Icon icon)
-		{
-			try
-			{
-				var bitmapSource = GetIcon(icon);
-				if (bitmapSource == null)
-				{
-					return null;
-				}
-
-				var encoder = new PngBitmapEncoder();
-				encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
-
-				using var stream = new MemoryStream();
-				encoder.Save(stream);
-				return Convert.ToBase64String(stream.ToArray());
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, "ウィンドウハンドル由来のアイコン変換に失敗しました。");
-				return null;
-			}
-		}
-
-		private string? GetIconAsBase64(string? moduleFileName)
-		{
-			if (string.IsNullOrEmpty(moduleFileName))
-			{
-				return null;
-			}
-
-			try
-			{
-				var icon = GetIcon(moduleFileName);
-				if (icon == null)
-				{
-					Logger.Info($"GetIconAsBase64: アイコン取得失敗 {moduleFileName}");
-					return null;
-				}
-
-				// BitmapSourceをBase64に変換
-				var encoder = new PngBitmapEncoder();
-				encoder.Frames.Add(BitmapFrame.Create(icon));
-
-				using var stream = new MemoryStream();
-				encoder.Save(stream);
-				var base64String = Convert.ToBase64String(stream.ToArray());
-				return base64String;
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, $"アイコンの変換に失敗しました: {moduleFileName}");
-				return null;
-			}
-		}
-
-		private static System.Drawing.Icon? GetWindowIcon(IntPtr handle)
-		{
-			var small2Handle = NativeMethods.SendMessage(handle, NativeMethods.WM_GETICON, (IntPtr)NativeMethods.ICON_SMALL2, IntPtr.Zero);
-			var smallHandle = small2Handle != IntPtr.Zero
-				? IntPtr.Zero
-				: NativeMethods.SendMessage(handle, NativeMethods.WM_GETICON, (IntPtr)NativeMethods.ICON_SMALL, IntPtr.Zero);
-			var bigHandle = small2Handle != IntPtr.Zero || smallHandle != IntPtr.Zero
-				? IntPtr.Zero
-				: NativeMethods.SendMessage(handle, NativeMethods.WM_GETICON, (IntPtr)NativeMethods.ICON_BIG, IntPtr.Zero);
-			var classSmallHandle = small2Handle != IntPtr.Zero || smallHandle != IntPtr.Zero || bigHandle != IntPtr.Zero
-				? IntPtr.Zero
-				: NativeMethods.GetClassLongPtr(handle, NativeMethods.GCL_HICONSM);
-			var classBigHandle = small2Handle != IntPtr.Zero || smallHandle != IntPtr.Zero || bigHandle != IntPtr.Zero || classSmallHandle != IntPtr.Zero
-				? IntPtr.Zero
-				: NativeMethods.GetClassLongPtr(handle, NativeMethods.GCL_HICON);
-
-			var iconHandle = small2Handle != IntPtr.Zero ? small2Handle
-				: smallHandle != IntPtr.Zero ? smallHandle
-				: bigHandle != IntPtr.Zero ? bigHandle
-				: classSmallHandle != IntPtr.Zero ? classSmallHandle
-				: classBigHandle;
-
-			if (iconHandle == IntPtr.Zero)
-			{
-				return null;
-			}
-
-			try
-			{
-				return (System.Drawing.Icon)System.Drawing.Icon.FromHandle(iconHandle).Clone();
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, $"ウィンドウアイコンの取得に失敗しました: handle={handle}");
-				return null;
-			}
-		}
-
-		private static string? ResolveIconPath(IntPtr handle, string? processPath)
-		{
-			var aumid = GetWindowApplicationUserModelId(handle);
-			var package = !string.IsNullOrWhiteSpace(aumid)
-				? AppxPackage.FromApplicationUserModelId(aumid)
-				: AppxPackage.FromWindow(handle);
-			var packageLogoPath = package?.GetBestLogoPath();
-			if (!string.IsNullOrWhiteSpace(packageLogoPath))
-			{
-				return packageLogoPath;
-			}
-
-			return processPath;
-		}
-
-		private static string? GetWindowApplicationUserModelId(IntPtr handle)
-		{
-			NativeMethods.IPropertyStore? propertyStore = null;
-			NativeMethods.PROPVARIANT value = default;
-			try
-			{
-				var propertyStoreGuid = typeof(NativeMethods.IPropertyStore).GUID;
-				var hr = NativeMethods.SHGetPropertyStoreForWindow(handle, ref propertyStoreGuid, out propertyStore);
-				if (hr != 0 || propertyStore == null)
-				{
-					return null;
-				}
-
-				var key = NativeMethods.PKEY_AppUserModel_ID;
-				var propertyHr = propertyStore.GetValue(ref key, out value);
-				return propertyHr == 0 ? value.GetValue() : null;
-			}
-			catch (Exception ex)
-			{
-				Logger.Error(ex, $"AUMID の取得に失敗しました: handle={handle}");
-				return null;
-			}
-			finally
-			{
-				if (!value.IsEmpty)
-				{
-					NativeMethods.PropVariantClear(ref value);
-				}
-
-				if (propertyStore != null)
-				{
-					Marshal.ReleaseComObject(propertyStore);
-				}
-			}
-		}
-
-		public static BitmapSource? GetIcon(string iconFilePath)
-		{
-			try
-			{
-				System.Drawing.Icon? icon;
-				if (iconFilePath.ToUpper().EndsWith("EXE"))
-				{
-					icon = System.Drawing.Icon.ExtractAssociatedIcon(iconFilePath);
-				}
-				else
-				{
-					icon = IconUtility.ConvertPngToIcon(iconFilePath);
-				}
-				return icon != null ? GetIcon(icon) : null;
-			}
-			catch (System.ComponentModel.Win32Exception ex)
-			{
-				if (ex.Message.Contains("アクセスが拒否されました"))
-				{
-					return null;
-				}
-				throw;
-			}
-			catch (Exception e)
-			{
-				Console.WriteLine(e);
-				return null;
-			}
-		}
-
-		public static BitmapSource? GetIcon(System.Drawing.Icon icon)
-		{
-			using (var bitmap = icon.ToBitmap())
-			{
-				var hBitmap = bitmap.GetHbitmap();
-				try
-				{
-					var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(hBitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-					bitmapSource.Freeze();
-					return bitmapSource;
-				}
-				finally
-				{
-					NativeMethods.DeleteObject(hBitmap);
-				}
 			}
 		}
 

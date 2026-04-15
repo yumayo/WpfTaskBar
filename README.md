@@ -48,7 +48,7 @@ docker compose up -d --build && docker compose exec ai bash -i -c "claude -c"
 
 ```sh
 wsl
-make artifact APP_VERSION=v0.xx.zip
+make artifact APP_VERSION=v0.xx
 ```
 
 # Gitプッシュ
