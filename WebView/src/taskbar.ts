@@ -140,10 +140,15 @@ function updateTaskBarWindows(nextTaskBarItems: TaskBarItem[]): void {
   }
 }
 
-// フォアグラウンドウィンドウの取得
-async function requestForegroundWindow(): Promise<number> {
+type TaskClickResponse = {
+  handle: number;
+  action: 'activate' | 'restore' | 'minimize';
+  foregroundHandle: number;
+};
+
+async function requestTaskClick(handle: number): Promise<TaskClickResponse> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestForegroundWindow timeout')), 1000);
+    const timeout = setTimeout(() => reject(new Error('requestTaskClick timeout')), 1000);
 
     const responseHandler = (event: MessageEvent) => {
       try {
@@ -154,10 +159,10 @@ async function requestForegroundWindow(): Promise<number> {
           data = event.data;
         }
 
-        if (data && data.type === 'foreground_window_response') {
+        if (data && data.type === 'task_click_response' && data.handle === handle) {
           clearTimeout(timeout);
           window.chrome!.webview!.removeEventListener('message', responseHandler);
-          resolve(data.foregroundWindow as number);
+          resolve(data as unknown as TaskClickResponse);
         }
       } catch (error) {
         clearTimeout(timeout);
@@ -167,73 +172,7 @@ async function requestForegroundWindow(): Promise<number> {
     };
 
     window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_foreground_window');
-  });
-}
-
-// ウィンドウが最小化されているかを確認
-async function requestIsWindowMinimized(handle: number): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestIsWindowMinimized timeout')), 1000);
-
-    const responseHandler = (event: MessageEvent) => {
-      try {
-        let data: MessageData;
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          data = event.data;
-        }
-
-        if (data && data.type === 'is_window_minimized_response') {
-          if (data.handle === handle) {
-            clearTimeout(timeout);
-            window.chrome!.webview!.removeEventListener('message', responseHandler);
-            resolve(data.isMinimized as boolean);
-          }
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        window.chrome!.webview!.removeEventListener('message', responseHandler);
-        reject(error);
-      }
-    };
-
-    window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_is_window_minimized', { handle: handle });
-  });
-}
-
-// 次にアクティブになるウィンドウを取得
-async function requestNextWindowToActivate(handle: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestNextWindowToActivate timeout')), 1000);
-
-    const responseHandler = (event: MessageEvent) => {
-      try {
-        let data: MessageData;
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          data = event.data;
-        }
-
-        if (data && data.type === 'next_window_to_activate_response') {
-          if (data.currentHandle === handle) {
-            clearTimeout(timeout);
-            window.chrome!.webview!.removeEventListener('message', responseHandler);
-            resolve(data.nextHandle as number);
-          }
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        window.chrome!.webview!.removeEventListener('message', responseHandler);
-        reject(error);
-      }
-    };
-
-    window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_next_window_to_activate', { handle: handle });
+    sendMessageToHost('task_click', { handle });
   });
 }
 
@@ -380,45 +319,11 @@ async function onClick(item: HTMLElement, task: TaskBarItem, _e: MouseEvent): Pr
   lastClickTime = Date.now();
 
   try {
-    // ウィンドウが最小化されているか確認
-    const isMinimized = await requestIsWindowMinimized(task.handle);
-
-    if (isMinimized) {
-      // 最小化されている場合は復元してアクティブ化
-      sendMessageToHost('restore_window', { handle: task.handle });
-
-      // クリックされたアイテムに foreground クラスを追加
-      item.classList.add('foreground');
-    } else {
-      // 現在のフォアグラウンドウィンドウを取得
-      const foregroundWindow = await requestForegroundWindow();
-
-      // クリックされたウィンドウが既にアクティブな場合
-      if (task.handle === foregroundWindow) {
-        // 次にアクティブになるウィンドウを取得
-        const nextHandle = await requestNextWindowToActivate(task.handle);
-
-        // 次にアクティブになるitemを探してforegroundクラスを付与
-        if (nextHandle && nextHandle !== 0) {
-          const nextItem = taskBarItems.find(t => t.handle === nextHandle);
-          if (nextItem) {
-            const nextElementSelector = `.task-item[data-handle="${nextItem.handle}"]`;
-            const nextElement = document.querySelector(nextElementSelector);
-            if (nextElement) {
-              nextElement.classList.add('foreground');
-            }
-          }
-        }
-
-        // ウィンドウを最小化
-        sendMessageToHost('minimize_window', { handle: task.handle });
-      } else {
-        // ウィンドウをアクティブにする
-        sendMessageToHost('activate_window', { handle: task.handle });
-
-        // クリックされたアイテムに foreground クラスを追加
-        item.classList.add('foreground');
-      }
+    const response = await requestTaskClick(task.handle);
+    const foregroundHandle = response.foregroundHandle;
+    if (foregroundHandle && foregroundHandle !== 0) {
+      const foregroundElement = document.querySelector(`.task-item[data-handle="${foregroundHandle}"]`);
+      foregroundElement?.classList.add('foreground');
     }
   } catch (error) {
     console.error('Error in onClick:', error);

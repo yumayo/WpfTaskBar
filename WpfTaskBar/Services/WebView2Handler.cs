@@ -13,6 +13,10 @@ using Microsoft.Web.WebView2.Wpf;
 		public class WebView2Handler
 		{
 			private const string WebViewDevServerUrl = "http://localhost:13001";
+			private static readonly TimeSpan SlowMessageThreshold = TimeSpan.FromMilliseconds(80);
+			private static readonly TimeSpan QueuedMessageThreshold = TimeSpan.FromMilliseconds(80);
+			private static long _nextWebMessageId;
+			private static int _activeBackgroundMessages;
 			private readonly WindowIconService _windowIconService;
 			private Dispatcher? _dispatcher;
 			private WebView2? _webView2;
@@ -58,7 +62,13 @@ using Microsoft.Web.WebView2.Wpf;
 
 		public void SendMessageToWebView(object data)
 		{
-			_dispatcher?.Invoke(() =>
+			var dispatcher = _dispatcher;
+			if (dispatcher == null)
+			{
+				return;
+			}
+
+			void Send()
 			{
 				if (_webView2?.CoreWebView2 != null)
 				{
@@ -76,7 +86,16 @@ using Microsoft.Web.WebView2.Wpf;
 				{
 					Logger.Error(null, "WebView2が初期化されていません。メッセージ送信をスキップします。");
 				}
-			});
+			}
+
+			if (dispatcher.CheckAccess())
+			{
+				Send();
+			}
+			else
+			{
+				dispatcher.BeginInvoke((Action)Send, DispatcherPriority.Send);
+			}
 		}
 
 		private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -113,93 +132,7 @@ using Microsoft.Web.WebView2.Wpf;
 					if (root.TryGetProperty("type", out var typeElement))
 					{
 						var messageType = typeElement.GetString();
-
-						switch (messageType)
-						{
-							case "request_window_handles":
-								HandleRequestWindowHandles();
-								break;
-
-							case "request_foreground_window":
-								HandleRequestForegroundWindow();
-								break;
-
-							case "request_window_snapshot":
-								HandleRequestWindowSnapshot();
-								break;
-
-							case "request_taskbar_items":
-								HandleRequestTaskBarItems(root);
-								break;
-
-							case "request_is_taskbar_window":
-								HandleRequestIsTaskBarWindow(root);
-								break;
-
-							case "request_window_info":
-								HandleRequestWindowInfo(root);
-								break;
-
-							case "request_is_window_on_current_virtual_desktop":
-								HandleRequestIsWindowOnCurrentVirtualDesktop(root);
-								break;
-
-							case "task_middle_click":
-								HandleTaskMiddleClick(root);
-								break;
-
-							case "request_is_window_minimized":
-								HandleRequestIsWindowMinimized(root);
-								break;
-
-							case "request_next_window_to_activate":
-								HandleRequestNextWindowToActivate(root);
-								break;
-
-							case "restore_window":
-								HandleRestoreWindow(root);
-								break;
-
-							case "minimize_window":
-								HandleMinimizeWindow(root);
-								break;
-
-							case "activate_window":
-								HandleActivateWindow(root);
-								break;
-
-							case "file_write_request":
-								HandleFileWriteRequest(root);
-								break;
-
-							case "file_read_request":
-								HandleFileReadRequest(root);
-								break;
-
-							case "exit_application":
-								Application.Current.Shutdown();
-								break;
-
-							case "open_task_manager":
-								HandleOpenTaskManager();
-								break;
-
-							case "open_app_data_folder":
-								HandleOpenAppDataFolder();
-								break;
-
-							case "open_dev_tools":
-								HandleOpenDevTools();
-								break;
-
-							case "request_time_record_status":
-								HandleRequestTimeRecordStatus();
-								break;
-
-							default:
-								Logger.Info($"未知のメッセージタイプ: {messageType}");
-								break;
-						}
+						DispatchWebMessage(messageType, root);
 					}
 				}
 			}
@@ -207,6 +140,195 @@ using Microsoft.Web.WebView2.Wpf;
 			{
 				Logger.Error(ex, "WebView2メッセージ処理時にエラーが発生しました。");
 			}
+		}
+
+		private void DispatchWebMessage(string? messageType, JsonElement root)
+		{
+			if (string.IsNullOrEmpty(messageType))
+			{
+				return;
+			}
+
+			var queuedDuration = GetClientQueuedDuration(root);
+			if (ShouldRunInBackground(messageType))
+			{
+				var messageId = Interlocked.Increment(ref _nextWebMessageId);
+				var rootClone = root.Clone();
+				var activeAtStart = Interlocked.Increment(ref _activeBackgroundMessages);
+
+				_ = Task.Run(() =>
+				{
+					var stopwatch = Stopwatch.StartNew();
+					try
+					{
+						ProcessWebMessage(messageType, rootClone);
+					}
+					catch (Exception ex)
+					{
+						Logger.Error(ex, $"WebView2バックグラウンドメッセージ処理時にエラーが発生しました。 type={messageType} id={messageId}");
+					}
+					finally
+					{
+						stopwatch.Stop();
+						var activeAfterFinish = Interlocked.Decrement(ref _activeBackgroundMessages);
+						LogWebMessageTiming(messageType, messageId, stopwatch.Elapsed, queuedDuration, activeAtStart, activeAfterFinish);
+					}
+				});
+
+				return;
+			}
+
+			var inlineId = Interlocked.Increment(ref _nextWebMessageId);
+			var inlineStopwatch = Stopwatch.StartNew();
+			ProcessWebMessage(messageType, root);
+			inlineStopwatch.Stop();
+			LogWebMessageTiming(messageType, inlineId, inlineStopwatch.Elapsed, queuedDuration, 0, _activeBackgroundMessages);
+		}
+
+		private static bool ShouldRunInBackground(string messageType)
+		{
+			return messageType is
+				"request_window_handles" or
+				"request_window_snapshot" or
+				"request_taskbar_items" or
+				"request_is_taskbar_window" or
+				"request_window_info" or
+				"request_is_window_on_current_virtual_desktop" or
+				"file_write_request" or
+				"file_read_request";
+		}
+
+		private void ProcessWebMessage(string messageType, JsonElement root)
+		{
+			switch (messageType)
+			{
+				case "request_window_handles":
+					HandleRequestWindowHandles();
+					break;
+
+				case "request_foreground_window":
+					HandleRequestForegroundWindow();
+					break;
+
+				case "request_window_snapshot":
+					HandleRequestWindowSnapshot();
+					break;
+
+				case "request_taskbar_items":
+					HandleRequestTaskBarItems(root);
+					break;
+
+				case "request_is_taskbar_window":
+					HandleRequestIsTaskBarWindow(root);
+					break;
+
+				case "request_window_info":
+					HandleRequestWindowInfo(root);
+					break;
+
+				case "request_is_window_on_current_virtual_desktop":
+					HandleRequestIsWindowOnCurrentVirtualDesktop(root);
+					break;
+
+				case "task_middle_click":
+					HandleTaskMiddleClick(root);
+					break;
+
+				case "task_click":
+					HandleTaskClick(root);
+					break;
+
+				case "request_is_window_minimized":
+					HandleRequestIsWindowMinimized(root);
+					break;
+
+				case "request_next_window_to_activate":
+					HandleRequestNextWindowToActivate(root);
+					break;
+
+				case "restore_window":
+					HandleRestoreWindow(root);
+					break;
+
+				case "minimize_window":
+					HandleMinimizeWindow(root);
+					break;
+
+				case "activate_window":
+					HandleActivateWindow(root);
+					break;
+
+				case "file_write_request":
+					HandleFileWriteRequest(root);
+					break;
+
+				case "file_read_request":
+					HandleFileReadRequest(root);
+					break;
+
+				case "exit_application":
+					Application.Current.Shutdown();
+					break;
+
+				case "open_task_manager":
+					HandleOpenTaskManager();
+					break;
+
+				case "open_app_data_folder":
+					HandleOpenAppDataFolder();
+					break;
+
+				case "open_dev_tools":
+					HandleOpenDevTools();
+					break;
+
+				case "request_time_record_status":
+					HandleRequestTimeRecordStatus();
+					break;
+
+				default:
+					Logger.Info($"未知のメッセージタイプ: {messageType}");
+					break;
+			}
+		}
+
+		private static TimeSpan? GetClientQueuedDuration(JsonElement root)
+		{
+			if (!root.TryGetProperty("timestamp", out var timestampElement) ||
+			    timestampElement.ValueKind != JsonValueKind.String)
+			{
+				return null;
+			}
+
+			var timestamp = timestampElement.GetString();
+			if (string.IsNullOrEmpty(timestamp) ||
+			    !DateTimeOffset.TryParse(timestamp, out var sentAt))
+			{
+				return null;
+			}
+
+			var queuedDuration = DateTimeOffset.UtcNow - sentAt.ToUniversalTime();
+			return queuedDuration < TimeSpan.Zero ? TimeSpan.Zero : queuedDuration;
+		}
+
+		private static void LogWebMessageTiming(
+			string messageType,
+			long messageId,
+			TimeSpan processingDuration,
+			TimeSpan? queuedDuration,
+			int activeAtStart,
+			int activeAfterFinish)
+		{
+			var isSlowProcessing = processingDuration >= SlowMessageThreshold;
+			var isQueued = queuedDuration >= QueuedMessageThreshold;
+			if (!isSlowProcessing && !isQueued)
+			{
+				return;
+			}
+
+			var queuedText = queuedDuration.HasValue ? queuedDuration.Value.TotalMilliseconds.ToString("F1") : "n/a";
+			Logger.Warning(
+				$"WebView2 message timing type={messageType} id={messageId} queuedMs={queuedText} processingMs={processingDuration.TotalMilliseconds:F1} activeAtStart={activeAtStart} activeAfterFinish={activeAfterFinish}");
 		}
 
 		private void HandleTaskMiddleClick(JsonElement root)
@@ -256,6 +378,56 @@ using Microsoft.Web.WebView2.Wpf;
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "タスク中クリック処理時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleTaskClick(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("handle", out var handleElement))
+				{
+					var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+					var foregroundHandle = handle;
+					var action = "activate";
+
+					if (NativeMethods.IsIconic(handle))
+					{
+						NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_RESTORE, IntPtr.Zero);
+						NativeMethods.SetForegroundWindow(handle);
+						action = "restore";
+						Logger.Info($"ウィンドウを復元しました: {handle}");
+					}
+					else
+					{
+						var currentForegroundWindow = NativeMethods.GetForegroundWindow();
+						if (handle == currentForegroundWindow)
+						{
+							foregroundHandle = GetNextWindowToActivate(handle);
+							NativeMethods.SendMessage(handle, NativeMethods.WM_SYSCOMMAND, (IntPtr)NativeMethods.SC_MINIMIZE, IntPtr.Zero);
+							action = "minimize";
+							Logger.Info($"ウィンドウを最小化しました: {handle}");
+						}
+						else
+						{
+							NativeMethods.SetForegroundWindow(handle);
+							Logger.Info($"ウィンドウをアクティブにしました: {handle}");
+						}
+					}
+
+					SendMessageToWebView(new
+					{
+						type = "task_click_response",
+						handle = handle.ToInt32(),
+						action,
+						foregroundHandle = foregroundHandle.ToInt32()
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タスククリック処理時にエラーが発生しました。");
 			}
 		}
 
