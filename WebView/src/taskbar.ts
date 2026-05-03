@@ -19,11 +19,15 @@ function start(): void {
 // ウィンドウリストの更新ループ
 async function updateTaskWindows(): Promise<void> {
   try {
-    // C#側にウィンドウハンドル一覧の取得を要求
-    const windowHandles = await requestWindowHandles();
+    // C#側にWin32 API由来のウィンドウ状態一覧を要求
+    const windowSnapshot = await requestWindowSnapshot();
+    const taskBarWindowHandles = windowSnapshot
+      .filter(item => item.isTaskBarWindow && item.isOnCurrentVirtualDesktop)
+      .map(item => item.handle);
+    const taskBarWindows = await requestTaskBarItems(taskBarWindowHandles);
 
     // タスクバーウィンドウの更新
-    await updateTaskBarWindows(windowHandles);
+    updateTaskBarWindows(taskBarWindows);
 
     // タスクリストの順序のみを更新
     updateTaskListOrder();
@@ -41,10 +45,16 @@ async function updateTaskWindows(): Promise<void> {
   }
 }
 
-// C#側にウィンドウハンドル一覧を要求
-async function requestWindowHandles(): Promise<number[]> {
+type WindowSnapshotItem = {
+  handle: number;
+  isTaskBarWindow: boolean;
+  isOnCurrentVirtualDesktop: boolean;
+};
+
+// C#側にWin32 API由来のウィンドウ状態一覧を要求
+async function requestWindowSnapshot(): Promise<WindowSnapshotItem[]> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestWindowHandles timeout')), 1000);
+    const timeout = setTimeout(() => reject(new Error('requestWindowSnapshot timeout')), 1000);
 
     // レスポンス受信用の一時的なリスナー
     const responseHandler = (event: MessageEvent) => {
@@ -56,10 +66,10 @@ async function requestWindowHandles(): Promise<number[]> {
           data = event.data;
         }
 
-        if (data && data.type === 'window_handles_response') {
+        if (data && data.type === 'window_snapshot_response') {
           clearTimeout(timeout);
           window.chrome!.webview!.removeEventListener('message', responseHandler);
-          resolve(data.windowHandles as number[]);
+          resolve(data.items as WindowSnapshotItem[]);
         }
       } catch (error) {
         clearTimeout(timeout);
@@ -71,54 +81,58 @@ async function requestWindowHandles(): Promise<number[]> {
     // イベントリスナー追加
     window.chrome!.webview!.addEventListener('message', responseHandler);
 
-    sendMessageToHost('request_window_handles');
+    sendMessageToHost('request_window_snapshot');
+  });
+}
+
+// C#側に表示対象ウィンドウの詳細情報をまとめて要求
+async function requestTaskBarItems(windowHandles: number[]): Promise<TaskBarItem[]> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('requestTaskBarItems timeout')), 1000);
+
+    const responseHandler = (event: MessageEvent) => {
+      try {
+        let data: MessageData;
+        if (typeof event.data === 'string') {
+          data = JSON.parse(event.data);
+        } else {
+          data = event.data;
+        }
+
+        if (data && data.type === 'taskbar_items_response') {
+          clearTimeout(timeout);
+          window.chrome!.webview!.removeEventListener('message', responseHandler);
+          resolve(data.items as TaskBarItem[]);
+        }
+      } catch (error) {
+        clearTimeout(timeout);
+        window.chrome!.webview!.removeEventListener('message', responseHandler);
+        reject(error);
+      }
+    };
+
+    window.chrome!.webview!.addEventListener('message', responseHandler);
+    sendMessageToHost('request_taskbar_items', { windowHandles });
   });
 }
 
 // タスクバーウィンドウの更新処理
-async function updateTaskBarWindows(windowHandles: number[]): Promise<void> {
+function updateTaskBarWindows(nextTaskBarItems: TaskBarItem[]): void {
   try {
-    // フォアグラウンドウィンドウの取得
-    const foregroundHwnd = await requestForegroundWindow();
-
-    // ウィンドウハンドルに存在しないタスクバーを削除
+    // 現在表示対象ではないタスクバーを削除
+    const nextHandles = new Set(nextTaskBarItems.map(item => item.handle));
     taskBarItems = taskBarItems.filter(item => {
-      return windowHandles.some(handle => handle === item.handle);
+      return nextHandles.has(item.handle);
     });
 
-    // 各ウィンドウハンドルを処理
-    for (const windowHandle of windowHandles) {
-      // タスクバーウィンドウかどうかの判定をC#側に要求
-      let isTaskBarWindow = await requestIsTaskBarWindow(windowHandle);
-
-      // 現在の仮想デスクトップにあるウィンドウのみを対象とする
-      if (isTaskBarWindow) {
-        const isOnCurrentVirtualDesktop = await requestIsWindowOnCurrentVirtualDesktop(windowHandle);
-        if (!isOnCurrentVirtualDesktop) {
-          isTaskBarWindow = false;
-        }
-      }
-
-      // 現在のタスクバーアイテムに含まれているか
-      const existingTaskBarItem = taskBarItems.find(item => item.handle === windowHandle);
-
-      if (existingTaskBarItem) {
-        // 既存のアイテム
-        if (!isTaskBarWindow) {
-          // タスクバー管理外になったため削除
-          // または異なる仮想デスクトップに移動されたため削除
-          taskBarItems = taskBarItems.filter(item => item.handle !== windowHandle);
-        } else {
-          const taskBarItem = await createTaskBarItem(windowHandle, foregroundHwnd);
-          const index = taskBarItems.findIndex(item => item.handle === taskBarItem.handle);
-          taskBarItems[index] = taskBarItem;
-        }
+    // 各タスクバーウィンドウを処理
+    for (const taskBarItem of nextTaskBarItems) {
+      const index = taskBarItems.findIndex(item => item.handle === taskBarItem.handle);
+      if (index >= 0) {
+        taskBarItems[index] = taskBarItem;
       } else {
         // 新しいアイテム
-        if (isTaskBarWindow) {
-          const taskBarItem = await createTaskBarItem(windowHandle, foregroundHwnd);
-          taskBarItems.push(taskBarItem);
-        }
+        taskBarItems.push(taskBarItem);
       }
     }
   } catch (error) {
@@ -154,132 +168,6 @@ async function requestForegroundWindow(): Promise<number> {
 
     window.chrome!.webview!.addEventListener('message', responseHandler);
     sendMessageToHost('request_foreground_window');
-  });
-}
-
-// タスクバーウィンドウかどうかの判定
-async function requestIsTaskBarWindow(windowHandle: number): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestIsTaskBarWindow timeout')), 1000);
-
-    const responseHandler = (event: MessageEvent) => {
-      try {
-        let data: MessageData;
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          data = event.data;
-        }
-
-        if (data && data.type === 'is_taskbar_window_response') {
-          const dataWindowHandle = parseInt(String(data.windowHandle), 10);
-          if (dataWindowHandle === windowHandle) {
-            clearTimeout(timeout);
-            window.chrome!.webview!.removeEventListener('message', responseHandler);
-            resolve(data.isTaskBarWindow as boolean);
-          }
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        window.chrome!.webview!.removeEventListener('message', responseHandler);
-        reject(error);
-      }
-    };
-
-    window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_is_taskbar_window', { windowHandle: windowHandle });
-  });
-}
-
-// タスクバーアイテムの作成
-async function createTaskBarItem(windowHandle: number, foregroundHwnd: number): Promise<TaskBarItem> {
-  try {
-    const windowInfo = await requestWindowInfo(windowHandle);
-    return {
-      handle: windowHandle,
-      sortKey: (windowInfo?.sortKey as string) || (windowInfo?.moduleFileName as string) || '',
-      moduleFileName: (windowInfo?.moduleFileName as string) || '',
-      title: (windowInfo?.title as string) || '',
-      isForeground: windowHandle === foregroundHwnd,
-      iconData: (windowInfo?.iconData as string) || null,
-      windowId: (windowInfo?.windowId as number) || 0,
-    };
-  } catch (error) {
-    console.error('Error creating TaskBarItem:', error);
-    return {
-      handle: windowHandle,
-      sortKey: '',
-      moduleFileName: '',
-      title: '',
-      isForeground: false,
-      iconData: null,
-    };
-  }
-}
-
-// ウィンドウ情報の取得
-async function requestWindowInfo(windowHandle: number): Promise<MessageData | null> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestWindowInfo timeout')), 1000);
-
-    const responseHandler = (event: MessageEvent) => {
-      try {
-        let data: MessageData;
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          data = event.data;
-        }
-
-        if (data && data.type === 'window_info_response') {
-          if (data.windowHandle === windowHandle) {
-            clearTimeout(timeout);
-            window.chrome!.webview!.removeEventListener('message', responseHandler);
-            resolve(data);
-          }
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        window.chrome!.webview!.removeEventListener('message', responseHandler);
-        reject(error);
-      }
-    };
-
-    window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_window_info', { windowHandle: windowHandle });
-  });
-}
-
-// 仮想デスクトップ判定の要求
-async function requestIsWindowOnCurrentVirtualDesktop(windowHandle: number): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('requestIsWindowOnCurrentVirtualDesktop timeout')), 1000);
-
-    const responseHandler = (event: MessageEvent) => {
-      try {
-        let data: MessageData;
-        if (typeof event.data === 'string') {
-          data = JSON.parse(event.data);
-        } else {
-          data = event.data;
-        }
-
-        if (data && data.type === 'is_window_on_current_virtual_desktop_response') {
-          if (data.windowHandle === windowHandle) {
-            clearTimeout(timeout);
-            window.chrome!.webview!.removeEventListener('message', responseHandler);
-            resolve(data.isOnCurrentVirtualDesktop as boolean);
-          }
-        }
-      } catch (error) {
-        clearTimeout(timeout);
-        window.chrome!.webview!.removeEventListener('message', responseHandler);
-        reject(error);
-      }
-    };
-
-    window.chrome!.webview!.addEventListener('message', responseHandler);
-    sendMessageToHost('request_is_window_on_current_virtual_desktop', { windowHandle: windowHandle });
   });
 }
 

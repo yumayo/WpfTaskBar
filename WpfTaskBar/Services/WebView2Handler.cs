@@ -124,6 +124,14 @@ using Microsoft.Web.WebView2.Wpf;
 								HandleRequestForegroundWindow();
 								break;
 
+							case "request_window_snapshot":
+								HandleRequestWindowSnapshot();
+								break;
+
+							case "request_taskbar_items":
+								HandleRequestTaskBarItems(root);
+								break;
+
 							case "request_is_taskbar_window":
 								HandleRequestIsTaskBarWindow(root);
 								break;
@@ -294,6 +302,97 @@ using Microsoft.Web.WebView2.Wpf;
 			{
 				Logger.Error(ex, "フォアグラウンドウィンドウ取得時にエラーが発生しました。");
 			}
+		}
+
+		private void HandleRequestWindowSnapshot()
+		{
+			try
+			{
+				var foregroundWindow = NativeMethods.GetForegroundWindow();
+				var items = new List<object>();
+
+				NativeMethods.EnumWindows((hwnd, lParam) =>
+					{
+						items.Add(new
+						{
+							handle = hwnd.ToInt32(),
+							isTaskBarWindow = NativeMethodUtility.IsTaskBarWindow(hwnd),
+							isOnCurrentVirtualDesktop = VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(hwnd),
+						});
+
+						return true;
+					},
+					0);
+
+				SendMessageToWebView(new
+				{
+					type = "window_snapshot_response",
+					items
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "ウィンドウ状態一覧取得時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleRequestTaskBarItems(JsonElement root)
+		{
+			try
+			{
+				if (root.TryGetProperty("data", out var dataElement) &&
+				    dataElement.TryGetProperty("windowHandles", out var handlesElement) &&
+				    handlesElement.ValueKind == JsonValueKind.Array)
+				{
+					var foregroundWindow = NativeMethods.GetForegroundWindow();
+					var items = new List<object>();
+
+					foreach (var handleElement in handlesElement.EnumerateArray())
+					{
+						var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
+						items.Add(CreateTaskBarItemResponse(handle, foregroundWindow));
+					}
+
+					SendMessageToWebView(new
+					{
+						type = "taskbar_items_response",
+						items
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タスクバーウィンドウ詳細取得時にエラーが発生しました。");
+			}
+		}
+
+		private object CreateTaskBarItemResponse(IntPtr handle, IntPtr foregroundWindow)
+		{
+			var rawProcessName = UwpUtility.GetRawProcessName(handle) ?? "";
+			var processName = UwpUtility.GetProcessName(handle) ?? rawProcessName;
+			var resolvedProcessId = UwpUtility.GetProcessId(handle);
+			var sortKey = GetStableSortKey(handle, rawProcessName, processName);
+			var sb = new StringBuilder(255);
+			NativeMethods.GetWindowText(handle, sb, sb.Capacity);
+			var title = sb.ToString();
+			var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
+			var rawFileName = Path.GetFileName(rawProcessName);
+			if (string.Equals(rawFileName, "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ||
+			    !string.Equals(rawProcessName, processName, StringComparison.OrdinalIgnoreCase))
+			{
+				Logger.Trace(
+					$"WindowInfoTrace handle={handle.ToInt64()} rawProcess={rawProcessName} resolvedProcess={processName} resolvedProcessId={resolvedProcessId.ToInt64()} sortKey={sortKey} title={title}");
+			}
+
+			return new
+			{
+				handle = handle.ToInt32(),
+				sortKey,
+				moduleFileName = processName,
+				title,
+				isForeground = handle == foregroundWindow,
+				iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
+			};
 		}
 
 		private void HandleRequestIsTaskBarWindow(JsonElement root)
