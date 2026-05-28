@@ -522,7 +522,11 @@ using Microsoft.Web.WebView2.Wpf;
 					foreach (var handleElement in handlesElement.EnumerateArray())
 					{
 						var handle = IntPtr.Parse(handleElement.GetInt32().ToString());
-						items.Add(CreateTaskBarItemResponse(handle, foregroundWindow));
+						var item = CreateTaskBarItemResponse(handle, foregroundWindow);
+						if (item != null)
+						{
+							items.Add(item);
+						}
 					}
 
 					SendMessageToWebView(new
@@ -538,18 +542,41 @@ using Microsoft.Web.WebView2.Wpf;
 			}
 		}
 
-		private object CreateTaskBarItemResponse(IntPtr handle, IntPtr foregroundWindow)
+		private object? CreateTaskBarItemResponse(IntPtr handle, IntPtr foregroundWindow)
 		{
+			if (!IsCurrentTaskBarWindow(handle))
+			{
+				return null;
+			}
+
 			var rawProcessName = UwpUtility.GetRawProcessName(handle) ?? "";
 			var processName = UwpUtility.GetProcessName(handle) ?? rawProcessName;
-			var resolvedProcessId = UwpUtility.GetProcessId(handle);
-			var sortKey = GetStableSortKey(handle, rawProcessName, processName);
 			var sb = new StringBuilder(255);
 			NativeMethods.GetWindowText(handle, sb, sb.Capacity);
 			var title = sb.ToString();
-			var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
+			if (string.IsNullOrWhiteSpace(title))
+			{
+				return null;
+			}
+
 			var rawFileName = Path.GetFileName(rawProcessName);
-			if (string.Equals(rawFileName, "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ||
+			var isApplicationFrameHost = string.Equals(rawFileName, "ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase);
+			if (isApplicationFrameHost && string.Equals(title, "Unknown", StringComparison.OrdinalIgnoreCase))
+			{
+				Logger.Trace($"Skip unknown UWP frame handle={handle.ToInt64()} rawProcess={rawProcessName} title={title}");
+				return null;
+			}
+
+			if (isApplicationFrameHost && string.Equals(rawProcessName, processName, StringComparison.OrdinalIgnoreCase))
+			{
+				Logger.Trace($"Skip unresolved UWP frame handle={handle.ToInt64()} rawProcess={rawProcessName} title={title}");
+				return null;
+			}
+
+			var resolvedProcessId = UwpUtility.GetProcessId(handle);
+			var sortKey = GetStableSortKey(handle, rawProcessName, processName);
+			var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
+			if (isApplicationFrameHost ||
 			    !string.Equals(rawProcessName, processName, StringComparison.OrdinalIgnoreCase))
 			{
 				Logger.Trace(
@@ -565,6 +592,12 @@ using Microsoft.Web.WebView2.Wpf;
 				isForeground = handle == foregroundWindow,
 				iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
 			};
+		}
+
+		private static bool IsCurrentTaskBarWindow(IntPtr handle)
+		{
+			return NativeMethodUtility.IsTaskBarWindow(handle) &&
+			       VirtualDesktopUtility.IsWindowOnCurrentVirtualDesktop(handle);
 		}
 
 		private void HandleRequestIsTaskBarWindow(JsonElement root)

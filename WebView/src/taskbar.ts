@@ -24,6 +24,9 @@ async function updateTaskWindows(): Promise<void> {
     const taskBarWindowHandles = windowSnapshot
       .filter(item => item.isTaskBarWindow && item.isOnCurrentVirtualDesktop)
       .map(item => item.handle);
+    const taskBarWindowHandleSet = new Set(taskBarWindowHandles);
+    removeMissingTaskBarWindows(taskBarWindowHandleSet);
+
     const taskBarWindows = await requestTaskBarItems(taskBarWindowHandles);
 
     // タスクバーウィンドウの更新
@@ -138,6 +141,27 @@ function updateTaskBarWindows(nextTaskBarItems: TaskBarItem[]): void {
   } catch (error) {
     console.error('Error in updateTaskBarWindows:', error);
   }
+}
+
+function removeMissingTaskBarWindows(currentHandles: Set<number>): void {
+  const missingHandles = taskBarItems
+    .filter(item => !currentHandles.has(item.handle))
+    .map(item => item.handle);
+
+  for (const handle of missingHandles) {
+    removeTaskBarWindow(handle);
+  }
+}
+
+function removeTaskBarWindow(handle: number): void {
+  taskBarItems = taskBarItems.filter(item => item.handle !== handle);
+
+  if (draggedTask?.handle === handle) {
+    draggedTask = null;
+    draggedElement = null;
+  }
+
+  document.querySelector(`.task-item[data-handle="${handle}"]`)?.remove();
 }
 
 type TaskClickResponse = {
