@@ -181,6 +181,9 @@ public partial class MainWindow : Window
 
 		Logger.Info("Starting REST API server...");
 
+		AppSettingsModel.Load();
+		Logger.Info("AppSettingsModel data loaded");
+
 		// TimeRecordModelのデータを読み込む
 		TimeRecordModel.Load();
 		Logger.Info("TimeRecordModel data loaded");

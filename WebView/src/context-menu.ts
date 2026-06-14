@@ -10,6 +10,11 @@ function openTaskManager(): void {
   sendMessageToHost('open_task_manager');
 }
 
+// オプションを開く機能
+function openOptions(): void {
+  sendMessageToHost('open_options');
+}
+
 // 保存データフォルダを開く機能
 function openAppDataFolder(): void {
   sendMessageToHost('open_app_data_folder');
@@ -49,6 +54,9 @@ export function setupContextMenu(): void {
     switch (action) {
       case 'openTaskManager':
         openTaskManager();
+        break;
+      case 'openOptions':
+        openOptions();
         break;
       case 'openAppDataFolder':
         openAppDataFolder();

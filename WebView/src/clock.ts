@@ -6,9 +6,18 @@ const timeRecord: TimeRecord = {
   clockInDate: null,
   clockOutDate: null
 };
+let isAttendanceEnabled = true;
+let updateTimerId: ReturnType<typeof setInterval> | null = null;
 
 // 時刻エリアの更新
 function updateDateTime(): void {
+  updateCurrentTime();
+
+  if (!isAttendanceEnabled) {
+    clearWarnings();
+    return;
+  }
+
   // 勤怠時刻の表示
   const startTimeValue = document.getElementById('startTimeValue');
   const endTimeValue = document.getElementById('endTimeValue');
@@ -25,14 +34,34 @@ function updateDateTime(): void {
       : '--:--';
   }
 
-  // 現在時刻と日付はJavaScript側で直接取得
-  updateCurrentTime();
-
   // 日付変更チェック（午前4時を基準）
   checkDateChange();
 
   // 警告表示の更新
   updateWarnings();
+}
+
+function getAttendanceEnabled(data: MessageData): boolean {
+  const value = data.is_attendance_enabled;
+  return typeof value === 'boolean' ? value : true;
+}
+
+function setAttendanceEnabled(isEnabled: boolean): void {
+  isAttendanceEnabled = isEnabled;
+
+  const attendanceSection = document.querySelector('.attendance-section');
+  if (attendanceSection) {
+    attendanceSection.classList.toggle('disabled', !isEnabled);
+  }
+
+  if (!isEnabled) {
+    clearWarnings();
+  }
+}
+
+function clearWarnings(): void {
+  document.getElementById('startTime')?.classList.remove('missing');
+  document.getElementById('endTime')?.classList.remove('missing');
 }
 
 // 日付変更チェック（DateTimeItem.csの機能を移植）
@@ -156,6 +185,8 @@ export function setupClockListeners(): void {
 
     // 起動時の時刻記録状態の受信
     if (data.type === 'time_record_status_response') {
+      setAttendanceEnabled(getAttendanceEnabled(data));
+
       // ClockInDateとClockOutDateを設定
       if (data.clock_in_date && data.clock_in_date !== '0001-01-01T00:00:00') {
         timeRecord.clockInDate = new Date(data.clock_in_date as string);
@@ -170,7 +201,14 @@ export function setupClockListeners(): void {
       updateDateTime();
 
       // 定期的に時刻情報を更新
-      setInterval(() => updateDateTime(), 100);
+      if (updateTimerId === null) {
+        updateTimerId = setInterval(() => updateDateTime(), 100);
+      }
+    }
+
+    if (data.type === 'app_settings_update') {
+      setAttendanceEnabled(getAttendanceEnabled(data));
+      updateDateTime();
     }
 
     if (data.type === 'clock_in_update') {

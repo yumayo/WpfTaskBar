@@ -6,8 +6,7 @@ namespace WpfTaskBar
 	public class TimeRecordModel
 	{
 		private static readonly string DataFilePath = Path.Combine(
-			Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-			"WpfTaskBar",
+			AppDataPath.DirectoryPath,
 			"timerecord.json"
 		);
 

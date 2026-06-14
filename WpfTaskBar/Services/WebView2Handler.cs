@@ -21,10 +21,12 @@ using WpfApplication = System.Windows.Application;
 			private readonly WindowIconService _windowIconService;
 			private Dispatcher? _dispatcher;
 			private WebView2? _webView2;
+			private OptionsWindow? _optionsWindow;
 
 			public WebView2Handler(WindowIconService windowIconService)
 			{
 				_windowIconService = windowIconService;
+				AppSettingsModel.SettingsChanged += OnAppSettingsChanged;
 			}
 
 		public async Task InitializeAsync(Dispatcher dispatcher, WebView2 webView2)
@@ -281,6 +283,10 @@ using WpfApplication = System.Windows.Application;
 
 				case "open_app_data_folder":
 					HandleOpenAppDataFolder();
+					break;
+
+				case "open_options":
+					HandleOpenOptions();
 					break;
 
 				case "open_dev_tools":
@@ -914,10 +920,9 @@ using WpfApplication = System.Windows.Application;
 						return;
 					}
 
-					var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-					var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
-					Directory.CreateDirectory(appFolder);
-					var filePath = Path.Combine(appFolder, filename);
+						AppDataPath.EnsureDirectory();
+						var appFolder = AppDataPath.DirectoryPath;
+						var filePath = Path.Combine(appFolder, filename);
 
 					File.WriteAllText(filePath, data);
 
@@ -972,9 +977,8 @@ using WpfApplication = System.Windows.Application;
 						return;
 					}
 
-					var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-					var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
-					var filePath = Path.Combine(appFolder, filename);
+						var appFolder = AppDataPath.DirectoryPath;
+						var filePath = Path.Combine(appFolder, filename);
 
 					string data = "";
 					if (File.Exists(filePath))
@@ -1031,11 +1035,10 @@ using WpfApplication = System.Windows.Application;
 		{
 			try
 			{
-				var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-				var appFolder = Path.Combine(appDataPath, "WpfTaskBar");
-				Directory.CreateDirectory(appFolder);
+					AppDataPath.EnsureDirectory();
+					var appFolder = AppDataPath.DirectoryPath;
 
-				Process.Start(new ProcessStartInfo
+					Process.Start(new ProcessStartInfo
 				{
 					FileName = "explorer.exe",
 					Arguments = appFolder,
@@ -1045,6 +1048,34 @@ using WpfApplication = System.Windows.Application;
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "保存データフォルダを開く処理に失敗しました。");
+				}
+			}
+
+		private void HandleOpenOptions()
+		{
+			var dispatcher = _dispatcher ?? WpfApplication.Current.Dispatcher;
+
+			void Open()
+			{
+				if (_optionsWindow is { IsVisible: true })
+				{
+					_optionsWindow.Activate();
+					return;
+				}
+
+				_optionsWindow = new OptionsWindow();
+				_optionsWindow.Closed += (_, _) => _optionsWindow = null;
+				_optionsWindow.Show();
+				_optionsWindow.Activate();
+			}
+
+			if (dispatcher.CheckAccess())
+			{
+				Open();
+			}
+			else
+			{
+				dispatcher.BeginInvoke((Action)Open);
 			}
 		}
 
@@ -1053,11 +1084,12 @@ using WpfApplication = System.Windows.Application;
 			try
 			{
 				var response = new
-				{
-					type = "time_record_status_response",
-					clock_in_date = TimeRecordModel.ClockInDate,
-					clock_out_date = TimeRecordModel.ClockOutDate
-				};
+					{
+						type = "time_record_status_response",
+						clock_in_date = TimeRecordModel.ClockInDate,
+						clock_out_date = TimeRecordModel.ClockOutDate,
+						is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled
+					};
 
 				SendMessageToWebView(response);
 				Logger.Info("時刻記録の状態を送信しました");
@@ -1066,6 +1098,20 @@ using WpfApplication = System.Windows.Application;
 			{
 				Logger.Error(ex, "時刻記録の状態取得時にエラーが発生しました。");
 			}
+		}
+
+		private void OnAppSettingsChanged(object? sender, EventArgs e)
+		{
+			SendAppSettingsToWebView();
+		}
+
+		private void SendAppSettingsToWebView()
+		{
+			SendMessageToWebView(new
+			{
+				type = "app_settings_update",
+				is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled
+			});
 		}
 
 		private static string GetStableSortKey(IntPtr handle, string rawProcessName, string resolvedProcessName)

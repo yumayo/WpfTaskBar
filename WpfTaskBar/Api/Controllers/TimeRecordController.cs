@@ -16,6 +16,11 @@ namespace WpfTaskBar
         [HttpPost("clock-in")]
         public ActionResult<ClockInResponse> ClockIn([FromBody] ClockInRequest request)
         {
+            if (!AppSettingsModel.IsAttendanceEnabled)
+            {
+                return StatusCode(403, new { message = "出勤・退勤が無効です。" });
+            }
+
             TimeRecordModel.ClockInDate = request.Date;
             TimeRecordModel.Save();
 
@@ -31,6 +36,11 @@ namespace WpfTaskBar
         [HttpPost("clock-out")]
         public ActionResult<ClockOutResponse> ClockOut([FromBody] ClockOutRequest request)
         {
+            if (!AppSettingsModel.IsAttendanceEnabled)
+            {
+                return StatusCode(403, new { message = "出勤・退勤が無効です。" });
+            }
+
             TimeRecordModel.ClockOutDate = request.Date;
             TimeRecordModel.Save();
 
