@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using WpfApplication = System.Windows.Application;
 
 	namespace WpfTaskBar
 	{
@@ -254,6 +255,10 @@ using Microsoft.Web.WebView2.Wpf;
 					HandleMinimizeWindow(root);
 					break;
 
+				case "minimize_taskbar":
+					HandleMinimizeTaskbar();
+					break;
+
 				case "activate_window":
 					HandleActivateWindow(root);
 					break;
@@ -267,7 +272,7 @@ using Microsoft.Web.WebView2.Wpf;
 					break;
 
 				case "exit_application":
-					Application.Current.Shutdown();
+					WpfApplication.Current.Shutdown();
 					break;
 
 				case "open_task_manager":
@@ -802,6 +807,25 @@ using Microsoft.Web.WebView2.Wpf;
 			catch (Exception ex)
 			{
 				Logger.Error(ex, "ウィンドウ最小化時にエラーが発生しました。");
+			}
+		}
+
+		private void HandleMinimizeTaskbar()
+		{
+			try
+			{
+				WpfApplication.Current.Dispatcher.BeginInvoke((Action)(() =>
+				{
+					if (WpfApplication.Current.MainWindow is MainWindow mainWindow)
+					{
+						mainWindow.WindowState = WindowState.Minimized;
+					}
+				}));
+				Logger.Info("タスクバー最小化を要求しました。");
+			}
+			catch (Exception ex)
+			{
+				Logger.Error(ex, "タスクバー最小化時にエラーが発生しました。");
 			}
 		}
 

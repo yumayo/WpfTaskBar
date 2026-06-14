@@ -7,6 +7,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
         Loaded="Window_Loaded"
+        StateChanged="MainWindow_OnStateChanged"
         Closed="MainWindow_OnClosed"
         WindowStyle="None"
         AllowsTransparency="True"

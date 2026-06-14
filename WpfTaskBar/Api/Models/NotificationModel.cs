@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using WpfApplication = System.Windows.Application;
 
 namespace WpfTaskBar
 {
@@ -11,7 +12,7 @@ namespace WpfTaskBar
 
         public static void AddNotification(string title, string message)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            WpfApplication.Current.Dispatcher.Invoke(() =>
             {
                 var notification = new NotificationItem
                 {
@@ -34,7 +35,7 @@ namespace WpfTaskBar
 
         public static void ClearNotifications()
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            WpfApplication.Current.Dispatcher.Invoke(() =>
             {
                 _notifications.Clear();
             });

@@ -20,6 +20,11 @@ function openDevTools(): void {
   sendMessageToHost('open_dev_tools');
 }
 
+// タスクバー本体を最小化する機能
+function minimizeTaskbar(): void {
+  sendMessageToHost('minimize_taskbar');
+}
+
 function isTaskListArea(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest('#taskList') !== null;
 }
@@ -50,6 +55,9 @@ export function setupContextMenu(): void {
         break;
       case 'openDevTools':
         openDevTools();
+        break;
+      case 'minimizeTaskbar':
+        minimizeTaskbar();
         break;
       case 'exitApplication':
         exitApplication();
