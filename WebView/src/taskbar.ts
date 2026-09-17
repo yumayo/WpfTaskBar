@@ -157,8 +157,7 @@ function removeTaskBarWindow(handle: number): void {
   taskBarItems = taskBarItems.filter(item => item.handle !== handle);
 
   if (draggedTask?.handle === handle) {
-    draggedTask = null;
-    draggedElement = null;
+    resetDragState();
   }
 
   document.querySelector(`.task-item[data-handle="${handle}"]`)?.remove();
@@ -246,6 +245,9 @@ function updateTaskListOrder(): void {
   // 削除された要素をクリーンアップ
   existingItems.forEach((item, handle) => {
     if (!usedHandles.has(handle)) {
+      if (item === draggedElement) {
+        resetDragState();
+      }
       item.remove();
     }
   });
@@ -312,7 +314,7 @@ function setupDragAndDrop(item: HTMLElement, task: TaskBarItem): void {
   item.addEventListener('dragstart', (e) => onDragStart(item, task, e));
 
   // ドラッグ終了
-  item.addEventListener('dragend', () => onDragEnd(item));
+  item.addEventListener('dragend', resetDragState);
 
   // ドラッグオーバー（他の要素の上を通過）
   item.addEventListener('dragover', (e) => onDragOver(item, e));
@@ -367,8 +369,10 @@ function onMouseDown(_item: HTMLElement, task: TaskBarItem, e: MouseEvent): void
 }
 
 function onDragStart(item: HTMLElement, task: TaskBarItem, e: DragEvent): void {
+  resetDragState();
   draggedTask = task;
   draggedElement = item;
+  // 半透明表示は dragging クラスだけで管理し、終了後の遅延適用を防ぐ。
   item.classList.add('dragging');
 
   // ドラッグデータを設定
@@ -376,24 +380,40 @@ function onDragStart(item: HTMLElement, task: TaskBarItem, e: DragEvent): void {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(task.handle));
   }
-
-  // 少し遅延してスタイルを適用（ドラッグ画像に影響しないよう）
-  setTimeout(() => {
-    item.style.opacity = '0.5';
-  }, 0);
 }
 
-function onDragEnd(item: HTMLElement): void {
-  item.classList.remove('dragging');
-  item.style.opacity = '';
+function resetDragState(): void {
+  if (!draggedElement) return;
 
-  // 全ての要素からdrag-overクラスを除去
+  // DOMから外されたドラッグ元も含め、ドラッグ表示をまとめて解除する。
+  draggedElement.classList.remove('dragging');
   document.querySelectorAll('.task-item').forEach(el => {
-    el.classList.remove('drag-over-above', 'drag-over-below');
+    el.classList.remove('dragging', 'drag-over-above', 'drag-over-below');
   });
 
   draggedTask = null;
   draggedElement = null;
+}
+
+function setupDragCleanup(): void {
+  // ドラッグ元の移動・削除で、その要素のdragendを受け取れない場合にも備える。
+  document.addEventListener('dragend', resetDragState, true);
+  // タスク要素のdrop処理が終わってから解除する（キャプチャでは登録しない）。
+  document.addEventListener('drop', resetDragState);
+  window.addEventListener('blur', resetDragState);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) resetDragState();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') resetDragState();
+  }, true);
+
+  // 終了イベントを取り逃した場合は、通常のポインター操作が戻った時点で復旧する。
+  document.addEventListener('pointerdown', resetDragState, true);
+  document.addEventListener('pointerup', resetDragState, true);
+  document.addEventListener('pointermove', (e) => {
+    if (e.buttons === 0) resetDragState();
+  }, true);
 }
 
 function onDragOver(item: HTMLElement, e: DragEvent): void {
@@ -466,16 +486,19 @@ function onDragLeave(item: HTMLElement, e: DragEvent): void {
 
 function onDrop(item: HTMLElement, e: DragEvent): void {
   e.preventDefault();
-  item.classList.remove('drag-over-above', 'drag-over-below');
+  const sourceTask = draggedTask;
+  const sourceElement = draggedElement;
+  // 並べ替えによるDOM移動や途中のreturn・例外より前に表示と状態を解除する。
+  resetDragState();
 
-  if (draggedTask && draggedElement && draggedElement !== item) {
-    const draggedSortKey = draggedElement.dataset.sortKey!;
+  if (sourceTask && sourceElement && sourceElement !== item) {
+    const draggedSortKey = sourceElement.dataset.sortKey!;
     const targetSortKey = item.dataset.sortKey!;
 
     let differentApplication = draggedSortKey !== targetSortKey;
 
-    if (draggedElement.dataset.windowId !== undefined && item.dataset.windowId !== undefined) {
-      if (parseInt(draggedElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
+    if (sourceElement.dataset.windowId !== undefined && item.dataset.windowId !== undefined) {
+      if (parseInt(sourceElement.dataset.windowId, 10) !== parseInt(item.dataset.windowId, 10)) {
         differentApplication = true;
       }
     }
@@ -493,24 +516,13 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
 
       const isAbove = isDropAboveApplicationGroup(targetSortKey, mouseY);
       if (isAbove !== null) {
-        // 既存のクラスを削除
-        firstElement.classList.remove('drag-over-above', 'drag-over-below');
-        lastElement.classList.remove('drag-over-above', 'drag-over-below');
-
-        // 適切なクラスを追加
-        if (isAbove) {
-          firstElement.classList.add('drag-over-above');
-        } else {
-          lastElement.classList.add('drag-over-below');
-        }
-
         const dropTargetTask = {
           handle: parseInt((isAbove ? firstElement : lastElement).dataset.handle!, 10),
           windowId: parseInt((isAbove ? firstElement : lastElement).dataset.windowId || '0', 10),
         };
 
         // タスクの順序を変更
-        reorderTasks(draggedTask, dropTargetTask, isAbove);
+        reorderTasks(sourceTask, dropTargetTask, isAbove);
       }
     } else {
       // マウスの位置から上半分か下半分かを判定
@@ -525,7 +537,7 @@ function onDrop(item: HTMLElement, e: DragEvent): void {
       };
 
       // タスクの順序を変更
-      reorderTasks(draggedTask, dropTargetTask, isAbove);
+      reorderTasks(sourceTask, dropTargetTask, isAbove);
     }
   }
 }
@@ -742,5 +754,6 @@ function getApplicationGroupRange(targetSortKey: string): { startIndex: number; 
 }
 
 export function startTaskbar(): void {
+  setupDragCleanup();
   start();
 }
