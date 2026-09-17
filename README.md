@@ -48,8 +48,12 @@ docker compose up -d --build && docker compose exec ai bash -i -c "claude -c"
 
 ```sh
 wsl
-make artifact APP_VERSION=v0.xx
+make artifact
 ```
+
+APP_VERSION は、取得した最新の `v` タグの末尾を 1 増やした値になります。タグがない場合は `v0.1` を使用します。
+明示的に指定する場合は `make artifact APP_VERSION=v0.xx` を実行してください。
+ビルドと ZIP 作成後、`master` と作成したタグを push し、エクスプローラーと GitHub のリリース作成ページを開きます。
 
 # Gitプッシュ
 
