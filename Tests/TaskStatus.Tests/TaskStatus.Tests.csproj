@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- Win32 のウィンドウ列挙を差し替え、API と状態管理は Windows 以外でも検証する。 -->
+  <ItemGroup>
+    <Compile Include="../../WpfTaskBar/Api/Controllers/TaskStatusController.cs" Link="TaskStatusController.cs" />
+    <Compile Include="../../WpfTaskBar/Api/Models/TaskStatusModels.cs" Link="TaskStatusModels.cs" />
+    <Compile Include="../../WpfTaskBar/Services/TaskStatusStore.cs" Link="TaskStatusStore.cs" />
+  </ItemGroup>
+</Project>
