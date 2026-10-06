@@ -18,7 +18,7 @@ AI の開始・終了の判定は AI 側のフックが行います。コンテ�
 ## インストール
 
 セッション API に対応したこのリポジトリの WpfTaskBar をビルドして起動します。
-拡張をパッケージ化します（Node.js 20 以降）。
+拡張をパッケージ化します（Node.js 24 LTS 推奨）。
 
 ```sh
 cd VSCodeExtension
@@ -27,6 +27,17 @@ npm run check
 npm test
 npm run package
 ```
+
+パッケージ作成にはプロジェクト内の `@vscode/vsce` を使用します。
+既に導入済みの環境で最新版へ更新する場合は、`VSCodeExtension` ディレクトリで以下を実行してください。
+
+```sh
+npm install --save-dev @vscode/vsce@latest
+npm exec -- vsce --version
+npm run package
+```
+
+`package.json` と `package-lock.json` が更新されます。グローバルインストールは不要です。
 
 Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.0.vsix` を選択してください。
 Remote - WSL 使用時も拡張は Windows 側で動きます。
