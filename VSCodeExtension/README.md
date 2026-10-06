@@ -66,24 +66,41 @@ WSL から Docker コンテナへの引き継ぎはランチャー側で設定�
 
 ## aicontainer からの利用
 
-`aicontainer` がコンテナを作成するときに、上記 2 つの環境変数を渡してください。
-ホストの変数をコンテナへ引き継ぐ機能を持つ版では、その対象に両方を追加します。
-このリポジトリには `aicontainer` 本体が含まれないため、拡張はランチャーの設定や AI の設定ファイルを自動変更しません。
+`.aicontainer` に、次の1行を設定します。既存の `env=WPF_TASKBAR_SESSION_ID=...` はこの行に置き換えてください。
 
-`.aicontainer` の `env=名前=値` を使う場合は、通知付きターミナルの WSL シェルで次を実行して、その時点の設定行を取得できます。
-
-```sh
-printf 'env=WPF_TASKBAR_URL=%s\nenv=WPF_TASKBAR_SESSION_ID=%s\n' \
-  "$WPF_TASKBAR_URL" "$WPF_TASKBAR_SESSION_ID"
+```text
+env=WPF_TASKBAR_SESSION_ID
 ```
 
-出力された 2 行を `.aicontainer` に設定してから `aicontainer` を起動します。
-**通知 ID はターミナルごとに異なります。** 固定値での設定は開き直すたびに更新し、Git にコミットしないでください。
-同じ設定ファイルで複数のコンテナを起動する場合は、各起動時に対応する値を読み込ませてください。
-ランチャーの環境変数引き継ぎ機能を利用すると、この書き換えが不要になります。
-起動済みのコンテナの環境変数は設定ファイルを変更しても変わらないため、作り直しが必要です。
+**値を指定しないことで、起動元ターミナルの最新のIDを自動でコンテナへ渡します。**
+通知付きターミナルを開き直した後やVSCode再起動後も、IDをコピーしたり設定ファイルを書き換えたりする必要はありません。
+末尾に `=` を追加した `env=WPF_TASKBAR_SESSION_ID=` は空の値を指定するため、使わないでください。
 
-AI コンテナ内で `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` が設定されていることを確認し、共通フックを登録します。
+通知先URLを既に `env=WPF_TASKBAR_URL=http://...` で設定している場合は、そのまま使えます。
+URLもVSCodeの `wpftaskbar.containerApiUrl` から引き継ぐ場合は、URLの設定行も次へ置き換えます。
+
+```text
+env=WPF_TASKBAR_URL
+```
+
+通知付きターミナルのWSLシェルから、通常どおり `aicontainer` を起動します。
+ターミナルごとに異なるIDが渡るため、同じ `.aicontainer` を複数のターミナルで使えます。
+この変更は次回のコンテナ作成から有効です。起動済みのコンテナの環境変数は自動では変わりません。
+
+[aicontainerの実装](https://github.com/yumayo/ai-container/blob/master/.bash_ai_container)は `env` の内容を `docker run -e` に渡します。
+名前だけ指定するとホストの環境変数を渡すのは、[Dockerの `--env` の動作](https://docs.docker.com/reference/cli/docker/container/run/#set-environment-variables--e---env---env-file)です。
+通知付きターミナル以外ではIDが渡らず、共通フックは通知せずに終了します。
+
+AIコンテナ内で `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` が設定されていることを確認し、共通フックを登録します。
+
+### ターミナルの開き直し・VSCode再起動後
+
+1. コマンドパレットで **WpfTaskBar: AI 通知付きターミナルを開く** を実行します。
+2. そのターミナルのWSLシェルから `aicontainer` を起動します。
+
+この2操作で新しいIDが自動で渡ります。`.aicontainer` やAIのフック設定の編集は不要です。
+現在の拡張は、VSCodeが復元した古いターミナルの通知登録を引き継ぎません。再起動・再読み込み後は上の操作で新しく開いてください。
+WpfTaskBarの再起動などでIDが失効した場合も同じ手順です。
 
 ## docker compose からの利用
 
@@ -311,7 +328,7 @@ sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" none
 - `none` とターミナルを閉じる操作は、そのターミナルの状態だけを解除します。
 - **1 つの通知付きターミナルにつき、同時に実行する AI は 1 つ**にしてください。複数の AI はそれぞれ別の通知付きターミナルから起動します。
 - 拡張は 30 秒ごとに生存通知を送り、2 分間届かなければ登録と状態が失効します。
-- VSCode の再読み込み、拡張の停止、WpfTaskBar の再起動、長時間のスリープ後は、通知付きターミナルを開き直し、コンテナにも新しい環境変数を渡してください。
+- VSCodeの再読み込み、拡張の停止、WpfTaskBarの再起動、長時間のスリープなどでIDが失効した場合は、通知付きターミナルを開き直してコンテナを起動します。上記の `env=WPF_TASKBAR_SESSION_ID` 設定なら、新しいIDが自動で渡ります。
 - 作成前から開いていたターミナル・コンテナには自動で接続しません。
 - 「WpfTaskBar: この VSCode の通知先を選択」で通知先を選び直せます。先に通知付きターミナルを閉じてください。
 - 従来の `POST /tasks/status` の状態とは独立し、集約時に `running` が優先されます。従来の API で設定した状態の解除には、従来の API から `none` を送ります。
