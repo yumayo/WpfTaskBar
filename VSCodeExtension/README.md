@@ -217,22 +217,90 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 `Stop` は応答の停止タイミングを示し、作業の成功を保証するイベントではありません。
 他の `Stop` フックで応答を継続させる構成では、処理が続いていても完了表示になる場合があります。
 
-### Claude Code の設定例
+### Claude Code のユーザー共通フック
 
-`UserPromptSubmit` / `Stop` に設定する場合は次の内容を既存の hooks 設定へマージします。
+Claude Codeでも同じ `taskbar-status.sh` を使います。
+[公式のフック仕様](https://code.claude.com/docs/en/hooks)に合わせ、次の4イベントを登録します。
+
+| Claude Codeイベント | 通知する状態 |
+| --- | --- |
+| `UserPromptSubmit` | `running` |
+| `Stop` | `completed` |
+| `StopFailure`（APIエラーで応答が終了） | `none` |
+| `SessionEnd`（終了・会話のクリアなど） | `none` |
+
+#### 手動で設定する場合
+
+設定先は**Claude Codeを動かすAIコンテナ内**の `~/.claude/settings.json` です。
+`CLAUDE_CONFIG_DIR` を指定している場合は `$CLAUDE_CONFIG_DIR/settings.json` を使います。
+同じClaude Code設定ディレクトリを使うプロジェクトに共通で適用されます。
+
+リポジトリルートで、通知スクリプトを共通の場所へコピーします。
+
+```sh
+taskbar_claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+mkdir -p "$taskbar_claude_dir/hooks/wpftaskbar"
+cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
+printf '設定ファイル: %s\n' "$taskbar_claude_dir/settings.json"
+printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
+```
+
+表示された `settings.json` をエディターで開き、次のJSONを追加します。
+以下はホームが `/home/ubuntu`、`CLAUDE_CONFIG_DIR` が未設定の場合の例です。**4か所のスクリプトのパスを実際の絶対パスに合わせてください。**
+既存の権限・環境変数・フック設定は残します。同じイベントが既にある場合は、その配列へ今回の `{"hooks": [...]}` を追加してください。
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [{
-      "hooks": [{ "type": "command", "command": "sh /opt/taskbar/taskbar-status.sh running" }]
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' running", "timeout": 10 }]
     }],
     "Stop": [{
-      "hooks": [{ "type": "command", "command": "sh /opt/taskbar/taskbar-status.sh completed" }]
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' completed", "timeout": 10 }]
+    }],
+    "StopFailure": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
     }]
   }
 }
 ```
+
+通知用の `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` は環境変数から読みます。JSONに固定で書き込む必要はありません。
+Claude Codeを起動し直し、**`/hooks` で4つのフックと配置先を確認**してください。Claude Codeの `/hooks` は設定を閲覧するためのメニューです。
+
+#### 導入スクリプトで設定する場合
+
+Python 3.8以降があれば、コピーとJSONへの登録を次のコマンドで行えます。
+
+```sh
+python3 VSCodeExtension/scripts/install-claude-hooks.py
+```
+
+導入スクリプトは `settings.json` の既存設定を保持し、変更前のファイルを `.bak` に保存します。
+同じコマンドの重複登録を防ぎ、通知スクリプトは再実行で更新できます。
+`permissions`、`env`、`disableAllHooks` などの既存設定は変更しません。
+テンプレートは [examples/claude-hooks.json](examples/claude-hooks.json) です。
+
+実行後にClaude Codeを起動し直し、`/hooks` で確認します。各ターンの通知には `sh` と `curl` を使います。
+`aicontainer` やDocker ComposeではClaude Code設定ディレクトリを永続化してください。永続化されていなければコンテナ再作成後に再登録します。
+
+#### 動作確認と中断時の扱い
+
+この環境のCLIは `2.1.285` です。登録後は短い依頼を2回送り、毎回「実行中 → 完了」に変わることと、通常終了で表示が消えることを確認してください。
+`Stop` は応答が終わったことを表し、作業成功の判定には使いません。他の停止フックが応答を継続させる場合は、処理中でも完了表示になる場合があります。
+
+**Escなどによる中断では `Stop` は発火せず、実行中表示が残る場合があります。**
+Claude Codeの公式イベント一覧には `Interrupt` がないため、この設定には登録していません。
+中断直後に表示を解除する場合は、同じ通知用環境変数を引き継いだコンテナ内シェルで次を実行します。
+
+```sh
+sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" none 2
+```
+
+既存設定で `disableAllHooks` が有効になっている場合や、管理設定でユーザーフックが制限されている場合は、その設定も確認してください。
 
 他のAIでも、依頼開始・応答完了のフックへ同じコマンドを登録できます。
 
