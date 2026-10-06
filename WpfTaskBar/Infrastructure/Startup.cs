@@ -21,6 +21,8 @@ namespace WpfTaskBar
             });
 
             services.AddSingleton<WindowIconService>();
+            services.AddSingleton<TaskStatusStore>();
+            services.AddSingleton<ITaskWindowProvider, TaskWindowProvider>();
             services.AddSingleton<WebView2Handler>();
         }
 

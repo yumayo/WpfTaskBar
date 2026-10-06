@@ -19,13 +19,15 @@ using WpfApplication = System.Windows.Application;
 			private static long _nextWebMessageId;
 			private static int _activeBackgroundMessages;
 			private readonly WindowIconService _windowIconService;
+			private readonly TaskStatusStore _taskStatusStore;
 			private Dispatcher? _dispatcher;
 			private WebView2? _webView2;
 			private OptionsWindow? _optionsWindow;
 
-			public WebView2Handler(WindowIconService windowIconService)
+			public WebView2Handler(WindowIconService windowIconService, TaskStatusStore taskStatusStore)
 			{
 				_windowIconService = windowIconService;
+				_taskStatusStore = taskStatusStore;
 				AppSettingsModel.SettingsChanged += OnAppSettingsChanged;
 			}
 
@@ -491,11 +493,14 @@ using WpfApplication = System.Windows.Application;
 		{
 			try
 			{
+				var statusRevision = _taskStatusStore.GetRevision();
 				var foregroundWindow = NativeMethods.GetForegroundWindow();
 				var items = new List<object>();
+				var windowHandles = new HashSet<int>();
 
 				NativeMethods.EnumWindows((hwnd, lParam) =>
 					{
+						windowHandles.Add(hwnd.ToInt32());
 						items.Add(new
 						{
 							handle = hwnd.ToInt32(),
@@ -507,6 +512,8 @@ using WpfApplication = System.Windows.Application;
 					},
 					0);
 
+				// 全仮想デスクトップの HWND を使い、閉じたウィンドウの状態だけを破棄する。
+				_taskStatusStore.RemoveMissingWindows(windowHandles, statusRevision);
 				SendMessageToWebView(new
 				{
 					type = "window_snapshot_response",
@@ -585,6 +592,7 @@ using WpfApplication = System.Windows.Application;
 			}
 
 			var resolvedProcessId = UwpUtility.GetProcessId(handle);
+			NativeMethods.GetWindowThreadProcessId(handle, out var windowProcessId);
 			var sortKey = GetStableSortKey(handle, rawProcessName, processName);
 			var iconResult = _windowIconService.ResolveWindowIcon(handle, processName, title);
 			if (isApplicationFrameHost ||
@@ -602,6 +610,7 @@ using WpfApplication = System.Windows.Application;
 				title,
 				isForeground = handle == foregroundWindow,
 				iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
+				status = _taskStatusStore.GetStatus(handle.ToInt32(), windowProcessId),
 			};
 		}
 

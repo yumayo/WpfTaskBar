@@ -23,6 +23,8 @@ export interface MessageData {
 }
 
 // Task bar item
+export type TaskStatus = 'none' | 'running' | 'completed';
+
 export interface TaskBarItem {
   handle: number;
   sortKey: string;
@@ -30,6 +32,7 @@ export interface TaskBarItem {
   title: string;
   isForeground: boolean;
   iconData: string | null;
+  status?: TaskStatus;
   windowId?: number;
 }
 

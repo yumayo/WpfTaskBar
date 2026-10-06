@@ -1,5 +1,6 @@
 import { sendMessageToHost } from './network';
 import type { TaskBarItem, MessageData } from './types';
+import { updateTaskStatus } from './task-status';
 
 const UPDATE_INTERVAL = 100; // 更新間隔（ミリ秒）
 const FOREGROUND_UPDATE_SKIP_DURATION = 1000; // クリック後のタスク更新スキップ時間（ミリ秒）
@@ -273,6 +274,12 @@ function createTaskItem(task: TaskBarItem): HTMLElement {
   item.dataset.sortKey = task.sortKey;
   item.dataset.moduleFileName = task.moduleFileName;
   item.draggable = true; // ドラッグ可能にする
+
+  // 状態がないタスクにも同じ幅を確保する
+  const status = document.createElement('span');
+  status.className = 'task-status';
+  updateTaskStatus(status, task.status);
+  item.appendChild(status);
 
   // アイコン
   const icon = document.createElement('div');
@@ -657,6 +664,9 @@ function reorderSingleTask(draggedHandle: number, targetHandle: number, dropAbov
 
 // タスク要素の内容を更新（変更がある場合のみ）
 function updateTaskItemContent(item: HTMLElement, task: TaskBarItem): void {
+  const statusElement = item.querySelector<HTMLElement>('.task-status');
+  if (statusElement) updateTaskStatus(statusElement, task.status);
+
   // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ
   // これがないと定期的な通信によって上書きされて、アクティブなウィンドウのタスクバーがちらつきます。
   const timeSinceClick = Date.now() - lastClickTime;
