@@ -1,0 +1,54 @@
+{
+  "name": "wpftaskbar-ai-status",
+  "displayName": "WpfTaskBar AI Status",
+  "description": "WSL / AI コンテナの応答状態を、所属する VSCode の WpfTaskBar タスクへ通知します。",
+  "version": "0.1.0",
+  "publisher": "yumayo",
+  "repository": { "type": "git", "url": "https://github.com/yumayo/WpfTaskBar.git" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "extensionKind": ["ui"],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false },
+    "virtualWorkspaces": { "supported": false }
+  },
+  "contributes": {
+    "commands": [
+      { "command": "wpftaskbar.openTerminal", "title": "WpfTaskBar: AI 通知付きターミナルを開く" },
+      { "command": "wpftaskbar.selectWindow", "title": "WpfTaskBar: この VSCode の通知先を選択" },
+      { "command": "wpftaskbar.showLog", "title": "WpfTaskBar: 通知ログを表示" }
+    ],
+    "configuration": {
+      "title": "WpfTaskBar",
+      "properties": {
+        "wpftaskbar.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5000",
+          "scope": "machine",
+          "description": "Windows 側の拡張から WpfTaskBar に接続する URL。"
+        },
+        "wpftaskbar.containerApiUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "コンテナから Windows の WpfTaskBar に接続する URL。空欄の場合は apiUrl。WSL / Docker のネットワークに合わせて設定してください。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "vscode:prepublish": "npm run build",
+    "pretest": "npm run build",
+    "test": "node --test tests/*.test.cjs",
+    "check": "tsc --noEmit",
+    "package": "vsce package --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.9.3"
+  }
+}
