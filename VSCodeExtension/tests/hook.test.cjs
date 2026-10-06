@@ -26,7 +26,12 @@ test('AI フックは開始・完了を通知し、通知失敗でも正常終�
     const args = (await fs.readFile(capture, 'utf8')).trim().split('\n');
     assert.equal(args.at(-1), 'http://windows-host:5000/tasks/sessions/0123456789abcdef0123456789abcdef/status');
     assert.equal(args[args.indexOf('--data') + 1], JSON.stringify({ status }));
+    assert.equal(args[args.indexOf('--max-time') + 1], '5');
   }
+  await promisify(execFile)('sh', [script, 'none', '2'], { env });
+  const shortTimeoutArgs = (await fs.readFile(capture, 'utf8')).trim().split('\n');
+  assert.equal(shortTimeoutArgs[shortTimeoutArgs.indexOf('--max-time') + 1], '2');
+  await assert.rejects(promisify(execFile)('sh', [script, 'none', '0'], { env }), error => error.code === 2);
   const result = await promisify(execFile)('sh', [script, 'completed'], { env: { ...env, TASKBAR_TEST_EXIT: '22' } });
   assert.match(result.stderr, /通知できません/);
   await fs.unlink(capture);

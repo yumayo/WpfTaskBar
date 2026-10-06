@@ -131,8 +131,95 @@ AI のフック機構に次のコマンドを登録してください。どの�
 開始と完了は**AI の応答単位**で呼びます。CLI / コンテナの起動と終了に設定すると、その生存期間の表示になってしまいます。
 通知用の環境変数がない場合は何もせず終了するため、同じフック設定を VSCode 以外でも使用できます。
 通信失敗は標準エラーに出し、最大 5 秒で終了します。通知失敗で AI 本体を停止させません。
+第2引数で通信の上限を1〜5秒に短縮できます。例: `sh /opt/taskbar/taskbar-status.sh none 2`。
 
-例として、Claude Code の `UserPromptSubmit` / `Stop` に設定する場合は次の内容を既存の hooks 設定へマージします。
+### Codex CLI のユーザー共通フック
+
+Codex のフックからも同じ `taskbar-status.sh` を使えます。
+[公式 OpenAI Docs の Hooks](https://learn.chatgpt.com/docs/hooks) に従い、次の4イベントを登録します。
+この環境では Codex CLI `0.159.2` の `hooks` 機能が有効であることを確認しています。
+
+| Codexイベント | 通知する状態 |
+| --- | --- |
+| `UserPromptSubmit` | `running` |
+| `Stop` | `completed` |
+| `Interrupt` | `none` |
+| `SessionEnd` | `none` |
+
+#### 手動で設定する場合
+
+設定する場所は、**Codexを動かすAIコンテナ内**です。
+ユーザー共通の設定ファイルは `~/.codex/hooks.json` です。`CODEX_HOME` を指定している場合は `$CODEX_HOME/hooks.json` を使います。
+同じCodex設定ディレクトリを使うプロジェクトで共通に有効になります。
+
+まずリポジトリルートで、通知スクリプトを共通の場所へコピーします。手動設定に必要なのは `sh` と `curl` です。
+
+```sh
+taskbar_codex_dir="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$taskbar_codex_dir/hooks/wpftaskbar"
+cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
+printf '設定ファイル: %s\n' "$taskbar_codex_dir/hooks.json"
+printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
+```
+
+表示された `hooks.json` をエディターで開き、次のJSONを保存します。
+以下はホームが `/home/ubuntu`、`CODEX_HOME` が未設定の場合の例です。**4か所のスクリプトのパスを、上で表示された実際の絶対パスに合わせてください。**
+既存の設定がある場合は上書きせず、既存の `hooks` に追加します。同じイベントが既にあれば、その配列へ今回の `{"hooks": [...]}` を追加してください。
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' running", "timeout": 10 }]
+    }],
+    "Stop": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' completed", "timeout": 10 }]
+    }],
+    "Interrupt": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+    }]
+  }
+}
+```
+
+この設定でCodexがイベントごとに `taskbar-status.sh` を実行します。
+スクリプトは環境変数 `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` を読み、WindowsのWpfTaskBarへ状態をHTTPで通知します。
+URLと通知IDは通知付きターミナルからコンテナへ引き継ぎ、JSONには固定で書き込みません。
+
+Codexを起動し直し、**`/hooks` で4つの通知フックを確認して信頼**してください。
+これはCodex本体のフック実行要件です。既存の `config.toml` にも同じ通知を設定している場合は重複を解消します。
+フックは標準出力に何も書かず、通知に失敗しても通常終了します。中断・終了用は通信上限を2秒、フックの期限を3秒にしています。
+
+#### 導入スクリプトで設定する場合
+
+`scripts/install-codex-hooks.py` は、上のコピーとJSONへの登録を自動で行う導入用スクリプトです。
+既存のフックを保持し、変更前のJSONを `.bak` ファイルへ保存します。同じコマンドは二重登録しません。
+通知コマンドには配置先の絶対パスを設定します。`config.toml` の変更や `/hooks` の信頼確認は行いません。
+
+Python 3.8以降がある場合、手動設定の代わりに次のコマンドを使えます。
+
+```sh
+python3 VSCodeExtension/scripts/install-codex-hooks.py
+```
+
+実行後は手動設定と同様に、Codexを起動し直して `/hooks` で確認・信頼します。
+導入用のテンプレートは [examples/codex-hooks.json](examples/codex-hooks.json) です。パスのプレースホルダーは導入スクリプトが置き換えます。
+各ターンの通知は `taskbar-status.sh` が行い、Pythonの導入スクリプトは実行しません。
+
+`aicontainer` を使う場合も設定先はコンテナ内のCodexです。
+設定ディレクトリが永続化されていない構成では、コンテナを作り直すと再登録が必要です。
+
+初回は通知付きターミナルから起動し、短い依頼を2回送り、毎回「実行中 → 完了」に変わることを確認してください。
+中断と通常終了で表示が消えることも確認します。通知IDが未設定の普通のターミナルでは、フックは通知せず終了します。
+`Stop` は応答の停止タイミングを示し、作業の成功を保証するイベントではありません。
+他の `Stop` フックで応答を継続させる構成では、処理が続いていても完了表示になる場合があります。
+
+### Claude Code の設定例
+
+`UserPromptSubmit` / `Stop` に設定する場合は次の内容を既存の hooks 設定へマージします。
 
 ```json
 {
@@ -147,8 +234,7 @@ AI のフック機構に次のコマンドを登録してください。どの�
 }
 ```
 
-他の AI でも、使用している版が提供する依頼開始・応答完了のフックへ同じコマンドを登録します。
-完了通知しか提供しない版では、依頼開始を通知するために AI / ランチャー側の対応が必要です。
+他のAIでも、依頼開始・応答完了のフックへ同じコマンドを登録できます。
 
 ## 表示と通知の寿命
 

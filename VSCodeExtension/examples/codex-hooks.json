@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh __TASKBAR_STATUS_SCRIPT__ running",
+        "timeout": 10
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh __TASKBAR_STATUS_SCRIPT__ completed",
+        "timeout": 10
+      }]
+    }],
+    "Interrupt": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh __TASKBAR_STATUS_SCRIPT__ none 2",
+        "timeout": 3
+      }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh __TASKBAR_STATUS_SCRIPT__ none 2",
+        "timeout": 3
+      }]
+    }]
+  }
+}
