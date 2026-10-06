@@ -17,5 +17,7 @@
     <Compile Include="../../WpfTaskBar/Api/Controllers/TaskStatusController.cs" Link="TaskStatusController.cs" />
     <Compile Include="../../WpfTaskBar/Api/Models/TaskStatusModels.cs" Link="TaskStatusModels.cs" />
     <Compile Include="../../WpfTaskBar/Services/TaskStatusStore.cs" Link="TaskStatusStore.cs" />
+    <Compile Include="../../WpfTaskBar/Api/Controllers/TaskSessionsController.cs" Link="TaskSessionsController.cs" />
+    <Compile Include="../../WpfTaskBar/Api/Models/TaskSessionModels.cs" Link="TaskSessionModels.cs" />
   </ItemGroup>
 </Project>
