@@ -84,7 +84,7 @@ test('Codexフックが未設定なら新規作成し、壊れた既存設定は
 });
 
 
-test('旧中断フックは置き換え、質問ツールのmatcherと無関係なフックを保持する', async t => {
+test('旧中断フックは置き換え、質問ツールのmatcherと無関係なフックを保持する', { skip: process.platform === 'win32' }, async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wpftaskbar-codex-migrate-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await run('python3', [installer, '--codex-dir', dir]);

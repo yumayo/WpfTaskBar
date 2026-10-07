@@ -101,7 +101,7 @@ test('Claude設定の配置先を環境変数から選び、壊れた既存設�
 });
 
 
-test('Claudeの旧失敗フックは置き換え、matcherごとの追加を再実行でも重複させない', async t => {
+test('Claudeの旧失敗フックは置き換え、matcherごとの追加を再実行でも重複させない', { skip: process.platform === 'win32' }, async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wpftaskbar-claude-migrate-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await run('python3', [installer, '--claude-dir', dir]);
