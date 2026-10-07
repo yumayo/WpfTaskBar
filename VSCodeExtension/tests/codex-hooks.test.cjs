@@ -100,7 +100,7 @@ test('旧中断フックは置き換え、質問ツールのmatcherと無関係�
   assert.deepEqual(commands[0], custom);
   assert.equal(commands.length, 2);
   assert.match(commands[1].command, / interrupted 2$/);
-  const matcher = new RegExp(updated.hooks.PreToolUse[0].matcher);
+  const matcher = new RegExp(updated.hooks.PreToolUse.find(group => group.matcher)?.matcher);
   for (const tool of ['request_user_input', 'functions.request_user_input', 'request_permissions']) assert.equal(matcher.test(tool), true);
   for (const tool of ['exec_command', 'request_user_input_async', 'other_tool']) assert.equal(matcher.test(tool), false);
   const installed = await fs.readFile(file, 'utf8');

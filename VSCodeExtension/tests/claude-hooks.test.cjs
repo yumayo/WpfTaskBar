@@ -117,7 +117,7 @@ test('Claudeの旧失敗フックは置き換え、matcherごとの追加を再�
   assert.deepEqual(commands[0], custom);
   assert.equal(commands.length, 2);
   assert.match(commands[1].command, / interrupted 2$/);
-  const matcher = new RegExp(updated.hooks.PreToolUse[0].matcher);
+  const matcher = new RegExp(updated.hooks.PreToolUse.find(group => group.matcher)?.matcher);
   for (const tool of ['AskUserQuestion', 'ExitPlanMode']) assert.equal(matcher.test(tool), true);
   assert.equal(matcher.test('Bash'), false);
   const installed = await fs.readFile(file, 'utf8');

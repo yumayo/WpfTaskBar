@@ -262,6 +262,65 @@ public sealed class TaskSessionTests
 		Assert.Equal("running", _statuses.GetSession(second)!.Status);
 	}
 
+	[Fact]
+	public void ActivitySurvivesTitlePollingAndDoesNotChangeWaitingStateOrSessionSelection()
+	{
+		var first = CreateSession();
+		var second = CreateSession();
+		SetStatus(second, "running");
+		SetStatus(first, "waiting");
+		Assert.IsType<NoContentResult>(_controller.SetActivity(first, new() { ActivityText = "設定を確認しています。" }));
+		Assert.IsType<NoContentResult>(_controller.SetActivity(second, new() { ActivityText = "別の作業" }));
+		SetTitle(first, "Codex | WpfTaskBar");
+		Assert.Equal(new TaskWindowState("waiting", true, "Codex | WpfTaskBar", "設定を確認しています。"),
+			_statuses.GetWindowState(10, 100));
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(first, new() { Status = "completed", ActivityText = "修正しました。" }));
+		SetStatus(second, "none");
+		Assert.Equal("修正しました。", _statuses.GetWindowState(10, 100).ActivityText);
+		SetStatus(first, "running");
+		Assert.Equal("", _statuses.GetWindowState(10, 100).ActivityText);
+		Assert.IsType<NoContentResult>(_controller.SetActivity(first, new() { ActivityText = "次の作業" }));
+		SetStatus(first, "none");
+		Assert.Equal("", _statuses.GetWindowState(10, 100).ActivityText);
+	}
+
+	[Theory]
+	[InlineData("completed")]
+	[InlineData("interrupted")]
+	public void LateToolActivityCannotOverwriteFinishedText(string status)
+	{
+		var id = CreateSession();
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(id, new() { Status = status, ActivityText = "最後の文言" }));
+		var revision = _statuses.GetRevision();
+		Assert.IsType<NoContentResult>(_controller.SetActivity(id, new() { ActivityText = "遅れた進捗" }));
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(id, new()
+		{
+			Status = "running", OnlyIfActive = true, ActivityText = "遅れたツール結果"
+		}));
+		Assert.Equal(status, _statuses.GetWindowState(10, 100).Status);
+		Assert.Equal("最後の文言", _statuses.GetWindowState(10, 100).ActivityText);
+		Assert.Equal(revision, _statuses.GetRevision());
+	}
+
+	[Fact]
+	public void ActivityValidatesLengthAndWindowLifetimeWithoutRenewingSession()
+	{
+		var id = CreateSession();
+		SetStatus(id, "running");
+		Assert.IsType<BadRequestObjectResult>(_controller.SetActivity(id, new() { ActivityText = null! }));
+		Assert.IsType<BadRequestObjectResult>(_controller.SetActivity(id, new() { ActivityText = new string('x', 513) }));
+		Assert.IsType<BadRequestObjectResult>(_controller.SetStatus(id, new() { Status = "completed", ActivityText = new string('x', 513) }));
+		Assert.Equal("running", _statuses.GetSession(id)!.Status);
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		Assert.IsType<NoContentResult>(_controller.SetActivity(id, new() { ActivityText = "最新の進捗" }));
+		_clock.Advance(TimeSpan.FromSeconds(30));
+		Assert.IsType<NotFoundObjectResult>(_controller.SetActivity(id, new() { ActivityText = "期限切れ" }));
+		id = CreateSession();
+		_windows.Items[0] = _windows.Items[0] with { ProcessId = 999 };
+		Assert.IsType<NotFoundObjectResult>(_controller.SetActivity(id, new() { ActivityText = "別ウィンドウ" }));
+		Assert.Null(_statuses.GetSession(id));
+	}
+
 	private void SetTitle(string id, string title) =>
 		Assert.IsType<NoContentResult>(_controller.SetTitle(id, new() { TerminalTitle = title }));
 

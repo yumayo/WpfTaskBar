@@ -91,3 +91,19 @@ test('AIタスクの2段表示は状態によらず生存中に維持され、�
   assert.equal(title.hidden, true);
   assert.equal(title.textContent, '');
 });
+
+test('進捗文をタイトルより優先し、解除後は最新のターミナル名に戻る', () => {
+  const item = { classList: { toggle() {} } };
+  const title = { textContent: '', title: '', hidden: true };
+  const activityText = '<script>設定を確認中</script>';
+  updateAiTask(item, title, { hasAiTask: true, terminalTitle: 'Codex', activityText });
+  assert.equal(title.textContent, activityText);
+  updateAiTask(item, title, { hasAiTask: true, terminalTitle: '変更後のタイトル', activityText });
+  assert.equal(title.textContent, activityText);
+  assert.equal(title.title, activityText);
+  updateAiTask(item, title, { hasAiTask: true, terminalTitle: '変更後のタイトル', activityText: '' });
+  assert.equal(title.textContent, '変更後のタイトル');
+  updateAiTask(item, title, { hasAiTask: false, activityText });
+  assert.equal(title.textContent, '');
+  assert.equal(title.hidden, true);
+});
