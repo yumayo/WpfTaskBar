@@ -39,7 +39,7 @@ npm run package
 
 `package.json` と `package-lock.json` が更新されます。グローバルインストールは不要です。
 
-Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.1.vsix` を選択してください。
+Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.2.vsix` を選択してください。
 Remote - WSL 使用時も拡張は Windows 側で動きます。
 
 拡張本体は `src/*.ts` で実装し、`npm run build` で `dist/*.js` へコンパイルします。
