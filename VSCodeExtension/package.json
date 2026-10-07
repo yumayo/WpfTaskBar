@@ -14,6 +14,11 @@
     "virtualWorkspaces": { "supported": false }
   },
   "contributes": {
+    "terminal": {
+      "profiles": [
+        { "id": "wpftaskbar.aiTerminal", "title": "AI (WpfTaskBar)", "icon": "terminal" }
+      ]
+    },
     "commands": [
       { "command": "wpftaskbar.openTerminal", "title": "WpfTaskBar: AI 通知付きターミナルを開く" },
       { "command": "wpftaskbar.selectWindow", "title": "WpfTaskBar: この VSCode の通知先を選択" },
@@ -33,6 +38,19 @@
           "default": "",
           "scope": "machine",
           "description": "コンテナから Windows の WpfTaskBar に接続する URL。空欄の場合は apiUrl。WSL / Docker のネットワークに合わせて設定してください。"
+        },
+        "wpftaskbar.shellPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "AI 通知付きターミナルで起動するシェル。例: Windows の wsl.exe。空欄の場合は VSCode に選択を任せます。Remote - WSL では /bin/bash などリモート側のパスを指定してください。"
+        },
+        "wpftaskbar.shellArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine",
+          "description": "AI 通知付きターミナルのシェルに渡す引数。例: wsl.exe で Ubuntu を選ぶ場合は [\"-d\", \"Ubuntu\"]。"
         }
       }
     }

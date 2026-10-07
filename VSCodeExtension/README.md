@@ -62,7 +62,39 @@ Remote - WSL 使用時も拡張は Windows 側で動きます。
 
 Windows のターミナルから `wsl.exe` を起動する場合に備え、`WSLENV` にも上記の変数を追加します。
 WSL から Docker コンテナへの引き継ぎはランチャー側で設定が必要です。
-開くターミナルのシェルには VSCode の既定プロファイルを使います。ローカルウィンドウでは WSL プロファイルを既定にするか、作成されたターミナルで `wsl.exe` を実行してください。
+開くシェルは `wpftaskbar.shellPath` と `wpftaskbar.shellArgs` で指定できます。この設定は専用コマンドと次のプロファイルの両方で使います。未指定の場合は VSCode のシェル選択に従います。
+
+### 標準の「＋」やショートカットから開く
+
+ターミナルの「＋」の横にあるメニューから **AI (WpfTaskBar)** を選択します。
+専用コマンドの「AI 通知付きターミナルを開く」と同じ通知機能を持つ、通常の統合ターミナルが開きます。
+
+普段の「＋」や「ターミナル: 新しいターミナルの作成」から使うには、コマンドパレットの **ターミナル: 既定のプロファイルの選択** で **AI (WpfTaskBar)** を選んでください。
+以後、新しく開くたびに個別の通知 ID が環境変数へ設定されます。初回の通知先ウィンドウ選択、環境変数の引き継ぎ、AI のフック設定は専用コマンドと共通です。
+
+Windows のローカルウィンドウから WSL の Ubuntu を起動する設定例です。ディストリビューション名は使用環境に合わせて変更してください。
+
+```json
+{
+  "terminal.integrated.defaultProfile.windows": "AI (WpfTaskBar)",
+  "wpftaskbar.shellPath": "wsl.exe",
+  "wpftaskbar.shellArgs": ["-d", "Ubuntu"]
+}
+```
+
+Remote - WSL のウィンドウでは、シェルにリモート側のパスを指定します。
+
+```json
+{
+  "terminal.integrated.defaultProfile.linux": "AI (WpfTaskBar)",
+  "wpftaskbar.shellPath": "/bin/bash",
+  "wpftaskbar.shellArgs": []
+}
+```
+
+既定を **AI (WpfTaskBar)** に変更しても、それまで使っていたプロファイルのシェル・引数は自動ではコピーされません。WSL のディストリビューションやシェルを固定したい場合は上記の設定を指定してください。
+既存の PowerShell / WSL プロファイルを直接選んだ場合や、既に起動しているターミナルには通知用の環境変数を追加しません。
+WpfTaskBar に接続できない場合はエラーを表示します。通知先の選択をキャンセルすると起動を中止します。
 
 ## aicontainer からの利用
 
@@ -95,7 +127,7 @@ AIコンテナ内で `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` が設定さ
 
 ### ターミナルの開き直し・VSCode再起動後
 
-1. コマンドパレットで **WpfTaskBar: AI 通知付きターミナルを開く** を実行します。
+1. **AI (WpfTaskBar)** プロファイル（既定に設定済みなら「＋」）または **WpfTaskBar: AI 通知付きターミナルを開く** から、新しいターミナルを開きます。
 2. そのターミナルのWSLシェルから `aicontainer` を起動します。
 
 この2操作で新しいIDが自動で渡ります。`.aicontainer` やAIのフック設定の編集は不要です。
@@ -359,6 +391,10 @@ HTTP 404 は通知先の失効を示します。「WpfTaskBar: 通知ログを�
 
 API は状態の集約、ウィンドウの生存確認、有効期限を担当します。コンテナの通知だけでは有効期限は延長しません。
 登録時・更新時は HWND と PID の両方を確認します。セッションはディスクに保存しません。
+
+標準 UI 向けには `TerminalProfileProvider` で、セッションを登録済みの起動設定を返します。
+`onDidOpenTerminal` で起動設定の ID とターミナルを紐付け、その後は専用コマンドと同じ生存通知・終了時の解除を行います。
+起動前のキャンセル時は登録を解除します。起動を確認できなかった登録は延命せず、2 分経過後の定期処理で破棄します。
 
 ```sh
 npm --prefix VSCodeExtension run build
