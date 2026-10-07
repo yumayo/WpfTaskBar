@@ -16,7 +16,7 @@ public sealed class TaskStatusTests
 	[Fact]
 	public void StatusCanBeStartedCompletedClearedAndRestarted()
 	{
-		foreach (var status in new[] { "running", "completed", "none", "running" })
+		foreach (var status in new[] { "running", "waiting", "running", "interrupted", "completed", "none", "running" })
 		{
 			var result = _controller.SetStatus(new TaskStatusRequest { Handle = 10, Status = status });
 			var response = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(result).Value);

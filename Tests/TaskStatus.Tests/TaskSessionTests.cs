@@ -159,6 +159,112 @@ public sealed class TaskSessionTests
 		Assert.Equal("completed", _statuses.GetStatus(10, 100));
 	}
 
+	[Fact]
+	public void WaitingTakesPriorityAndResumingOrInterruptingKeepsOtherSessions()
+	{
+		var first = CreateSession();
+		var second = CreateSession();
+		SetStatus(first, "running");
+		SetStatus(second, "waiting");
+		Assert.Equal("waiting", _statuses.GetStatus(10, 100));
+		SetStatus(second, "running");
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+		SetStatus(second, "interrupted");
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+		SetStatus(first, "completed");
+		Assert.Equal("interrupted", _statuses.GetStatus(10, 100));
+		SetStatus(second, "none");
+		Assert.Equal("completed", _statuses.GetStatus(10, 100));
+	}
+
+	[Fact]
+	public void TitleFollowsSelectedSessionWithoutHeartbeatOrTitleUpdatesSwitchingSelection()
+	{
+		var first = CreateSession();
+		var second = CreateSession();
+		SetTitle(first, "調査中");
+		SetTitle(second, "続行しますか？");
+		SetStatus(first, "running");
+		SetStatus(second, "waiting");
+		Assert.Equal(new TaskWindowState("waiting", true, "続行しますか？"), _statuses.GetWindowState(10, 100));
+		SetTitle(second, "どちらの設定を使いますか？");
+		Assert.Equal("どちらの設定を使いますか？", _statuses.GetWindowState(10, 100).TerminalTitle);
+		SetStatus(second, "running");
+		_controller.Heartbeat(first);
+		SetTitle(first, "タイトルだけ更新");
+		Assert.Equal("どちらの設定を使いますか？", _statuses.GetWindowState(10, 100).TerminalTitle);
+		_controller.DeleteSession(second);
+		Assert.Equal("タイトルだけ更新", _statuses.GetWindowState(10, 100).TerminalTitle);
+		Assert.False(_statuses.GetWindowState(20, 100).HasAiTask);
+	}
+
+	[Fact]
+	public void IdleTerminalHasTitleAndDisappearsOnExpiryWithoutTitleUpdatesRenewingLease()
+	{
+		var id = CreateSession();
+		SetTitle(id, "AI ターミナル");
+		Assert.Equal(new TaskWindowState("none", true, "AI ターミナル"), _statuses.GetWindowState(10, 100));
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		SetTitle(id, "新しいタイトル");
+		_clock.Advance(TimeSpan.FromSeconds(30));
+		Assert.Equal(new TaskWindowState("none", false, ""), _statuses.GetWindowState(10, 100));
+		Assert.IsType<NotFoundObjectResult>(_controller.SetTitle(id, new() { TerminalTitle = "expired" }));
+	}
+
+	[Fact]
+	public void InvalidTitlesAreRejectedAndClosedWindowsCannotBeUpdated()
+	{
+		var id = CreateSession();
+		SetStatus(id, "waiting");
+		SetTitle(id, "<script>日本語 & \"引用\"</script>");
+		Assert.Equal("<script>日本語 & \"引用\"</script>", _statuses.GetWindowState(10, 100).TerminalTitle);
+		Assert.IsType<BadRequestObjectResult>(_controller.SetTitle(id, new() { TerminalTitle = null! }));
+		Assert.IsType<BadRequestObjectResult>(_controller.SetTitle(id, new() { TerminalTitle = new string('x', 4097) }));
+		Assert.Equal("waiting", _statuses.GetStatus(10, 100));
+		SetTitle(id, "");
+		Assert.Equal("", _statuses.GetWindowState(10, 100).TerminalTitle);
+		_windows.Items[0] = _windows.Items[0] with { ProcessId = 999 };
+		Assert.IsType<NotFoundObjectResult>(_controller.SetTitle(id, new() { TerminalTitle = "stale" }));
+		Assert.Null(_statuses.GetSession(id));
+	}
+
+	[Theory]
+	[InlineData("none")]
+	[InlineData("completed")]
+	[InlineData("interrupted")]
+	public void LateToolResumeAndEscapeDoNotChangeInactiveSessions(string status)
+	{
+		var id = CreateSession();
+		SetStatus(id, status);
+		var revision = _statuses.GetRevision();
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(id, new() { Status = "running", OnlyIfActive = true }));
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(id, new() { Status = "interrupted", OnlyIfActive = true }));
+		Assert.Equal(status, _statuses.GetStatus(10, 100));
+		Assert.Equal(revision, _statuses.GetRevision());
+		// 次の依頼は通常の通知で明示的に開始できる。
+		SetStatus(id, "running");
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+	}
+
+	[Fact]
+	public void EscapeInterruptsOnlyItsActiveSessionAndLateToolResultDoesNotResumeIt()
+	{
+		var first = CreateSession();
+		var second = CreateSession();
+		SetStatus(first, "waiting");
+		SetStatus(second, "running");
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(first, new() { Status = "interrupted", OnlyIfActive = true }));
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(first, new() { Status = "running", OnlyIfActive = true }));
+		Assert.Equal("interrupted", _statuses.GetSession(first)!.Status);
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+		SetStatus(second, "waiting");
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(second, new() { Status = "running", OnlyIfActive = true }));
+		Assert.Equal("running", _statuses.GetSession(second)!.Status);
+	}
+
+	private void SetTitle(string id, string title) =>
+		Assert.IsType<NoContentResult>(_controller.SetTitle(id, new() { TerminalTitle = title }));
+
 	private string CreateSession(int handle = 10)
 	{
 		var response = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(

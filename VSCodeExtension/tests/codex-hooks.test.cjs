@@ -28,7 +28,7 @@ test('Codex共通フックは既存設定を保持して登録され、別ディ
   const config = JSON.parse(installed);
   assert.equal(config.description, 'Existing hooks');
   assert.deepEqual(config.hooks.Stop[0].hooks, [existingHandler]);
-  assert.deepEqual(config.hooks.PreToolUse, [{ matcher: 'Bash', hooks: [existingHandler] }]);
+  assert.deepEqual(config.hooks.PreToolUse.slice(0, 1), [{ matcher: 'Bash', hooks: [existingHandler] }]);
   const backups = (await fs.readdir(target)).filter(file => file.endsWith('.bak'));
   assert.equal(backups.length, 1);
   assert.equal(await fs.readFile(path.join(target, backups[0]), 'utf8'), original);
@@ -48,7 +48,8 @@ test('Codex共通フックは既存設定を保持して登録され、別ディ
   };
   for (const [event, status, timeout] of [
     ['UserPromptSubmit', 'running', '5'], ['Stop', 'completed', '5'],
-    ['Interrupt', 'none', '2'], ['SessionEnd', 'none', '2'],
+    ['PreToolUse', 'waiting', '5'], ['PermissionRequest', 'waiting', '5'], ['PostToolUse', 'running', '5'],
+    ['Interrupt', 'interrupted', '2'], ['SessionEnd', 'none', '2'],
   ]) {
     const handler = config.hooks[event].at(-1).hooks[0];
     const execution = run('sh', ['-c', handler.command], { env, cwd: dir });
@@ -56,7 +57,7 @@ test('Codex共通フックは既存設定を保持して登録され、別ディ
     const result = await execution;
     assert.equal(result.stdout, ''); // 通知内容をCodexの追加指示に混ぜない。
     const args = (await fs.readFile(capture, 'utf8')).trim().split('\n');
-    assert.equal(args[args.indexOf('--data') + 1], JSON.stringify({ status }));
+    assert.deepEqual(JSON.parse(args[args.indexOf('--data') + 1]), event === 'PostToolUse' ? { status, onlyIfActive: true } : { status });
     assert.equal(args[args.indexOf('--max-time') + 1], timeout);
     assert.ok(handler.timeout > Number(timeout));
   }
@@ -69,7 +70,7 @@ test('Codexフックが未設定なら新規作成し、壊れた既存設定は
   const fresh = path.join(dir, 'new-config');
   await run('python3', [installer, '--codex-dir', fresh]);
   const config = JSON.parse(await fs.readFile(path.join(fresh, 'hooks.json'), 'utf8'));
-  assert.deepEqual(Object.keys(config.hooks), ['UserPromptSubmit', 'Stop', 'Interrupt', 'SessionEnd']);
+  assert.deepEqual(Object.keys(config.hooks), ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'Interrupt', 'SessionEnd']);
 
   for (const [index, invalid] of ['not JSON', '[]', '{"hooks":[]}', '{"hooks":{"Stop":"invalid"}}'].entries()) {
     const target = path.join(dir, `invalid-${index}`);
@@ -80,4 +81,29 @@ test('Codexフックが未設定なら新規作成し、壊れた既存設定は
     assert.equal(await fs.readFile(file, 'utf8'), invalid);
     assert.deepEqual(await fs.readdir(target), ['hooks.json']);
   }
+});
+
+
+test('旧中断フックは置き換え、質問ツールのmatcherと無関係なフックを保持する', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wpftaskbar-codex-migrate-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  await run('python3', [installer, '--codex-dir', dir]);
+  const file = path.join(dir, 'hooks.json');
+  const config = JSON.parse(await fs.readFile(file, 'utf8'));
+  config.hooks.Interrupt[0].hooks[0].command = config.hooks.Interrupt[0].hooks[0].command.replace('interrupted 2', 'none 2');
+  const custom = { type: 'command', command: 'echo keep', timeout: 9 };
+  config.hooks.Interrupt[0].hooks.push(custom);
+  await fs.writeFile(file, JSON.stringify(config));
+  await run('python3', [installer, '--codex-dir', dir]);
+  const updated = JSON.parse(await fs.readFile(file, 'utf8'));
+  const commands = updated.hooks.Interrupt.flatMap(group => group.hooks);
+  assert.deepEqual(commands[0], custom);
+  assert.equal(commands.length, 2);
+  assert.match(commands[1].command, / interrupted 2$/);
+  const matcher = new RegExp(updated.hooks.PreToolUse[0].matcher);
+  for (const tool of ['request_user_input', 'functions.request_user_input', 'request_permissions']) assert.equal(matcher.test(tool), true);
+  for (const tool of ['exec_command', 'request_user_input_async', 'other_tool']) assert.equal(matcher.test(tool), false);
+  const installed = await fs.readFile(file, 'utf8');
+  await run('python3', [installer, '--codex-dir', dir]);
+  assert.equal(await fs.readFile(file, 'utf8'), installed);
 });

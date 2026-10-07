@@ -54,11 +54,15 @@ test('HTTP 経由で一覧取得・登録・生存通知・削除を実行する
   const client = new TaskbarClient(url);
   const [window] = await client.windows();
   const session = await client.createSession(window);
+  await client.setTitle(session.sessionId, '日本語の質問 "続行？" <title>');
+  await client.interrupt(session.sessionId);
   await client.renew(session.sessionId);
   await client.remove(session.sessionId);
   assert.deepEqual(requests, [
     ['GET', '/tasks', null],
     ['POST', '/tasks/sessions', { handle: 10, processId: 100 }],
+    ['PUT', `/tasks/sessions/${id}/title`, { terminalTitle: '日本語の質問 "続行？" <title>' }],
+    ['POST', `/tasks/sessions/${id}/status`, { status: 'interrupted', onlyIfActive: true }],
     ['PUT', `/tasks/sessions/${id}/heartbeat`, null],
     ['DELETE', `/tasks/sessions/${id}`, null],
   ]);

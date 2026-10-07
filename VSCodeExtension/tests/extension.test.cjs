@@ -28,6 +28,13 @@ function extension() {
   const created = [];
   const removed = [];
   const renewed = [];
+  const titles = [];
+  const interrupted = [];
+  const sequences = [];
+  const contexts = new Map();
+  let activeTerminal;
+  let onActiveTerminal;
+  let onInterrupt;
   const errors = [];
   const warnings = [];
   const requests = [];
@@ -40,6 +47,8 @@ function extension() {
   let onClose;
   let onOpen;
   let onHeartbeat;
+  let onTitlePoll;
+  let onTitle;
   let now = 0;
   let failRenew = false;
   let failCreate = false;
@@ -59,13 +68,23 @@ function extension() {
       return { sessionId, handle: window.handle, processId: window.processId };
     }
     async renew(id) { renewed.push(id); if (failRenew) throw new clientModule.ApiError(404, 'missing'); }
+    async interrupt(id) { interrupted.push(id); await onInterrupt?.(); }
+    async setTitle(id, title) { titles.push({ id, title }); await onTitle?.(id, title); }
     async remove(id) { removed.push(id); }
   }
   const vscode = {
     TerminalProfile: class { constructor(options) { this.options = options; } },
     workspace: { getConfiguration: () => ({ get: (name, fallback) => config[name] ?? fallback }) },
-    commands: { registerCommand: (name, command) => { commands.set(name, command); return {}; } },
+    commands: {
+      registerCommand: (name, command) => { commands.set(name, command); return {}; },
+      executeCommand: async (name, ...args) => {
+        if (name === 'setContext') contexts.set(args[0], args[1]);
+        if (name === 'workbench.action.terminal.sendSequence') sequences.push({ terminal: activeTerminal, text: args[0].text });
+      },
+    },
     window: {
+      get activeTerminal() { return activeTerminal; },
+      onDidChangeActiveTerminal: listener => { onActiveTerminal = listener; return {}; },
       createOutputChannel: () => ({ appendLine() {}, show() {} }),
       showQuickPick: async (items, _options, token) => {
         picks++;
@@ -74,7 +93,7 @@ function extension() {
       },
       createTerminal: options => {
         if (failCreate) throw new Error('terminal creation failed');
-        const terminal = { options, creationOptions: options, show() {} };
+        const terminal = { name: 'shell', options, creationOptions: options, show() {} };
         created.push(terminal);
         if (openEventBeforeReturn) onOpen(terminal);
         return terminal;
@@ -92,7 +111,7 @@ function extension() {
     module: extensionModule,
     exports: extensionModule.exports,
     process: { platform: 'win32', env: { WSLENV: 'KEEP/p' } },
-    setInterval: callback => { onHeartbeat = callback; return 1; },
+    setInterval: (callback, delay) => { if (delay === 30000) onHeartbeat = callback; else onTitlePoll = callback; return delay; },
     clearInterval() {},
     Date: { now: () => now },
   };
@@ -100,10 +119,15 @@ function extension() {
   const api = sandbox.module.exports;
   api.activate({ subscriptions: [] });
   return {
-    created, removed, renewed, requests, errors, warnings, config, providers,
+    created, removed, renewed, requests, errors, warnings, config, providers, titles, interrupted, sequences, contexts,
     get picks() { return picks; },
     set windows(value) { windows = value; },
     set selection(value) { selection = value; },
+    activateTerminal: terminal => { activeTerminal = terminal; onActiveTerminal(terminal); },
+    interrupt: () => commands.get('wpftaskbar.interruptTerminal')(),
+    set onInterrupt(value) { onInterrupt = value; },
+    set onTitle(value) { onTitle = value; },
+    pollTitles: async () => { onTitlePoll(); await new Promise(resolve => setImmediate(resolve)); },
     set failCreate(value) { failCreate = value; },
     set failRenew(value) { failRenew = value; },
     set createError(value) { createError = value; },
@@ -113,7 +137,7 @@ function extension() {
     open: () => commands.get('wpftaskbar.openTerminal')(),
     profile: (token = cancellation()) => providers.get('wpftaskbar.aiTerminal').provideTerminalProfile(token),
     launchProfile: profile => {
-      const terminal = { creationOptions: profile.options };
+      const terminal = { name: 'shell', creationOptions: profile.options };
       onOpen(terminal);
       return terminal;
     },
@@ -360,4 +384,96 @@ test('セッション発行中に拡張が停止しても遅れて返された�
   ext.onCreateSession = () => ext.deactivate();
   assert.equal(await ext.profile(), undefined);
   assert.deepEqual(ext.removed, ['session-1']);
+});
+
+
+test('タイトルを初回・変更時だけ通知し、閉じたターミナルは更新しない', async () => {
+  const ext = extension();
+  await ext.open();
+  const terminal = ext.created[0];
+  assert.equal(terminal.options.name, undefined); // AIが設定するタイトルを固定名で隠さない。
+  await ext.pollTitles();
+  assert.deepEqual(ext.titles, [{ id: 'session-1', title: 'shell' }]);
+  terminal.name = 'どの設定を使いますか？';
+  await ext.pollTitles();
+  await ext.pollTitles();
+  assert.deepEqual(ext.titles.at(-1), { id: 'session-1', title: terminal.name });
+  assert.equal(ext.titles.length, 2);
+  ext.close(terminal);
+  terminal.name = 'closed';
+  await ext.pollTitles();
+  assert.equal(ext.titles.length, 2);
+  await ext.deactivate();
+});
+
+test('通信中のタイトル変更を直列で追従し、失敗時は再送する', async () => {
+  const ext = extension();
+  await ext.open();
+  const terminal = ext.created[0];
+  let finish;
+  ext.onTitle = () => new Promise(resolve => { finish = resolve; });
+  terminal.name = 'first';
+  await ext.pollTitles();
+  terminal.name = 'latest';
+  await ext.pollTitles();
+  assert.equal(ext.titles.at(-1).title, 'first');
+  ext.onTitle = undefined;
+  finish();
+  await ext.pollTitles();
+  assert.equal(ext.titles.at(-1).title, 'latest');
+  ext.onTitle = () => { throw new Error('offline'); };
+  terminal.name = 'retry';
+  await ext.pollTitles();
+  ext.onTitle = undefined;
+  await ext.pollTitles();
+  assert.deepEqual(ext.titles.slice(-2).map(value => value.title), ['retry', 'retry']);
+  await ext.deactivate();
+});
+
+test('タイトル通知の404で失効を案内し、別のセッションへ転送しない', async () => {
+  const ext = extension();
+  ext.onTitle = () => { throw new clientModule.ApiError(404, 'expired'); };
+  await ext.open();
+  await ext.pollTitles();
+  await ext.heartbeat();
+  assert.equal(ext.warnings.length, 1);
+  assert.equal(ext.titles.length, 1);
+  assert.equal(ext.renewed.length, 0);
+  await ext.deactivate();
+});
+
+
+test('通知付きターミナルのEscを先に転送し、そのセッションだけを中断通知する', async () => {
+  const ext = extension();
+  await ext.open();
+  await ext.open();
+  const first = ext.created[0];
+  const second = ext.created[1];
+  ext.activateTerminal(second);
+  assert.equal(ext.contexts.get('wpftaskbar.notificationTerminalActive'), true);
+  ext.onInterrupt = () => {
+    assert.equal(ext.sequences.at(-1).terminal, second);
+    assert.equal(ext.sequences.at(-1).text, '\u001b');
+    throw new Error('API offline');
+  };
+  await ext.interrupt();
+  assert.deepEqual(ext.interrupted, ['session-2']);
+  assert.equal(ext.sequences.length, 1); // 通信失敗時もEscは1回だけ渡る。
+  assert.equal(ext.errors.length, 1);
+  ext.activateTerminal(first);
+  ext.close(first);
+  assert.equal(ext.contexts.get('wpftaskbar.notificationTerminalActive'), false);
+  ext.activateTerminal({ name: '普通のターミナル' });
+  assert.equal(ext.contexts.get('wpftaskbar.notificationTerminalActive'), false);
+  await ext.interrupt(); // コンテキストの更新前にキーを押しても他のセッションを変更しない。
+  assert.deepEqual(ext.interrupted, ['session-2']);
+  await ext.deactivate();
+});
+
+test('Escの割り当ては通知付きターミナルに限定し、検索・候補一覧のEscを奪わない', () => {
+  const binding = require('../package.json').contributes.keybindings.find(value => value.command === 'wpftaskbar.interruptTerminal');
+  assert.equal(binding.key, 'escape');
+  for (const condition of ['terminalFocus', 'wpftaskbar.notificationTerminalActive', '!terminalFindVisible', '!terminalSuggestWidgetVisible']) {
+    assert.ok(binding.when.split(' && ').includes(condition));
+  }
 });
