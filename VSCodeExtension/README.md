@@ -195,6 +195,7 @@ Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続�
 
 | Codexイベント | 通知する状態 |
 | --- | --- |
+| `SessionStart`（開始理由を限定しない） | `none`（状態と以前の応答文を解除） |
 | `UserPromptSubmit` | `running` |
 | `PreToolUse`（全ツール） | `activity`（状態を変えず進捗文を更新） |
 | `PreToolUse`（`request_user_input` / `request_permissions`） | `waiting` |
@@ -203,6 +204,8 @@ Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続�
 | `Stop` | `completed` |
 | `Interrupt`（Escなど） | `interrupted` |
 | `SessionEnd` | `none` |
+
+`SessionStart` は `matcher` を省略し、すべての開始理由を対象にします。`type` は実行方式を表すため `"command"` を指定します。この設定ではクリア以外の通常起動・再開・圧縮時にも状態と応答文を解除します。
 
 #### 手動で設定する場合
 
@@ -227,6 +230,13 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/wpftas
 ```json
 {
   "hooks": {
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' none 2",
+        "timeout": 3
+      }]
+    }],
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
@@ -291,14 +301,15 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/wpftas
 スクリプトは環境変数 `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` を読み、WindowsのWpfTaskBarへ状態をHTTPで通知します。
 URLと通知IDは通知付きターミナルからコンテナへ引き継ぎ、JSONには固定で書き込みません。
 
-Codexを起動し直し、**`/hooks` で7イベントの通知フックを確認して信頼**してください。
+Codexを起動し直し、**`/hooks` で8イベントの通知フックを確認して信頼**してください。
 これはCodex本体のフック実行要件です。既存の `config.toml` にも同じ通知を設定している場合は重複を解消します。
-フックは標準出力に何も書かず、通知に失敗しても通常終了します。中断・終了用は通信上限を2秒、フックの期限を3秒にしています。
+フックは標準出力に何も書かず、通知に失敗しても通常終了します。クリア・中断・終了用は通信上限を2秒、フックの期限を3秒にしています。
 
 #### 導入スクリプトで設定する場合
 
 `scripts/install-codex-hooks.py` は、上のコピーとJSONへの登録を自動で行う導入用スクリプトです。
 既存のフックを保持し、変更前のJSONを `.bak` ファイルへ保存します。同じmatcher・コマンドは二重登録しません。旧版の `Interrupt → none` は `interrupted` に置き換え、競合する通知を残しません。
+既存環境でも再実行すると、開始理由を限定しない `SessionStart` フックが追加されます。以前のWpfTaskBar用 `SessionStart` に `"matcher": "clear"` がある場合は、再実行前にその行を削除してください。同じ通知の重複登録を防げます。
 通知コマンドには配置先の絶対パスを設定します。`config.toml` の変更や `/hooks` の信頼確認は行いません。
 
 Python 3.8以降がある場合、手動設定の代わりに次のコマンドを使えます。
@@ -321,6 +332,13 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 
 `waiting` は処理を止める質問ツール・承認要求のフックで判定します。通常の応答文に含まれる問いかけは `Stop` だけでは完了と区別できません。
 処理を止めずに質問を出す `request_user_input_async` は、この質問待ちmatcherの対象外です。
+
+#### `/clear` の反映を確認する場合
+
+1. 上の導入コマンドを再実行するか、手動設定例の `SessionStart` を既存の `hooks.json` に追加します。
+2. 通知付きターミナルからCodexを起動し直し、`/hooks` で `SessionStart` が開始理由を限定しない設定、通知スクリプトの引数が `none 2` になっていることを確認し、フックを有効・信頼済みにします。
+3. 短い依頼を送り、タスクバーに完了状態と応答文が出た後で `/clear` を実行します。**次の依頼を送る前に**、以前の応答文と状態表示が解除されるか確認します。
+4. 表示が残る場合は、次の依頼を送った時点で変わるかを確認します。`UserPromptSubmit` でも以前の応答文を解除するため、次の入力後に消えただけでは `/clear` 直後の反映を確認したことにはなりません。
 
 ### Claude Code のユーザー共通フック
 

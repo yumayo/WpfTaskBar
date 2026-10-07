@@ -47,13 +47,16 @@ test('Codex共通フックは既存設定を保持して登録され、別ディ
     WPF_TASKBAR_SESSION_ID: '0123456789abcdef0123456789abcdef',
   };
   for (const [event, status, timeout] of [
+    ['SessionStart', 'none', '2'],
     ['UserPromptSubmit', 'running', '5'], ['Stop', 'completed', '5'],
     ['PreToolUse', 'waiting', '5'], ['PermissionRequest', 'waiting', '5'], ['PostToolUse', 'running', '5'],
     ['Interrupt', 'interrupted', '2'], ['SessionEnd', 'none', '2'],
   ]) {
     const handler = config.hooks[event].at(-1).hooks[0];
     const execution = run('sh', ['-c', handler.command], { env, cwd: dir });
-    execution.child.stdin.end(JSON.stringify({ hook_event_name: event, prompt: 'not sent to taskbar' }));
+    execution.child.stdin.end(JSON.stringify({ hook_event_name: event, prompt: 'not sent to taskbar',
+      ...(event === 'SessionStart' ? { source: 'clear' } : {}),
+    }));
     const result = await execution;
     assert.equal(result.stdout, ''); // 通知内容をCodexの追加指示に混ぜない。
     const args = (await fs.readFile(capture, 'utf8')).trim().split('\n');
@@ -61,6 +64,8 @@ test('Codex共通フックは既存設定を保持して登録され、別ディ
     assert.equal(args[args.indexOf('--max-time') + 1], timeout);
     assert.ok(handler.timeout > Number(timeout));
   }
+  // 実際の開始理由によらず解除できるよう、matcher は指定しない。
+  assert.equal(config.hooks.SessionStart[0].matcher, undefined);
   assert.equal(config.hooks.SubagentStop, undefined);
 });
 
@@ -70,7 +75,7 @@ test('Codexフックが未設定なら新規作成し、壊れた既存設定は
   const fresh = path.join(dir, 'new-config');
   await run('python3', [installer, '--codex-dir', fresh]);
   const config = JSON.parse(await fs.readFile(path.join(fresh, 'hooks.json'), 'utf8'));
-  assert.deepEqual(Object.keys(config.hooks), ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'Interrupt', 'SessionEnd']);
+  assert.deepEqual(Object.keys(config.hooks), ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Stop', 'Interrupt', 'SessionEnd']);
 
   for (const [index, invalid] of ['not JSON', '[]', '{"hooks":[]}', '{"hooks":{"Stop":"invalid"}}'].entries()) {
     const target = path.join(dir, `invalid-${index}`);
@@ -91,6 +96,8 @@ test('旧中断フックは置き換え、質問ツールのmatcherと無関係�
   const file = path.join(dir, 'hooks.json');
   const config = JSON.parse(await fs.readFile(file, 'utf8'));
   const originalHooks = structuredClone(config.hooks);
+  // SessionStart のなかった既存環境へ、再導入で追加できることを確認する。
+  delete config.hooks.SessionStart;
   // 旧版で登録された全イベントを再現し、カスタム設定を含めて移行する。
   for (const groups of Object.values(config.hooks)) {
     for (const group of groups) {
