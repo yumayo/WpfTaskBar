@@ -37,6 +37,8 @@ AI の開始・終了時に `POST /tasks/status` を呼び出すと、次の表�
 | status | 表示 |
 | --- | --- |
 | `running` | 青い回転マーク（実行中） |
+| `waiting` | 黄色の「?」（質問・承認待ち） |
+| `interrupted` | オレンジの一時停止マーク（中断） |
 | `completed` | 緑のチェックアイコン（実行済み） |
 | `none` | 状態アイコンを解除（領域は残ります） |
 
@@ -48,7 +50,7 @@ curl "http://localhost:5000/tasks"
 # {"tasks":[{"handle":123456,"processId":1234,"title":"my-project","moduleFileName":"...","status":"none"}]}
 ```
 
-AI の開始時には `running`、終了時には `completed` を送ります。
+AI の開始時には `running`、質問・承認待ちには `waiting`、中断時には `interrupted`、応答終了時には `completed` を送ります。
 `handle` は実際のウィンドウ ID に置き換えてください。
 
 ```sh
@@ -89,9 +91,11 @@ WSL から接続する場合、必要に応じて `localhost` を Windows ホス
 [VSCodeExtension](VSCodeExtension/README.md) に、WSL / AI コンテナの依頼開始・応答完了を
 所属する VSCode ウィンドウへ表示する拡張を用意しています。
 拡張の「AI 通知付きターミナルを開く」から起動し、通知先の環境変数を `aicontainer` / `docker compose` に渡します。
-コンテナ内の AI フックから共通の `taskbar-status.sh running|completed|none` を呼び出します。
+コンテナ内の AI フックから共通の `taskbar-status.sh running|waiting|interrupted|completed|none` を呼び出します。
 
-複数のターミナルの状態はウィンドウ単位で集約し、実行中の AI があれば実行中表示を維持します。
+複数のターミナルの状態はウィンドウ単位で集約し、質問・承認待ち → 実行中 → 中断 → 完了の順に優先します。
+通知付きターミナルがあるタスクは通常の2倍の高さになり、下半分にAIターミナルのタイトルを表示します。
+VSCode拡張が1秒ごとにタイトルの変更を確認して通知するため、質問待ちや中断中も更新されます。
 VSCode が複数ある場合は初回に通知先を選択します。インストール、環境変数の引き継ぎ、フック設定は上記の手順を参照してください。
 
 # 開発

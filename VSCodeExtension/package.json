@@ -21,8 +21,16 @@
     },
     "commands": [
       { "command": "wpftaskbar.openTerminal", "title": "WpfTaskBar: AI 通知付きターミナルを開く" },
+      { "command": "wpftaskbar.interruptTerminal", "title": "WpfTaskBar: AI を中断 (Esc)", "enablement": "wpftaskbar.notificationTerminalActive" },
       { "command": "wpftaskbar.selectWindow", "title": "WpfTaskBar: この VSCode の通知先を選択" },
       { "command": "wpftaskbar.showLog", "title": "WpfTaskBar: 通知ログを表示" }
+    ],
+    "keybindings": [
+      {
+        "command": "wpftaskbar.interruptTerminal",
+        "key": "escape",
+        "when": "terminalFocus && wpftaskbar.notificationTerminalActive && !terminalFindVisible && !terminalSuggestWidgetVisible && !terminalAccessibleBufferFocus"
+      }
     ],
     "configuration": {
       "title": "WpfTaskBar",

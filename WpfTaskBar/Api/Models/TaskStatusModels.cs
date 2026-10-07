@@ -8,7 +8,7 @@ public sealed class TaskStatusRequest
 	public string? Title { get; set; }
 
 	[Required]
-	[RegularExpression("^(none|running|completed)$")]
+	[RegularExpression("^(none|running|waiting|interrupted|completed)$")]
 	public string Status { get; set; } = string.Empty;
 }
 

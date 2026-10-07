@@ -1,6 +1,6 @@
 # WpfTaskBar AI Status
 
-VSCode の統合ターミナルで起動した AI コンテナから、依頼ごとの実行中 / 応答完了を WpfTaskBar に表示します。
+VSCode の統合ターミナルで起動した AI コンテナから、依頼ごとの実行中 / 質問・承認待ち / 中断 / 応答完了と、ターミナルタイトルを WpfTaskBar に表示します。
 Windows 側の VSCode にインストールする拡張です。通常の WSL ターミナルと Remote - WSL の両方を想定しています。
 
 ```text
@@ -8,7 +8,7 @@ VSCode 拡張 → 通知付きターミナルを作成（ウィンドウと通�
                   ↓ 環境変数を引き継ぐ
                 WSL → aicontainer / docker compose → AI のフック
                                                         ↓ HTTP
-Windows の WpfTaskBar ← ターミナルごとの状態を集約 ← running / completed
+Windows の WpfTaskBar ← ターミナルごとの状態を集約 ← running / waiting / interrupted / completed
 ```
 
 `wsl.exe` の親 PID だけでは、同じ Electron プロセスが持つ複数の VSCode ウィンドウを区別できません。
@@ -175,7 +175,10 @@ AI のフック機構に次のコマンドを登録してください。どの�
 | --- | --- |
 | ユーザーの依頼を受け付けたとき | `sh /opt/taskbar/taskbar-status.sh running` |
 | AI が応答を終えたとき | `sh /opt/taskbar/taskbar-status.sh completed` |
-| キャンセル・表示解除 | `sh /opt/taskbar/taskbar-status.sh none` |
+| 質問・承認待ち | `sh /opt/taskbar/taskbar-status.sh waiting` |
+| 回答・承認後の再開 | `sh /opt/taskbar/taskbar-status.sh running` |
+| Escなどによる中断 | `sh /opt/taskbar/taskbar-status.sh interrupted 2` |
+| セッション終了・表示解除 | `sh /opt/taskbar/taskbar-status.sh none` |
 
 開始と完了は**AI の応答単位**で呼びます。CLI / コンテナの起動と終了に設定すると、その生存期間の表示になってしまいます。
 通知用の環境変数がない場合は何もせず終了するため、同じフック設定を VSCode 以外でも使用できます。
@@ -185,14 +188,17 @@ AI のフック機構に次のコマンドを登録してください。どの�
 ### Codex CLI のユーザー共通フック
 
 Codex のフックからも同じ `taskbar-status.sh` を使えます。
-[公式 OpenAI Docs の Hooks](https://learn.chatgpt.com/docs/hooks) に従い、次の4イベントを登録します。
-この環境では Codex CLI `0.159.2` の `hooks` 機能が有効であることを確認しています。
+[公式 OpenAI Docs の Hooks](https://learn.chatgpt.com/docs/hooks) を参照した既存設定に、質問・承認待ちと再開のフックを追加します。
+Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続できない開発環境では、導入済みCLIのイベント定義も確認しています。
 
 | Codexイベント | 通知する状態 |
 | --- | --- |
 | `UserPromptSubmit` | `running` |
+| `PreToolUse`（`request_user_input` / `request_permissions`） | `waiting` |
+| `PermissionRequest` | `waiting` |
+| `PostToolUse`（質問への回答・承認後を含む） | `resume`（実行中・待ちの間だけ `running` に戻す） |
 | `Stop` | `completed` |
-| `Interrupt` | `none` |
+| `Interrupt`（Escなど） | `interrupted` |
 | `SessionEnd` | `none` |
 
 #### 手動で設定する場合
@@ -212,23 +218,61 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskba
 ```
 
 表示された `hooks.json` をエディターで開き、次のJSONを保存します。
-以下はホームが `/home/ubuntu`、`CODEX_HOME` が未設定の場合の例です。**4か所のスクリプトのパスを、上で表示された実際の絶対パスに合わせてください。**
-既存の設定がある場合は上書きせず、既存の `hooks` に追加します。同じイベントが既にあれば、その配列へ今回の `{"hooks": [...]}` を追加してください。
+以下はホームが `/home/ubuntu`、`CODEX_HOME` が未設定の場合の例です。**各フックのスクリプトのパスを、上で表示された実際の絶対パスに合わせてください。**
+既存の設定がある場合は上書きせず、既存の `hooks` に追加します。以前のWpfTaskBar用フックは新しい定義に置き換えてください。同じイベントが既にあれば、その配列へ今回の `{"hooks": [...]}` を追加してください。
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' running", "timeout": 10 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' running",
+        "timeout": 10
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "(^|.*[.:/])(request_user_input|request_permissions)$",
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "timeout": 10
+      }]
+    }],
+    "PermissionRequest": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "timeout": 10
+      }]
+    }],
+    "PostToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "timeout": 10
+      }]
     }],
     "Stop": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' completed", "timeout": 10 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' completed",
+        "timeout": 10
+      }]
     }],
     "Interrupt": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' interrupted 2",
+        "timeout": 3
+      }]
     }],
     "SessionEnd": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2",
+        "timeout": 3
+      }]
     }]
   }
 }
@@ -238,14 +282,14 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskba
 スクリプトは環境変数 `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` を読み、WindowsのWpfTaskBarへ状態をHTTPで通知します。
 URLと通知IDは通知付きターミナルからコンテナへ引き継ぎ、JSONには固定で書き込みません。
 
-Codexを起動し直し、**`/hooks` で4つの通知フックを確認して信頼**してください。
+Codexを起動し直し、**`/hooks` で7イベントの通知フックを確認して信頼**してください。
 これはCodex本体のフック実行要件です。既存の `config.toml` にも同じ通知を設定している場合は重複を解消します。
 フックは標準出力に何も書かず、通知に失敗しても通常終了します。中断・終了用は通信上限を2秒、フックの期限を3秒にしています。
 
 #### 導入スクリプトで設定する場合
 
 `scripts/install-codex-hooks.py` は、上のコピーとJSONへの登録を自動で行う導入用スクリプトです。
-既存のフックを保持し、変更前のJSONを `.bak` ファイルへ保存します。同じコマンドは二重登録しません。
+既存のフックを保持し、変更前のJSONを `.bak` ファイルへ保存します。同じmatcher・コマンドは二重登録しません。旧版の `Interrupt → none` は `interrupted` に置き換え、競合する通知を残しません。
 通知コマンドには配置先の絶対パスを設定します。`config.toml` の変更や `/hooks` の信頼確認は行いません。
 
 Python 3.8以降がある場合、手動設定の代わりに次のコマンドを使えます。
@@ -262,20 +306,28 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 設定ディレクトリが永続化されていない構成では、コンテナを作り直すと再登録が必要です。
 
 初回は通知付きターミナルから起動し、短い依頼を2回送り、毎回「実行中 → 完了」に変わることを確認してください。
-中断と通常終了で表示が消えることも確認します。通知IDが未設定の普通のターミナルでは、フックは通知せず終了します。
+質問ツール・承認ダイアログで「待ち」、回答後に「実行中」、Escで「中断」、通常終了で状態表示が解除されることも確認します。通知IDが未設定の普通のターミナルでは、フックは通知せず終了します。
 `Stop` は応答の停止タイミングを示し、作業の成功を保証するイベントではありません。
 他の `Stop` フックで応答を継続させる構成では、処理が続いていても完了表示になる場合があります。
+
+`waiting` は処理を止める質問ツール・承認要求のフックで判定します。通常の応答文に含まれる問いかけは `Stop` だけでは完了と区別できません。
+処理を止めずに質問を出す `request_user_input_async` は、この質問待ちmatcherの対象外です。
 
 ### Claude Code のユーザー共通フック
 
 Claude Codeでも同じ `taskbar-status.sh` を使います。
-[公式のフック仕様](https://code.claude.com/docs/en/hooks)に合わせ、次の4イベントを登録します。
+[公式のフック仕様](https://code.claude.com/docs/en/hooks)に合わせ、次のイベントを登録します。
 
 | Claude Codeイベント | 通知する状態 |
 | --- | --- |
 | `UserPromptSubmit` | `running` |
+| `PreToolUse`（`AskUserQuestion` / `ExitPlanMode`） | `waiting` |
+| `PermissionRequest` | `waiting` |
+| `PostToolUse` | `resume`（実行中・待ちの間だけ `running` に戻す） |
+| `PostToolUseFailure` | `is_interrupt: true` なら `interrupted`、それ以外は `resume` |
+| `Elicitation` / `ElicitationResult`（MCPの質問・回答） | `waiting` / `resume` |
 | `Stop` | `completed` |
-| `StopFailure`（APIエラーで応答が終了） | `none` |
+| `StopFailure`（APIエラーで応答が終了） | `interrupted` |
 | `SessionEnd`（終了・会話のクリアなど） | `none` |
 
 #### 手動で設定する場合
@@ -295,30 +347,89 @@ printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskb
 ```
 
 表示された `settings.json` をエディターで開き、次のJSONを追加します。
-以下はホームが `/home/ubuntu`、`CLAUDE_CONFIG_DIR` が未設定の場合の例です。**4か所のスクリプトのパスを実際の絶対パスに合わせてください。**
-既存の権限・環境変数・フック設定は残します。同じイベントが既にある場合は、その配列へ今回の `{"hooks": [...]}` を追加してください。
+以下はホームが `/home/ubuntu`、`CLAUDE_CONFIG_DIR` が未設定の場合の例です。**各フックのスクリプトのパスを実際の絶対パスに合わせてください。**
+既存の権限・環境変数・他のフック設定は残し、以前のWpfTaskBar用フックは新しい定義に置き換えます。同じイベントが既にある場合は、その配列へ今回の `{"hooks": [...]}` を追加してください。
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' running", "timeout": 10 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' running",
+        "timeout": 10
+      }]
+    }],
+    "PreToolUse": [{
+      "matcher": "^(AskUserQuestion|ExitPlanMode)$",
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "timeout": 10
+      }]
+    }],
+    "PermissionRequest": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "timeout": 10
+      }]
+    }],
+    "PostToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "timeout": 10
+      }]
+    }],
+    "PostToolUseFailure": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' tool-failed 2",
+        "timeout": 3
+      }]
+    }],
+    "Elicitation": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "timeout": 10
+      }]
+    }],
+    "ElicitationResult": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "timeout": 10
+      }]
     }],
     "Stop": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' completed", "timeout": 10 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' completed",
+        "timeout": 10
+      }]
     }],
     "StopFailure": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' interrupted 2",
+        "timeout": 3
+      }]
     }],
     "SessionEnd": [{
-      "hooks": [{ "type": "command", "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2", "timeout": 3 }]
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2",
+        "timeout": 3
+      }]
     }]
   }
 }
 ```
 
 通知用の `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` は環境変数から読みます。JSONに固定で書き込む必要はありません。
-Claude Codeを起動し直し、**`/hooks` で4つのフックと配置先を確認**してください。Claude Codeの `/hooks` は設定を閲覧するためのメニューです。
+Claude Codeを起動し直し、**`/hooks` で10イベントのフックと配置先を確認**してください。Claude Codeの `/hooks` は設定を閲覧するためのメニューです。
 
 #### 導入スクリプトで設定する場合
 
@@ -329,48 +440,69 @@ python3 VSCodeExtension/scripts/install-claude-hooks.py
 ```
 
 導入スクリプトは `settings.json` の既存設定を保持し、変更前のファイルを `.bak` に保存します。
-同じコマンドの重複登録を防ぎ、通知スクリプトは再実行で更新できます。
+同じmatcher・コマンドの重複登録を防ぎ、通知スクリプトは再実行で更新できます。旧版の `StopFailure → none` は `interrupted` に置き換えます。
 `permissions`、`env`、`disableAllHooks` などの既存設定は変更しません。
 テンプレートは [examples/claude-hooks.json](examples/claude-hooks.json) です。
 
-実行後にClaude Codeを起動し直し、`/hooks` で確認します。各ターンの通知には `sh` と `curl` を使います。
+実行後にClaude Codeを起動し直し、`/hooks` で確認します。通常の通知には `sh` と `curl` を使い、`PostToolUseFailure` のJSON判定にはPython 3も使います。
 `aicontainer` やDocker ComposeではClaude Code設定ディレクトリを永続化してください。永続化されていなければコンテナ再作成後に再登録します。
 
 #### 動作確認と中断時の扱い
 
-この環境のCLIは `2.1.285` です。登録後は短い依頼を2回送り、毎回「実行中 → 完了」に変わることと、通常終了で表示が消えることを確認してください。
+開発環境のClaude Code `2.1.291` のイベント定義で確認しています。登録後は短い依頼を2回送り、毎回「実行中 → 完了」に変わることと、通常終了で表示が消えることを確認してください。
 `Stop` は応答が終わったことを表し、作業成功の判定には使いません。他の停止フックが応答を継続させる場合は、処理中でも完了表示になる場合があります。
 
-**Escなどによる中断では `Stop` は発火せず、実行中表示が残る場合があります。**
-Claude Codeの公式イベント一覧には `Interrupt` がないため、この設定には登録していません。
-中断直後に表示を解除する場合は、同じ通知用環境変数を引き継いだコンテナ内シェルで次を実行します。
+Claude Codeには `Interrupt` フックがないため、VSCode拡張が通知付きターミナル内のEscを補足します。
+Escをターミナルへ1回送ってから、そのセッションが `running` / `waiting` の場合だけ `interrupted` を通知します。通知APIが停止していてもEscの転送を遅らせません。
+検索欄・補完候補・アクセシブルバッファが開いているときや通常のターミナルでは、このキーバインドを適用しません。
+ツール実行中の中断は `PostToolUseFailure.is_interrupt` でも検知します。中断後に遅れて届く通常のツール結果では実行中に戻しません。
+
+このEsc連携はCodexでも共通です。AIの待機中にEscを押しても、未開始・完了・中断済みの状態は変更しません。
+ターミナル内の別のTUIでEscを使う場合も、AIが実行中・質問待ちなら中断として扱います。拡張が接続を失った場合や独自のキーバインドで上書きした場合、Claude Codeの生成中のEscは自動検知できません。
+通常の応答文に質問を書いて終了するケースは、CLIの `Stop` イベントだけでは判別できません。質問待ちの自動表示は上記の質問・承認フックが対象です。
+
+動作確認では、質問への回答前後で「待ち → 実行中」、生成中とツール実行中のEscで「中断」、次の依頼で「実行中」に変わることを確認します。
+必要に応じて、同じ通知用環境変数を引き継いだシェルから手動通知もできます。
 
 ```sh
-sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" none 2
+sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" interrupted 2
 ```
 
 既存設定で `disableAllHooks` が有効になっている場合や、管理設定でユーザーフックが制限されている場合は、その設定も確認してください。
 
 他のAIでも、依頼開始・応答完了のフックへ同じコマンドを登録できます。
 
+## ターミナルタイトルの表示
+
+通知付きターミナルがあるウィンドウは、通常タスク2つ分の高さ（76px）を使います。上半分はウィンドウ名、下半分はAIターミナルのタイトルをそれぞれ最大2行で表示します。下段のツールチップにはタイトル全体を表示します。
+タイトルはVSCodeの `Terminal.name` を使い、固定の `AI (WpfTaskBar)` 名で上書きしません。シェルやAIがOSCで変更したタイトル、VSCodeで手動変更したタイトルに追従します。
+安定版VSCode APIにはタイトル変更専用イベントがないため、1秒ごとに差分を確認して通知します。通信中の変更も順番に送り、失敗時は再送します。AIフックとは独立しているので、質問待ち・中断中も更新されます。
+手動でターミナルを固定名に変更した場合は、その名前が表示されます。AIがターミナルタイトルを変更しない場合、質問本文そのものは表示されません。
+`none` でも通知付きターミナルが残っていれば下段を維持し、最後のターミナルを閉じるか登録が失効すると通常の高さに戻ります。
+
+既存環境ではWpfTaskBarとVSCode拡張を両方更新し、使用するAIのフック導入スクリプトを再実行してください。AIを再起動して `/hooks` で確認（Codexは信頼も必要）した後、通知付きターミナルを開き直します。
+
 ## 表示と通知の寿命
 
-- 同じウィンドウ内で 1 つでも `running` があれば「実行中」を表示します。
-- 実行中がなく、`completed` があれば「完了」を表示します。
+- 状態は `waiting` → `running` → `interrupted` → `completed` → `none` の順に優先します。別ターミナルが実行中でも質問・承認待ちに気付けます。
+- 下段のタイトルも同じ優先順で選び、同じ状態なら最後に状態通知を受けたターミナルを表示します。生存通知・タイトル変更だけでは表示対象を切り替えません。
 - `none` とターミナルを閉じる操作は、そのターミナルの状態だけを解除します。
 - **1 つの通知付きターミナルにつき、同時に実行する AI は 1 つ**にしてください。複数の AI はそれぞれ別の通知付きターミナルから起動します。
 - 拡張は 30 秒ごとに生存通知を送り、2 分間届かなければ登録と状態が失効します。
 - VSCodeの再読み込み、拡張の停止、WpfTaskBarの再起動、長時間のスリープなどでIDが失効した場合は、通知付きターミナルを開き直してコンテナを起動します。上記の `env=WPF_TASKBAR_SESSION_ID` 設定なら、新しいIDが自動で渡ります。
 - 作成前から開いていたターミナル・コンテナには自動で接続しません。
 - 「WpfTaskBar: この VSCode の通知先を選択」で通知先を選び直せます。先に通知付きターミナルを閉じてください。
-- 従来の `POST /tasks/status` の状態とは独立し、集約時に `running` が優先されます。従来の API で設定した状態の解除には、従来の API から `none` を送ります。
+- 従来の `POST /tasks/status` の状態とは独立し、集約時には同じ状態優先順を使います。従来の API で設定した状態の解除には、従来の API から `none` を送ります。
 
 ## 疎通確認
 
-コンテナ内から次を実行し、選択した VSCode タスクの表示が青い回転マーク → 緑のチェック → 解除に変わることを確認します。
+コンテナ内から次を実行し、選択した VSCode タスクの状態表示が順に変わることを確認します。
 
 ```sh
 sh /opt/taskbar/taskbar-status.sh running
+sh /opt/taskbar/taskbar-status.sh waiting
+sh /opt/taskbar/taskbar-status.sh running
+sh /opt/taskbar/taskbar-status.sh interrupted
 sh /opt/taskbar/taskbar-status.sh completed
 sh /opt/taskbar/taskbar-status.sh none
 ```
@@ -385,11 +517,15 @@ HTTP 404 は通知先の失効を示します。「WpfTaskBar: 通知ログを�
 | メソッド / パス | 用途 |
 | --- | --- |
 | `POST /tasks/sessions` | `{ "handle": 123, "processId": 456 }` で VSCode ウィンドウへ登録。`sessionId` を返す |
-| `POST /tasks/sessions/{id}/status` | `{ "status": "running" }` などを送る |
+| `POST /tasks/sessions/{id}/status` | `{ "status": "running" }` などを送る。`onlyIfActive: true` を付けると、現在が `running` / `waiting` の場合だけ変更する |
+| `PUT /tasks/sessions/{id}/title` | `{ "terminalTitle": "続行しますか？" }` でタイトルだけを更新（最大4096文字、空文字で解除）。状態・有効期限は変えない |
 | `PUT /tasks/sessions/{id}/heartbeat` | 拡張から有効期限を延長する |
 | `DELETE /tasks/sessions/{id}` | ターミナル終了時に登録を解除する（繰り返し可能） |
 
-API は状態の集約、ウィンドウの生存確認、有効期限を担当します。コンテナの通知だけでは有効期限は延長しません。
+`resume` は内部フック用コマンドで、`running` と `onlyIfActive: true` を送ります。`tool-failed` も条件付き通知のため、EscやStopより後にツール通知が届いても中断・完了を取り消しません。
+
+API は状態の集約、ウィンドウの生存確認、有効期限を担当します。状態・タイトルの通知だけでは有効期限は延長しません。
+`GET /tasks` とWebView向けのタスク一覧には `status` に加えて `hasAiTask` と `terminalTitle` を返します。
 登録時・更新時は HWND と PID の両方を確認します。セッションはディスクに保存しません。
 
 標準 UI 向けには `TerminalProfileProvider` で、セッションを登録済みの起動設定を返します。

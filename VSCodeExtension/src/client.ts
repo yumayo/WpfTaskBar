@@ -111,6 +111,16 @@ export class TaskbarClient {
     await this.request('PUT', `/tasks/sessions/${encodeURIComponent(id)}/heartbeat`);
   }
 
+  async setTitle(id: string, terminalTitle: string): Promise<void> {
+    await this.request('PUT', `/tasks/sessions/${encodeURIComponent(id)}/title`, { terminalTitle });
+  }
+
+  async interrupt(id: string): Promise<void> {
+    await this.request('POST', `/tasks/sessions/${encodeURIComponent(id)}/status`, {
+      status: 'interrupted', onlyIfActive: true,
+    });
+  }
+
   async remove(id: string): Promise<void> {
     await this.request('DELETE', `/tasks/sessions/${encodeURIComponent(id)}`);
   }

@@ -23,7 +23,7 @@ export interface MessageData {
 }
 
 // Task bar item
-export type TaskStatus = 'none' | 'running' | 'completed';
+export type TaskStatus = 'none' | 'running' | 'waiting' | 'interrupted' | 'completed';
 
 export interface TaskBarItem {
   handle: number;
@@ -33,6 +33,8 @@ export interface TaskBarItem {
   isForeground: boolean;
   iconData: string | null;
   status?: TaskStatus;
+  hasAiTask?: boolean;
+  terminalTitle?: string;
   windowId?: number;
 }
 

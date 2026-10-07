@@ -29,6 +29,8 @@ def install(target_dir: Path) -> None:
         raise ValueError("既存の hooks はJSONオブジェクトである必要があります。")
 
     added = 0
+    legacy_failure = "sh " + shlex.quote(str(script_path)) + " none 2"
+    changed = False
     for event, additions in template["hooks"].items():
         groups = hooks.setdefault(event, [])
         if not isinstance(groups, list) or any(
@@ -37,12 +39,26 @@ def install(target_dir: Path) -> None:
             for group in groups
         ):
             raise ValueError(f"既存の {event} の設定形式を確認してください。ファイルは変更していません。")
+        if event == "StopFailure":
+            retained = []
+            for group in groups:
+                handlers = [handler for handler in group["hooks"]
+                            if not (group.get("matcher") in (None, "", "*")
+                                    and handler.get("type") == "command"
+                                    and handler.get("command") == legacy_failure)]
+                if len(handlers) != len(group["hooks"]):
+                    changed = True
+                    if handlers:
+                        retained.append({**group, "hooks": handlers})
+                else:
+                    retained.append(group)
+            groups = hooks[event] = retained
         for addition in additions:
             handler = addition["hooks"][0]
             handler["command"] = handler["command"].replace("__TASKBAR_STATUS_SCRIPT__", shlex.quote(str(script_path)))
-            # 全件に適用する同じコマンドの重複を避け、既存のカスタマイズは保持する。
+            # 同じmatcherとコマンドの重複を避け、既存のカスタマイズは保持する。
             if any(existing.get("type") == "command" and existing.get("command") == handler["command"]
-                   for group in groups if group.get("matcher") in (None, "", "*")
+                   for group in groups if group.get("matcher") == addition.get("matcher")
                    for existing in group["hooks"]):
                 continue
             groups.append(addition)
@@ -50,7 +66,7 @@ def install(target_dir: Path) -> None:
 
     script_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_script, script_path)
-    if added:
+    if added or changed:
         if original is not None:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             backup = config_path.with_name(f"settings.json.wpftaskbar-{timestamp}.bak")

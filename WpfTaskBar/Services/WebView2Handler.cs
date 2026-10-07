@@ -602,6 +602,7 @@ using WpfApplication = System.Windows.Application;
 					$"WindowInfoTrace handle={handle.ToInt64()} rawProcess={rawProcessName} resolvedProcess={processName} resolvedProcessId={resolvedProcessId.ToInt64()} sortKey={sortKey} title={title}");
 			}
 
+			var state = _taskStatusStore.GetWindowState(handle.ToInt32(), windowProcessId);
 			return new
 			{
 				handle = handle.ToInt32(),
@@ -610,7 +611,9 @@ using WpfApplication = System.Windows.Application;
 				title,
 				isForeground = handle == foregroundWindow,
 				iconData = iconResult.Base64 != null ? "data:image/png;base64," + iconResult.Base64 : null,
-				status = _taskStatusStore.GetStatus(handle.ToInt32(), windowProcessId),
+				status = state.Status,
+				hasAiTask = state.HasAiTask,
+				terminalTitle = state.TerminalTitle,
 			};
 		}
 

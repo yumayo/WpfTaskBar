@@ -10,14 +10,21 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 	private readonly Dictionary<string, TaskStatusSession> _sessions = new();
 	private long _revision;
 
-	public static bool IsValidStatus(string? status) => status is "none" or "running" or "completed";
+	public static bool IsValidStatus(string? status) => status is "none" or "running" or "waiting" or "interrupted" or "completed";
+
+	private static int Priority(string status) => status switch
+	{
+		"waiting" => 4, "running" => 3, "interrupted" => 2, "completed" => 1, _ => 0
+	};
 
 	public long GetRevision()
 	{
 		lock (_syncRoot) return _revision;
 	}
 
-	public string GetStatus(int handle, int processId)
+	public string GetStatus(int handle, int processId) => GetWindowState(handle, processId).Status;
+
+	public TaskWindowState GetWindowState(int handle, int processId)
 	{
 		lock (_syncRoot)
 		{
@@ -30,10 +37,14 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 				.Select(session => session.Id).ToArray())
 				_sessions.Remove(id);
 
-			var statuses = _sessions.Values.Where(session => session.Handle == handle)
-				.Select(session => session.Status)
-				.Append(_entries.TryGetValue(handle, out entry) ? entry.Status : "none").ToArray();
-			return statuses.Contains("running") ? "running" : statuses.Contains("completed") ? "completed" : "none";
+			// 生存通知やタイトル変更で表示対象を切り替えず、状態と直近の活動順で選ぶ。
+			var sessions = _sessions.Values.Where(session => session.Handle == handle)
+				.OrderByDescending(session => Priority(session.Status))
+				.ThenByDescending(session => session.ActivityRevision).ToArray();
+			var status = sessions.Select(session => session.Status)
+				.Append(_entries.TryGetValue(handle, out entry) ? entry.Status : "none")
+				.OrderByDescending(Priority).First();
+			return new TaskWindowState(status, sessions.Length > 0 || status != "none", sessions.FirstOrDefault()?.TerminalTitle ?? "");
 		}
 	}
 
@@ -60,7 +71,7 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 		{
 			RemoveExpiredSessions();
 			var session = new TaskStatusSession(Guid.NewGuid().ToString("N"), handle, processId, "none", ++_revision,
-				_time.GetUtcNow() + SessionLifetime);
+				_time.GetUtcNow() + SessionLifetime, "", _revision);
 			_sessions.Add(session.Id, session);
 			return session;
 		}
@@ -75,14 +86,26 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 		}
 	}
 
-	public bool SetSessionStatus(string id, string status)
+	public bool SetSessionStatus(string id, string status, bool onlyIfActive = false)
 	{
 		if (!IsValidStatus(status)) throw new ArgumentException("Unknown task status.", nameof(status));
 		lock (_syncRoot)
 		{
 			RemoveExpiredSessions();
 			if (!_sessions.TryGetValue(id, out var session)) return false;
-			_sessions[id] = session with { Status = status, Revision = ++_revision };
+			if (onlyIfActive && session.Status is not ("running" or "waiting")) return true;
+			_sessions[id] = session with { Status = status, Revision = ++_revision, ActivityRevision = _revision };
+			return true;
+		}
+	}
+
+	public bool SetSessionTitle(string id, string title)
+	{
+		lock (_syncRoot)
+		{
+			RemoveExpiredSessions();
+			if (!_sessions.TryGetValue(id, out var session)) return false;
+			_sessions[id] = session with { TerminalTitle = title, Revision = ++_revision };
 			return true;
 		}
 	}
@@ -133,4 +156,6 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 	private sealed record Entry(int ProcessId, string Status, long Revision);
 }
 
-public sealed record TaskStatusSession(string Id, int Handle, int ProcessId, string Status, long Revision, DateTimeOffset ExpiresAt);
+public sealed record TaskWindowState(string Status, bool HasAiTask, string TerminalTitle);
+public sealed record TaskStatusSession(string Id, int Handle, int ProcessId, string Status, long Revision,
+	DateTimeOffset ExpiresAt, string TerminalTitle, long ActivityRevision);

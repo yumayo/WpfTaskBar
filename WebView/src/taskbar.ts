@@ -1,6 +1,6 @@
 import { sendMessageToHost } from './network';
 import type { TaskBarItem, MessageData } from './types';
-import { updateTaskStatus } from './task-status';
+import { updateTaskStatus, updateAiTask } from './task-status';
 
 const UPDATE_INTERVAL = 100; // 更新間隔（ミリ秒）
 const FOREGROUND_UPDATE_SKIP_DURATION = 1000; // クリック後のタスク更新スキップ時間（ミリ秒）
@@ -302,6 +302,11 @@ function createTaskItem(task: TaskBarItem): HTMLElement {
   text.title = task.title || 'Unknown'; // ツールチップ
 
   item.appendChild(text);
+
+  const terminalTitle = document.createElement('div');
+  terminalTitle.className = 'task-terminal-title';
+  item.appendChild(terminalTitle);
+  updateAiTask(item, terminalTitle, task);
 
   // ドラッグ&ドロップイベントリスナー
   setupDragAndDrop(item, task);
@@ -666,6 +671,8 @@ function reorderSingleTask(draggedHandle: number, targetHandle: number, dropAbov
 function updateTaskItemContent(item: HTMLElement, task: TaskBarItem): void {
   const statusElement = item.querySelector<HTMLElement>('.task-status');
   if (statusElement) updateTaskStatus(statusElement, task.status);
+  const terminalTitle = item.querySelector<HTMLElement>('.task-terminal-title');
+  if (terminalTitle) updateAiTask(item, terminalTitle, task);
 
   // クリック後FOREGROUND_UPDATE_SKIP_DURATION以内は全タスクのforeground更新をスキップ
   // これがないと定期的な通信によって上書きされて、アクティブなウィンドウのタスクバーがちらつきます。

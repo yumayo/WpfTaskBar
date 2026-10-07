@@ -25,7 +25,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 	public IActionResult SetStatus(string id, [FromBody] TaskSessionStatusRequest request)
 	{
 		if (!TaskStatusStore.IsValidStatus(request.Status))
-			return BadRequest(new { message = "status は running、completed、none のいずれかを指定してください。" });
+			return BadRequest(new { message = "status は running、waiting、interrupted、completed、none のいずれかを指定してください。" });
 
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
@@ -36,7 +36,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 			statuses.RemoveSession(id);
 			return SessionNotFound();
 		}
-		if (!statuses.SetSessionStatus(id, request.Status)) return SessionNotFound();
+		if (!statuses.SetSessionStatus(id, request.Status, request.OnlyIfActive)) return SessionNotFound();
 		return Ok(new { handle = target.Handle, status = statuses.GetStatus(target.Handle, target.ProcessId) });
 	}
 
@@ -45,6 +45,22 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 	{
 		statuses.RemoveSession(id);
 		return NoContent();
+	}
+
+	[HttpPut("tasks/sessions/{id}/title")]
+	public IActionResult SetTitle(string id, [FromBody] TaskSessionTitleRequest request)
+	{
+		if (request.TerminalTitle == null || request.TerminalTitle.Length > 4096)
+			return BadRequest(new { message = "terminalTitle は4096文字以内の文字列を指定してください。" });
+		var session = statuses.GetSession(id);
+		if (session == null) return SessionNotFound();
+		if (!windows.GetWindows().Any(window =>
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && IsVsCode(window)))
+		{
+			statuses.RemoveSession(id);
+			return SessionNotFound();
+		}
+		return statuses.SetSessionTitle(id, request.TerminalTitle) ? NoContent() : SessionNotFound();
 	}
 
 	[HttpPut("tasks/sessions/{id}/heartbeat")]

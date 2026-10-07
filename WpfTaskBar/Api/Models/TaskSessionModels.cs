@@ -11,6 +11,15 @@ public sealed class TaskSessionRequest
 public sealed class TaskSessionStatusRequest
 {
 	[Required]
-	[RegularExpression("^(none|running|completed)$")]
+	[RegularExpression("^(none|running|waiting|interrupted|completed)$")]
 	public string Status { get; set; } = string.Empty;
+	// ツール完了・Esc通知が遅れて届いても、完了済みや中断済みの状態を戻さない。
+	public bool OnlyIfActive { get; set; }
+}
+
+public sealed class TaskSessionTitleRequest
+{
+	[Required(AllowEmptyStrings = true)]
+	[StringLength(4096)]
+	public string TerminalTitle { get; set; } = null!;
 }

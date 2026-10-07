@@ -16,7 +16,7 @@ public sealed class TaskStatusController(ITaskWindowProvider windows, TaskStatus
 	{
 		if (!TaskStatusStore.IsValidStatus(request.Status))
 		{
-			return BadRequest(new { message = "status は running、completed、none のいずれかを指定してください。" });
+			return BadRequest(new { message = "status は running、waiting、interrupted、completed、none のいずれかを指定してください。" });
 		}
 
 		if (request.Handle.HasValue == (request.Title != null) ||
@@ -48,12 +48,18 @@ public sealed class TaskStatusController(ITaskWindowProvider windows, TaskStatus
 		return Ok(ToResponse(target));
 	}
 
-	private object ToResponse(TaskWindow window) => new
+	private object ToResponse(TaskWindow window)
 	{
-		handle = window.Handle,
-		processId = window.ProcessId,
-		title = window.Title,
-		moduleFileName = window.ModuleFileName,
-		status = statuses.GetStatus(window.Handle, window.ProcessId)
-	};
+		var state = statuses.GetWindowState(window.Handle, window.ProcessId);
+		return new
+		{
+			handle = window.Handle,
+			processId = window.ProcessId,
+			title = window.Title,
+			moduleFileName = window.ModuleFileName,
+			status = state.Status,
+			hasAiTask = state.HasAiTask,
+			terminalTitle = state.TerminalTitle
+		};
+	}
 }
