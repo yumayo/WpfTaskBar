@@ -29,7 +29,7 @@ async function fixture(t) {
     },
     async invoke(action, input = {}, options = {}) {
       await fs.rm(capture, { force: true });
-      const execution = run('sh', [path.join(scripts, 'taskbar-status.sh'), action], { env, timeout: 3000, ...options });
+      const execution = run('python3', [path.join(scripts, 'wpftaskbar.py'), action], { env, timeout: 3000, ...options });
       execution.child.stdin.end(JSON.stringify({ transcript_path: transcript, ...input }));
       const result = await execution;
       assert.equal(result.stdout, '');
@@ -107,15 +107,16 @@ test('長いログの末尾を読み、日本語や絵文字を壊さず120文�
 });
 
 for (const ai of ['codex', 'claude']) {
-  test(`${ai}の導入済みフックが配置先のヘルパーを使って進捗を送れる`, { skip: process.platform === 'win32' }, async t => {
+  test(`${ai}の導入済みフックが配置先の単一スクリプトで進捗を送れる`, { skip: process.platform === 'win32' }, async t => {
     const f = await fixture(t);
     const target = path.join(f.dir, "config 'quoted'");
     await run('python3', [path.join(scripts, `install-${ai}-hooks.py`), `--${ai}-dir`, target]);
     const config = JSON.parse(await fs.readFile(path.join(target, ai === 'codex' ? 'hooks.json' : 'settings.json'), 'utf8'));
     const handler = config.hooks.PreToolUse.flatMap(group => group.hooks).find(hook => hook.command.endsWith(' activity'));
     assert.ok(handler);
-    assert.equal(await fs.readFile(path.join(target, 'hooks/wpftaskbar/taskbar-message.py'), 'utf8'),
-      await fs.readFile(path.join(scripts, 'taskbar-message.py'), 'utf8'));
+    assert.equal(await fs.readFile(path.join(target, 'hooks/wpftaskbar/wpftaskbar.py'), 'utf8'),
+      await fs.readFile(path.join(scripts, 'wpftaskbar.py'), 'utf8'));
+    assert.deepEqual(await fs.readdir(path.join(target, 'hooks/wpftaskbar')), ['wpftaskbar.py']);
     await f.write([codexMessage('assistant', 'テストを実行しています。')]);
     const execution = run('sh', ['-c', handler.command], { env: f.env, cwd: f.dir });
     execution.child.stdin.end(JSON.stringify({ transcript_path: f.transcript }));

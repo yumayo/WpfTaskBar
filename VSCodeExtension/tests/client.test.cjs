@@ -96,17 +96,17 @@ test('コンテナの通知スクリプトがセッションへ状態を送り�
     response.statusCode = requests.length > 1 ? 404 : 200;
     response.end();
   });
-  const script = path.join(__dirname, '../scripts/taskbar-status.sh');
+  const script = path.join(__dirname, '../scripts/wpftaskbar.py');
   const sessionId = '0123456789abcdef0123456789abcdef';
   const env = { ...process.env, WPF_TASKBAR_URL: url, WPF_TASKBAR_SESSION_ID: sessionId };
-  await promisify(execFile)('sh', [script, 'running'], { env });
-  const result = await promisify(execFile)('sh', [script, 'completed'], { env });
+  await promisify(execFile)('python3', [script, 'running'], { env });
+  const result = await promisify(execFile)('python3', [script, 'completed'], { env });
   assert.match(result.stderr, /通知できません/);
   assert.deepEqual(requests, [
     [`/tasks/sessions/${sessionId}/status`, { status: 'running' }],
     [`/tasks/sessions/${sessionId}/status`, { status: 'completed' }],
   ]);
-  await promisify(execFile)('sh', [script, 'running'], { env: { ...env, WPF_TASKBAR_SESSION_ID: '' } });
+  await promisify(execFile)('python3', [script, 'running'], { env: { ...env, WPF_TASKBAR_SESSION_ID: '' } });
   assert.equal(requests.length, 2);
-  await assert.rejects(promisify(execFile)('sh', [script, 'invalid'], { env }), error => error.code === 2);
+  await assert.rejects(promisify(execFile)('python3', [script, 'invalid'], { env }), error => error.code === 2);
 });

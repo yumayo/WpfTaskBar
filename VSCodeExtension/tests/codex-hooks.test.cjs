@@ -85,17 +85,37 @@ test('Codexフックが未設定なら新規作成し、壊れた既存設定は
 
 
 test('旧中断フックは置き換え、質問ツールのmatcherと無関係なフックを保持する', { skip: process.platform === 'win32' }, async t => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wpftaskbar-codex-migrate-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "wpftaskbar-codex-migrate-'quoted' "));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await run('python3', [installer, '--codex-dir', dir]);
   const file = path.join(dir, 'hooks.json');
   const config = JSON.parse(await fs.readFile(file, 'utf8'));
+  const originalHooks = structuredClone(config.hooks);
+  // 旧版で登録された全イベントを再現し、カスタム設定を含めて移行する。
+  for (const groups of Object.values(config.hooks)) {
+    for (const group of groups) {
+      for (const handler of group.hooks) {
+        handler.command = handler.command.replace(/^python3 /, 'sh ').replace('/wpftaskbar.py', '/taskbar-status.sh');
+      }
+    }
+  }
+  config.hooks.UserPromptSubmit[0].hooks[0].timeout = 17;
   config.hooks.Interrupt[0].hooks[0].command = config.hooks.Interrupt[0].hooks[0].command.replace('interrupted 2', 'none 2');
   const custom = { type: 'command', command: 'echo keep', timeout: 9 };
   config.hooks.Interrupt[0].hooks.push(custom);
   await fs.writeFile(file, JSON.stringify(config));
   await run('python3', [installer, '--codex-dir', dir]);
   const updated = JSON.parse(await fs.readFile(file, 'utf8'));
+  for (const [event, groups] of Object.entries(updated.hooks)) {
+    for (const handler of groups.flatMap(group => group.hooks).filter(hook => hook.command !== custom.command)) {
+      assert.match(handler.command, /^python3 /);
+      assert.ok(handler.command.includes('/wpftaskbar.py'));
+      assert.equal(handler.command.includes('taskbar-status.sh'), false);
+    }
+    if (event !== 'Interrupt' && event !== 'UserPromptSubmit') assert.deepEqual(groups, originalHooks[event]);
+  }
+  assert.equal(updated.hooks.UserPromptSubmit.length, 1);
+  assert.equal(updated.hooks.UserPromptSubmit[0].hooks[0].timeout, 17);
   const commands = updated.hooks.Interrupt.flatMap(group => group.hooks);
   assert.deepEqual(commands[0], custom);
   assert.equal(commands.length, 2);

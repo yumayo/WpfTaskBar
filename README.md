@@ -91,7 +91,7 @@ WSL から接続する場合、必要に応じて `localhost` を Windows ホス
 [VSCodeExtension](VSCodeExtension/README.md) に、WSL / AI コンテナの依頼開始・応答完了を
 所属する VSCode ウィンドウへ表示する拡張を用意しています。
 拡張の「AI 通知付きターミナルを開く」から起動し、通知先の環境変数を `aicontainer` / `docker compose` に渡します。
-コンテナ内の AI フックから共通の `taskbar-status.sh running|waiting|interrupted|completed|none` を呼び出します。
+コンテナ内の AI フックから共通の `python3 wpftaskbar.py running|waiting|interrupted|completed|none` を呼び出します。
 
 複数のターミナルの状態はウィンドウ単位で集約し、質問・承認待ち → 実行中 → 中断 → 完了の順に優先します。
 通知付きターミナルがあるタスクは通常の2倍の高さになり、下半分にAIの最新の進捗コメント・応答文を先頭120文字まで表示します。

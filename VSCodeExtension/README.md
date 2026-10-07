@@ -145,8 +145,7 @@ services:
       WPF_TASKBAR_URL: ${WPF_TASKBAR_URL}
       WPF_TASKBAR_SESSION_ID: ${WPF_TASKBAR_SESSION_ID}
     volumes:
-      - ./VSCodeExtension/scripts/taskbar-status.sh:/opt/taskbar/taskbar-status.sh:ro
-      - ./VSCodeExtension/scripts/taskbar-message.py:/opt/taskbar/taskbar-message.py:ro
+      - ./VSCodeExtension/scripts/wpftaskbar.py:/opt/taskbar/wpftaskbar.py:ro
 ```
 
 通知付きターミナルで次のように起動すると、ターミナルごとの値を独立したコンテナに渡せます。
@@ -169,27 +168,28 @@ docker compose exec \
 
 ## 共通フック
 
-`scripts/taskbar-status.sh` と `scripts/taskbar-message.py` をコンテナの同じディレクトリへコピーするか、読み取り専用でマウントします。進捗文の抽出にはPython 3.8以降が必要です。
+`scripts/wpftaskbar.py` だけをコンテナへコピーするか、読み取り専用でマウントします。実行にはPython 3.8以降と `curl` が必要です。
 AI のフック機構に次のコマンドを登録してください。どのランチャーでも同じスクリプトを使えます。
+旧版の `taskbar-status.sh` を登録済みの場合は、使用するAIの導入スクリプトを再実行すると `python3 .../wpftaskbar.py` に移行します。手動設定では、配置するファイルと各フックのコマンドを下記に置き換えてください。
 
 | タイミング | コマンド |
 | --- | --- |
-| ユーザーの依頼を受け付けたとき | `sh /opt/taskbar/taskbar-status.sh running` |
-| AI が応答を終えたとき | `sh /opt/taskbar/taskbar-status.sh completed` |
-| ツール実行の直前（進捗文のみ更新） | `sh /opt/taskbar/taskbar-status.sh activity` |
-| 質問・承認待ち | `sh /opt/taskbar/taskbar-status.sh waiting` |
-| 回答・承認後の再開 | `sh /opt/taskbar/taskbar-status.sh resume` |
-| Escなどによる中断 | `sh /opt/taskbar/taskbar-status.sh interrupted 2` |
-| セッション終了・表示解除 | `sh /opt/taskbar/taskbar-status.sh none` |
+| ユーザーの依頼を受け付けたとき | `python3 /opt/taskbar/wpftaskbar.py running` |
+| AI が応答を終えたとき | `python3 /opt/taskbar/wpftaskbar.py completed` |
+| ツール実行の直前（進捗文のみ更新） | `python3 /opt/taskbar/wpftaskbar.py activity` |
+| 質問・承認待ち | `python3 /opt/taskbar/wpftaskbar.py waiting` |
+| 回答・承認後の再開 | `python3 /opt/taskbar/wpftaskbar.py resume` |
+| Escなどによる中断 | `python3 /opt/taskbar/wpftaskbar.py interrupted 2` |
+| セッション終了・表示解除 | `python3 /opt/taskbar/wpftaskbar.py none` |
 
 開始と完了は**AI の応答単位**で呼びます。CLI / コンテナの起動と終了に設定すると、その生存期間の表示になってしまいます。
 通知用の環境変数がない場合は何もせず終了するため、同じフック設定を VSCode 以外でも使用できます。
 通信失敗は標準エラーに出し、最大 5 秒で終了します。通知失敗で AI 本体を停止させません。
-第2引数で通信の上限を1〜5秒に短縮できます。例: `sh /opt/taskbar/taskbar-status.sh none 2`。
+第2引数で通信の上限を1〜5秒に短縮できます。例: `python3 /opt/taskbar/wpftaskbar.py none 2`。
 
 ### Codex CLI のユーザー共通フック
 
-Codex のフックからも同じ `taskbar-status.sh` を使えます。
+Codex のフックからも同じ `wpftaskbar.py` を使えます。
 [公式 OpenAI Docs の Hooks](https://learn.chatgpt.com/docs/hooks) を参照した既存設定に、質問・承認待ちと再開のフックを追加します。
 Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続できない開発環境では、導入済みCLIのイベント定義も確認しています。
 
@@ -210,15 +210,14 @@ Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続�
 ユーザー共通の設定ファイルは `~/.codex/hooks.json` です。`CODEX_HOME` を指定している場合は `$CODEX_HOME/hooks.json` を使います。
 同じCodex設定ディレクトリを使うプロジェクトで共通に有効になります。
 
-まずリポジトリルートで、通知スクリプトを共通の場所へコピーします。`sh`、`curl`、Python 3.8以降を使用します。
+まずリポジトリルートで、通知スクリプトを共通の場所へコピーします。`curl` とPython 3.8以降を使用します。
 
 ```sh
 taskbar_codex_dir="${CODEX_HOME:-$HOME/.codex}"
 mkdir -p "$taskbar_codex_dir/hooks/wpftaskbar"
-cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
-cp VSCodeExtension/scripts/taskbar-message.py "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-message.py"
+cp VSCodeExtension/scripts/wpftaskbar.py "$taskbar_codex_dir/hooks/wpftaskbar/wpftaskbar.py"
 printf '設定ファイル: %s\n' "$taskbar_codex_dir/hooks.json"
-printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
+printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/wpftaskbar.py"
 ```
 
 表示された `hooks.json` をエディターで開き、次のJSONを保存します。
@@ -231,56 +230,56 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskba
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' running",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' running",
         "timeout": 10
       }]
     }],
     "PreToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' activity",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' activity",
         "timeout": 10
       }]
     }, {
       "matcher": "(^|.*[.:/])(request_user_input|request_permissions)$",
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' waiting",
         "timeout": 10
       }]
     }],
     "PermissionRequest": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' waiting",
         "timeout": 10
       }]
     }],
     "PostToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' resume",
         "timeout": 10
       }]
     }],
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' completed",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' completed",
         "timeout": 10
       }]
     }],
     "Interrupt": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' interrupted 2",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' interrupted 2",
         "timeout": 3
       }]
     }],
     "SessionEnd": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' none 2",
+        "command": "python3 '/home/ubuntu/.codex/hooks/wpftaskbar/wpftaskbar.py' none 2",
         "timeout": 3
       }]
     }]
@@ -288,7 +287,7 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskba
 }
 ```
 
-この設定でCodexがイベントごとに `taskbar-status.sh` を実行します。
+この設定でCodexがイベントごとに `wpftaskbar.py` を実行します。
 スクリプトは環境変数 `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` を読み、WindowsのWpfTaskBarへ状態をHTTPで通知します。
 URLと通知IDは通知付きターミナルからコンテナへ引き継ぎ、JSONには固定で書き込みません。
 
@@ -310,7 +309,7 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 
 実行後は手動設定と同様に、Codexを起動し直して `/hooks` で確認・信頼します。
 導入用のテンプレートは [examples/codex-hooks.json](examples/codex-hooks.json) です。パスのプレースホルダーは導入スクリプトが置き換えます。
-各ターンの通知は `taskbar-status.sh` が行い、`taskbar-message.py` が最新の応答文を抽出します。導入スクリプトは各ターンには実行しません。
+各ターンの状態通知と最新の応答文の抽出は、単一の `wpftaskbar.py` が行います。導入スクリプトは各ターンには実行しません。
 
 `aicontainer` を使う場合も設定先はコンテナ内のCodexです。
 設定ディレクトリが永続化されていない構成では、コンテナを作り直すと再登録が必要です。
@@ -325,7 +324,7 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 
 ### Claude Code のユーザー共通フック
 
-Claude Codeでも同じ `taskbar-status.sh` を使います。
+Claude Codeでも同じ `wpftaskbar.py` を使います。
 [公式のフック仕様](https://code.claude.com/docs/en/hooks)に合わせ、次のイベントを登録します。
 
 | Claude Codeイベント | 通知する状態 |
@@ -352,10 +351,9 @@ Claude Codeでも同じ `taskbar-status.sh` を使います。
 ```sh
 taskbar_claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mkdir -p "$taskbar_claude_dir/hooks/wpftaskbar"
-cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
-cp VSCodeExtension/scripts/taskbar-message.py "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-message.py"
+cp VSCodeExtension/scripts/wpftaskbar.py "$taskbar_claude_dir/hooks/wpftaskbar/wpftaskbar.py"
 printf '設定ファイル: %s\n' "$taskbar_claude_dir/settings.json"
-printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
+printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/wpftaskbar.py"
 ```
 
 表示された `settings.json` をエディターで開き、次のJSONを追加します。
@@ -368,77 +366,77 @@ printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskb
     "UserPromptSubmit": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' running",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' running",
         "timeout": 10
       }]
     }],
     "PreToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' activity",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' activity",
         "timeout": 10
       }]
     }, {
       "matcher": "^(AskUserQuestion|ExitPlanMode)$",
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' waiting",
         "timeout": 10
       }]
     }],
     "PermissionRequest": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' waiting",
         "timeout": 10
       }]
     }],
     "PostToolUse": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' resume",
         "timeout": 10
       }]
     }],
     "PostToolUseFailure": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' tool-failed 2",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' tool-failed 2",
         "timeout": 3
       }]
     }],
     "Elicitation": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' waiting",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' waiting",
         "timeout": 10
       }]
     }],
     "ElicitationResult": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' resume",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' resume",
         "timeout": 10
       }]
     }],
     "Stop": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' completed",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' completed",
         "timeout": 10
       }]
     }],
     "StopFailure": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' interrupted 2",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' interrupted 2",
         "timeout": 3
       }]
     }],
     "SessionEnd": [{
       "hooks": [{
         "type": "command",
-        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' none 2",
+        "command": "python3 '/home/ubuntu/.claude/hooks/wpftaskbar/wpftaskbar.py' none 2",
         "timeout": 3
       }]
     }]
@@ -462,7 +460,7 @@ python3 VSCodeExtension/scripts/install-claude-hooks.py
 `permissions`、`env`、`disableAllHooks` などの既存設定は変更しません。
 テンプレートは [examples/claude-hooks.json](examples/claude-hooks.json) です。
 
-実行後にClaude Codeを起動し直し、`/hooks` で確認します。通知には `sh` と `curl` を使い、進捗文の抽出と `PostToolUseFailure` のJSON判定にはPython 3も使います。
+実行後にClaude Codeを起動し直し、`/hooks` で確認します。状態通知・進捗文の抽出・`PostToolUseFailure` のJSON判定を `wpftaskbar.py` で行い、通信には `curl` を使います。
 `aicontainer` やDocker ComposeではClaude Code設定ディレクトリを永続化してください。永続化されていなければコンテナ再作成後に再登録します。
 
 #### 動作確認と中断時の扱い
@@ -483,7 +481,7 @@ Escをターミナルへ1回送ってから、そのセッションが `running`
 必要に応じて、同じ通知用環境変数を引き継いだシェルから手動通知もできます。
 
 ```sh
-sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" interrupted 2
+python3 "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/wpftaskbar.py" interrupted 2
 ```
 
 既存設定で `disableAllHooks` が有効になっている場合や、管理設定でユーザーフックが制限されている場合は、その設定も確認してください。
@@ -506,7 +504,7 @@ Markdownの見出し・強調や改行を整え、先頭120文字以内に切り
 手動でターミナルを固定名に変更した場合は、その名前が表示されます。
 `none` でも通知付きターミナルが残っていれば下段を維持し、最後のターミナルを閉じるか登録が失効すると通常の高さに戻ります。
 
-既にタイトル連携を導入している環境では、WpfTaskBarを再ビルドし、使用するAIのフック導入スクリプトを再実行してください。`taskbar-status.sh` と `taskbar-message.py` が一緒に更新され、全ツール用の `PreToolUse` フックが追加されます。VSCode拡張の更新は不要です。AIを再起動して `/hooks` で確認（Codexは信頼も必要）した後、WpfTaskBarの再起動で失効した通知付きターミナルを開き直します。
+既にタイトル連携を導入している環境では、WpfTaskBarを再ビルドし、使用するAIのフック導入スクリプトを再実行してください。`wpftaskbar.py` が更新され、全ツール用の `PreToolUse` フックが追加されます。VSCode拡張の更新は不要です。AIを再起動して `/hooks` で確認（Codexは信頼も必要）した後、WpfTaskBarの再起動で失効した通知付きターミナルを開き直します。
 
 ## 表示と通知の寿命
 
@@ -525,12 +523,12 @@ Markdownの見出し・強調や改行を整え、先頭120文字以内に切り
 コンテナ内から次を実行し、選択した VSCode タスクの状態表示が順に変わることを確認します。
 
 ```sh
-sh /opt/taskbar/taskbar-status.sh running
-sh /opt/taskbar/taskbar-status.sh waiting
-sh /opt/taskbar/taskbar-status.sh running
-sh /opt/taskbar/taskbar-status.sh interrupted
-sh /opt/taskbar/taskbar-status.sh completed
-sh /opt/taskbar/taskbar-status.sh none
+python3 /opt/taskbar/wpftaskbar.py running
+python3 /opt/taskbar/wpftaskbar.py waiting
+python3 /opt/taskbar/wpftaskbar.py running
+python3 /opt/taskbar/wpftaskbar.py interrupted
+python3 /opt/taskbar/wpftaskbar.py completed
+python3 /opt/taskbar/wpftaskbar.py none
 ```
 
 同じ VSCode 内で 2 つ、別の VSCode で 1 つ通知付きターミナルを開き、前者の片方が `completed` でも他方が `running` なら実行中が残ること、別ウィンドウには影響しないことも確認します。

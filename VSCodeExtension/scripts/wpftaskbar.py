@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""フック入力から状態と最新の公開応答の抜粋をJSONにする（通信はsh側で行う）。"""
+"""AIフックから状態と最新の公開応答の抜粋を通知する。通知失敗でAIを止めない。"""
 
 import json
 import os
 from pathlib import Path
 import re
 import select
+import subprocess
 import sys
 import time
 
 MAX_INPUT_BYTES = 1024 * 1024
 MAX_TRANSCRIPT_BYTES = 512 * 1024
 MAX_TEXT_LENGTH = 120
+ACTIONS = ("running", "waiting", "interrupted", "completed", "none", "resume", "tool-failed", "activity")
 
 
 def read_hook_input():
@@ -113,16 +115,7 @@ def excerpt(text):
     return text if len(text) <= MAX_TEXT_LENGTH else text[:MAX_TEXT_LENGTH - 1].rstrip() + "…"
 
 
-def main():
-    action = sys.argv[1]
-    try:
-        data = read_hook_input()
-    except (OSError, ValueError):
-        if action == "tool-failed":
-            print("WpfTaskBar: ツール失敗フックの入力を読み取れませんでした。", file=sys.stderr)
-            return 1
-        data = {}
-
+def build_payload(action, data):
     status = "running" if action in ("resume", "tool-failed") else action
     if action == "tool-failed" and data.get("is_interrupt") is True:
         status = "interrupted"
@@ -137,8 +130,49 @@ def main():
         text = excerpt(text)
         if text:
             payload["activityText"] = text
-    if payload:
-        print(json.dumps(payload, ensure_ascii=True, separators=(",", ":")))
+    return payload
+
+
+def main():
+    if len(sys.argv) not in (2, 3) or sys.argv[1] not in ACTIONS:
+        print(f"Usage: wpftaskbar.py {'|'.join(ACTIONS)} [timeout-seconds: 1-5]", file=sys.stderr)
+        return 2
+    action = sys.argv[1]
+    timeout = sys.argv[2] if len(sys.argv) == 3 else "5"
+    if timeout not in ("1", "2", "3", "4", "5"):
+        print("WpfTaskBar: timeout must be between 1 and 5 seconds", file=sys.stderr)
+        return 2
+
+    # 通知付きターミナル以外では、フック入力も読まずに終了する。
+    url = os.environ.get("WPF_TASKBAR_URL", "")
+    session_id = os.environ.get("WPF_TASKBAR_SESSION_ID", "")
+    if not url or not session_id:
+        return 0
+    if not re.fullmatch(r"[a-f0-9]{32}", session_id):
+        print("WpfTaskBar: invalid session ID", file=sys.stderr)
+        return 0
+
+    try:
+        data = read_hook_input()
+    except (OSError, ValueError):
+        if action == "tool-failed":
+            print("WpfTaskBar: ツール失敗フックの入力を読み取れませんでした。", file=sys.stderr)
+            return 0
+        data = {}
+    payload = build_payload(action, data)
+    if not payload:
+        return 0
+    method, endpoint = ("PUT", "activity") if action == "activity" else ("POST", "status")
+    try:
+        subprocess.run([
+            "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", timeout,
+            "--output", "/dev/null", "--request", method,
+            "--header", "Content-Type: application/json",
+            "--data", json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
+            f"{url.rstrip('/')}/tasks/sessions/{session_id}/{endpoint}",
+        ], check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        print("WpfTaskBar: 状態を通知できませんでした。接続先と通知付きターミナルを確認してください。", file=sys.stderr)
     return 0
 
 

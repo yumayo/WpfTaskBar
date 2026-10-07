@@ -15,11 +15,10 @@ def install(target_dir: Path) -> None:
     source_dir = Path(__file__).resolve().parent
     target_dir = target_dir.expanduser().resolve()
     config_path = target_dir / "settings.json"
-    script_path = target_dir / "hooks" / "wpftaskbar" / "taskbar-status.sh"
-    source_script = source_dir / "taskbar-status.sh"
+    script_path = target_dir / "hooks" / "wpftaskbar" / "wpftaskbar.py"
+    source_script = source_dir / "wpftaskbar.py"
     # 書き込み前に、設定とコピー元の両方を確認する。
     source_script.read_bytes()
-    (source_dir / "taskbar-message.py").read_bytes()
     template = json.loads((source_dir.parent / "examples" / "claude-hooks.json").read_text(encoding="utf-8"))
     original = config_path.read_text(encoding="utf-8-sig") if config_path.exists() else None
     config = json.loads(original) if original is not None else {}
@@ -30,7 +29,7 @@ def install(target_dir: Path) -> None:
         raise ValueError("既存の hooks はJSONオブジェクトである必要があります。")
 
     added = 0
-    legacy_failure = "sh " + shlex.quote(str(script_path)) + " none 2"
+    legacy_failure = "python3 " + shlex.quote(str(script_path)) + " none 2"
     changed = False
     for event, additions in template["hooks"].items():
         groups = hooks.setdefault(event, [])
@@ -40,6 +39,20 @@ def install(target_dir: Path) -> None:
             for group in groups
         ):
             raise ValueError(f"既存の {event} の設定形式を確認してください。ファイルは変更していません。")
+        # 旧2ファイル構成から移行し、matcherやtimeoutなどの既存設定は保持する。
+        for group in groups:
+            for handler in group["hooks"]:
+                if handler.get("type") != "command" or not isinstance(handler.get("command"), str):
+                    continue
+                try:
+                    command = shlex.split(handler["command"])
+                except ValueError:
+                    continue
+                if (len(command) in (3, 4) and command[:2] == ["sh", str(script_path.with_name("taskbar-status.sh"))]
+                        and command[2] in ("running", "waiting", "interrupted", "completed", "none", "resume", "tool-failed", "activity")
+                        and (len(command) == 3 or command[3] in ("1", "2", "3", "4", "5"))):
+                    handler["command"] = "python3 " + shlex.quote(str(script_path)) + " " + " ".join(command[2:])
+                    changed = True
         if event == "StopFailure":
             retained = []
             for group in groups:
@@ -56,7 +69,7 @@ def install(target_dir: Path) -> None:
             groups = hooks[event] = retained
         for addition in additions:
             handler = addition["hooks"][0]
-            handler["command"] = handler["command"].replace("__TASKBAR_STATUS_SCRIPT__", shlex.quote(str(script_path)))
+            handler["command"] = handler["command"].replace("__WPFTASKBAR_SCRIPT__", shlex.quote(str(script_path)))
             # 同じmatcherとコマンドの重複を避け、既存のカスタマイズは保持する。
             if any(existing.get("type") == "command" and existing.get("command") == handler["command"]
                    for group in groups if group.get("matcher") == addition.get("matcher")
@@ -67,7 +80,6 @@ def install(target_dir: Path) -> None:
 
     script_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_script, script_path)
-    shutil.copyfile(source_dir / "taskbar-message.py", script_path.with_name("taskbar-message.py"))
     if added or changed:
         if original is not None:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

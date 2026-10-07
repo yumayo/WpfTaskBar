@@ -83,8 +83,8 @@ test('Claude設定の配置先を環境変数から選び、壊れた既存設�
   await run('python3', [installer], { env: { ...process.env, CLAUDE_CONFIG_DIR: fresh } });
   const config = JSON.parse(await fs.readFile(path.join(fresh, 'settings.json'), 'utf8'));
   assert.deepEqual(Object.keys(config.hooks), ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Elicitation', 'ElicitationResult', 'Stop', 'StopFailure', 'SessionEnd']);
-  assert.equal(await fs.readFile(path.join(fresh, 'hooks/wpftaskbar/taskbar-status.sh'), 'utf8'),
-    await fs.readFile(path.join(__dirname, '../scripts/taskbar-status.sh'), 'utf8'));
+  assert.equal(await fs.readFile(path.join(fresh, 'hooks/wpftaskbar/wpftaskbar.py'), 'utf8'),
+    await fs.readFile(path.join(__dirname, '../scripts/wpftaskbar.py'), 'utf8'));
 
   for (const [index, invalid] of [
     'not JSON', '[]', '{"hooks":[]}', '{"hooks":{"Stop":"invalid"}}',
@@ -102,17 +102,37 @@ test('Claude設定の配置先を環境変数から選び、壊れた既存設�
 
 
 test('Claudeの旧失敗フックは置き換え、matcherごとの追加を再実行でも重複させない', { skip: process.platform === 'win32' }, async t => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wpftaskbar-claude-migrate-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "wpftaskbar-claude-migrate-'quoted' "));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   await run('python3', [installer, '--claude-dir', dir]);
   const file = path.join(dir, 'settings.json');
   const config = JSON.parse(await fs.readFile(file, 'utf8'));
+  const originalHooks = structuredClone(config.hooks);
+  // 旧版で登録された全イベントを再現し、カスタム設定を含めて移行する。
+  for (const groups of Object.values(config.hooks)) {
+    for (const group of groups) {
+      for (const handler of group.hooks) {
+        handler.command = handler.command.replace(/^python3 /, 'sh ').replace('/wpftaskbar.py', '/taskbar-status.sh');
+      }
+    }
+  }
+  config.hooks.UserPromptSubmit[0].hooks[0].timeout = 17;
   config.hooks.StopFailure[0].hooks[0].command = config.hooks.StopFailure[0].hooks[0].command.replace('interrupted 2', 'none 2');
   const custom = { type: 'command', command: 'echo keep', timeout: 9 };
   config.hooks.StopFailure[0].hooks.push(custom);
   await fs.writeFile(file, JSON.stringify(config));
   await run('python3', [installer, '--claude-dir', dir]);
   const updated = JSON.parse(await fs.readFile(file, 'utf8'));
+  for (const [event, groups] of Object.entries(updated.hooks)) {
+    for (const handler of groups.flatMap(group => group.hooks).filter(hook => hook.command !== custom.command)) {
+      assert.match(handler.command, /^python3 /);
+      assert.ok(handler.command.includes('/wpftaskbar.py'));
+      assert.equal(handler.command.includes('taskbar-status.sh'), false);
+    }
+    if (event !== 'StopFailure' && event !== 'UserPromptSubmit') assert.deepEqual(groups, originalHooks[event]);
+  }
+  assert.equal(updated.hooks.UserPromptSubmit.length, 1);
+  assert.equal(updated.hooks.UserPromptSubmit[0].hooks[0].timeout, 17);
   const commands = updated.hooks.StopFailure.flatMap(group => group.hooks);
   assert.deepEqual(commands[0], custom);
   assert.equal(commands.length, 2);
