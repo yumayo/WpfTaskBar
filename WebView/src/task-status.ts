@@ -1,4 +1,13 @@
-import type { TaskStatus, TaskBarItem } from './types';
+import type { TaskStatus, TaskBarItem, MessageData } from './types';
+
+export function setupTaskStatusListeners(): void {
+  window.chrome?.webview?.addEventListener('message', event => {
+    const data: MessageData | null = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    if (data?.type === 'time_record_status_response' || data?.type === 'app_settings_update') {
+      document.body.classList.toggle('hide-ai-task-details', data.is_ai_task_details_visible === false);
+    }
+  });
+}
 
 const statusLabels: Record<TaskStatus, string> = {
   none: '', running: 'AI 実行中', waiting: 'AI 質問・承認待ち',

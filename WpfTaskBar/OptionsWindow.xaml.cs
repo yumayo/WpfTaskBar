@@ -8,11 +8,13 @@ public partial class OptionsWindow : Window
 	{
 		InitializeComponent();
 		AttendanceEnabledCheckBox.IsChecked = AppSettingsModel.IsAttendanceEnabled;
+		AiTaskDetailsVisibleCheckBox.IsChecked = AppSettingsModel.IsAiTaskDetailsVisible;
 	}
 
 	private void SaveButton_OnClick(object sender, RoutedEventArgs e)
 	{
 		AppSettingsModel.SetAttendanceEnabled(AttendanceEnabledCheckBox.IsChecked == true);
+		AppSettingsModel.SetAiTaskDetailsVisible(AiTaskDetailsVisibleCheckBox.IsChecked == true);
 		Close();
 	}
 

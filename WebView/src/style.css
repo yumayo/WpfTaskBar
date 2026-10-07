@@ -129,7 +129,7 @@ body {
 }
 
 /* 通常タスク (38px) の2つ分を確保し、下半分にAIターミナルのタイトルを表示する。 */
-.task-item.has-ai-task {
+body:not(.hide-ai-task-details) .task-item.has-ai-task {
   display: grid;
   grid-template-columns: 22px 32px minmax(0, 1fr);
   grid-template-rows: 32px 32px;
@@ -151,7 +151,8 @@ body {
   -webkit-box-orient: vertical;
 }
 
-.task-terminal-title[hidden] { display: none; }
+.task-terminal-title[hidden],
+.hide-ai-task-details .task-terminal-title { display: none; }
 
 @keyframes task-status-spin {
   to { transform: rotate(360deg); }

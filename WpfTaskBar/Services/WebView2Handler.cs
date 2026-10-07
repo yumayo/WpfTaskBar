@@ -1100,7 +1100,8 @@ using WpfApplication = System.Windows.Application;
 						type = "time_record_status_response",
 						clock_in_date = TimeRecordModel.ClockInDate,
 						clock_out_date = TimeRecordModel.ClockOutDate,
-						is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled
+						is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled,
+						is_ai_task_details_visible = AppSettingsModel.IsAiTaskDetailsVisible
 					};
 
 				SendMessageToWebView(response);
@@ -1122,7 +1123,8 @@ using WpfApplication = System.Windows.Application;
 			SendMessageToWebView(new
 			{
 				type = "app_settings_update",
-				is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled
+				is_attendance_enabled = AppSettingsModel.IsAttendanceEnabled,
+				is_ai_task_details_visible = AppSettingsModel.IsAiTaskDetailsVisible
 			});
 		}
 

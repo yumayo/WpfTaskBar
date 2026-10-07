@@ -11,6 +11,7 @@ public static class AppSettingsModel
 	public static event EventHandler? SettingsChanged;
 
 	public static bool IsAttendanceEnabled { get; private set; } = true;
+	public static bool IsAiTaskDetailsVisible { get; private set; } = true;
 
 	public static void Load()
 	{
@@ -21,17 +22,20 @@ public static class AppSettingsModel
 				if (!File.Exists(DataFilePath))
 				{
 					IsAttendanceEnabled = true;
+					IsAiTaskDetailsVisible = true;
 					return;
 				}
 
 				var json = File.ReadAllText(DataFilePath);
 				var data = JsonSerializer.Deserialize<AppSettingsData>(json);
 				IsAttendanceEnabled = data?.IsAttendanceEnabled ?? true;
+				IsAiTaskDetailsVisible = data?.IsAiTaskDetailsVisible ?? true;
 			}
 			catch (Exception ex)
 			{
 				Console.WriteLine($"Failed to load app settings: {ex.Message}");
 				IsAttendanceEnabled = true;
+				IsAiTaskDetailsVisible = true;
 			}
 		}
 	}
@@ -57,6 +61,17 @@ public static class AppSettingsModel
 		}
 	}
 
+	public static void SetAiTaskDetailsVisible(bool isVisible)
+	{
+		lock (SyncRoot)
+		{
+			if (IsAiTaskDetailsVisible == isVisible) return;
+			IsAiTaskDetailsVisible = isVisible;
+			SaveCore();
+		}
+		SettingsChanged?.Invoke(null, EventArgs.Empty);
+	}
+
 	public static void Save()
 	{
 		lock (SyncRoot)
@@ -73,7 +88,8 @@ public static class AppSettingsModel
 
 			var data = new AppSettingsData
 			{
-				IsAttendanceEnabled = IsAttendanceEnabled
+				IsAttendanceEnabled = IsAttendanceEnabled,
+				IsAiTaskDetailsVisible = IsAiTaskDetailsVisible
 			};
 
 			var json = JsonSerializer.Serialize(data, new JsonSerializerOptions
@@ -92,5 +108,6 @@ public static class AppSettingsModel
 	private sealed class AppSettingsData
 	{
 		public bool IsAttendanceEnabled { get; set; } = true;
+		public bool IsAiTaskDetailsVisible { get; set; } = true;
 	}
 }
