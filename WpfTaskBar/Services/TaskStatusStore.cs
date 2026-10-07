@@ -44,7 +44,9 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 			var status = sessions.Select(session => session.Status)
 				.Append(_entries.TryGetValue(handle, out entry) ? entry.Status : "none")
 				.OrderByDescending(Priority).First();
-			return new TaskWindowState(status, sessions.Length > 0 || status != "none", sessions.FirstOrDefault()?.TerminalTitle ?? "");
+			var selected = sessions.FirstOrDefault();
+			return new TaskWindowState(status, sessions.Length > 0 || status != "none",
+				selected?.TerminalTitle ?? "", selected?.ActivityText ?? "");
 		}
 	}
 
@@ -86,7 +88,7 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 		}
 	}
 
-	public bool SetSessionStatus(string id, string status, bool onlyIfActive = false)
+	public bool SetSessionStatus(string id, string status, bool onlyIfActive = false, string? activityText = null)
 	{
 		if (!IsValidStatus(status)) throw new ArgumentException("Unknown task status.", nameof(status));
 		lock (_syncRoot)
@@ -94,7 +96,10 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 			RemoveExpiredSessions();
 			if (!_sessions.TryGetValue(id, out var session)) return false;
 			if (onlyIfActive && session.Status is not ("running" or "waiting")) return true;
-			_sessions[id] = session with { Status = status, Revision = ++_revision, ActivityRevision = _revision };
+			// 新しい依頼とセッション終了では、前の応答文を持ち越さない。
+			var text = status == "none" ? "" : activityText ??
+				(status == "running" && !onlyIfActive ? "" : session.ActivityText);
+			_sessions[id] = session with { Status = status, ActivityText = text, Revision = ++_revision, ActivityRevision = _revision };
 			return true;
 		}
 	}
@@ -106,6 +111,19 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 			RemoveExpiredSessions();
 			if (!_sessions.TryGetValue(id, out var session)) return false;
 			_sessions[id] = session with { TerminalTitle = title, Revision = ++_revision };
+			return true;
+		}
+	}
+
+	public bool SetSessionActivity(string id, string text)
+	{
+		lock (_syncRoot)
+		{
+			RemoveExpiredSessions();
+			if (!_sessions.TryGetValue(id, out var session)) return false;
+			// 遅れて届くツール開始通知で完了・中断後の文言を書き換えない。
+			if (session.Status is not ("running" or "waiting") || session.ActivityText == text) return true;
+			_sessions[id] = session with { ActivityText = text, Revision = ++_revision };
 			return true;
 		}
 	}
@@ -156,6 +174,6 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 	private sealed record Entry(int ProcessId, string Status, long Revision);
 }
 
-public sealed record TaskWindowState(string Status, bool HasAiTask, string TerminalTitle);
+public sealed record TaskWindowState(string Status, bool HasAiTask, string TerminalTitle, string ActivityText = "");
 public sealed record TaskStatusSession(string Id, int Handle, int ProcessId, string Status, long Revision,
-	DateTimeOffset ExpiresAt, string TerminalTitle, long ActivityRevision);
+	DateTimeOffset ExpiresAt, string TerminalTitle, long ActivityRevision, string ActivityText = "");

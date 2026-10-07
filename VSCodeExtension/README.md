@@ -1,6 +1,6 @@
 # WpfTaskBar AI Status
 
-VSCode の統合ターミナルで起動した AI コンテナから、依頼ごとの実行中 / 質問・承認待ち / 中断 / 応答完了と、ターミナルタイトルを WpfTaskBar に表示します。
+VSCode の統合ターミナルで起動した AI コンテナから、依頼ごとの実行中 / 質問・承認待ち / 中断 / 応答完了と、最新の進捗文を WpfTaskBar に表示します。進捗文がない場合はターミナルタイトルを表示します。
 Windows 側の VSCode にインストールする拡張です。通常の WSL ターミナルと Remote - WSL の両方を想定しています。
 
 ```text
@@ -146,6 +146,7 @@ services:
       WPF_TASKBAR_SESSION_ID: ${WPF_TASKBAR_SESSION_ID}
     volumes:
       - ./VSCodeExtension/scripts/taskbar-status.sh:/opt/taskbar/taskbar-status.sh:ro
+      - ./VSCodeExtension/scripts/taskbar-message.py:/opt/taskbar/taskbar-message.py:ro
 ```
 
 通知付きターミナルで次のように起動すると、ターミナルごとの値を独立したコンテナに渡せます。
@@ -168,15 +169,16 @@ docker compose exec \
 
 ## 共通フック
 
-`scripts/taskbar-status.sh` をコンテナへコピーするか、読み取り専用でマウントします。
+`scripts/taskbar-status.sh` と `scripts/taskbar-message.py` をコンテナの同じディレクトリへコピーするか、読み取り専用でマウントします。進捗文の抽出にはPython 3.8以降が必要です。
 AI のフック機構に次のコマンドを登録してください。どのランチャーでも同じスクリプトを使えます。
 
 | タイミング | コマンド |
 | --- | --- |
 | ユーザーの依頼を受け付けたとき | `sh /opt/taskbar/taskbar-status.sh running` |
 | AI が応答を終えたとき | `sh /opt/taskbar/taskbar-status.sh completed` |
+| ツール実行の直前（進捗文のみ更新） | `sh /opt/taskbar/taskbar-status.sh activity` |
 | 質問・承認待ち | `sh /opt/taskbar/taskbar-status.sh waiting` |
-| 回答・承認後の再開 | `sh /opt/taskbar/taskbar-status.sh running` |
+| 回答・承認後の再開 | `sh /opt/taskbar/taskbar-status.sh resume` |
 | Escなどによる中断 | `sh /opt/taskbar/taskbar-status.sh interrupted 2` |
 | セッション終了・表示解除 | `sh /opt/taskbar/taskbar-status.sh none` |
 
@@ -194,6 +196,7 @@ Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続�
 | Codexイベント | 通知する状態 |
 | --- | --- |
 | `UserPromptSubmit` | `running` |
+| `PreToolUse`（全ツール） | `activity`（状態を変えず進捗文を更新） |
 | `PreToolUse`（`request_user_input` / `request_permissions`） | `waiting` |
 | `PermissionRequest` | `waiting` |
 | `PostToolUse`（質問への回答・承認後を含む） | `resume`（実行中・待ちの間だけ `running` に戻す） |
@@ -207,12 +210,13 @@ Codex CLI の `hooks` 機能が必要です。外部ドキュメントへ接続�
 ユーザー共通の設定ファイルは `~/.codex/hooks.json` です。`CODEX_HOME` を指定している場合は `$CODEX_HOME/hooks.json` を使います。
 同じCodex設定ディレクトリを使うプロジェクトで共通に有効になります。
 
-まずリポジトリルートで、通知スクリプトを共通の場所へコピーします。手動設定に必要なのは `sh` と `curl` です。
+まずリポジトリルートで、通知スクリプトを共通の場所へコピーします。`sh`、`curl`、Python 3.8以降を使用します。
 
 ```sh
 taskbar_codex_dir="${CODEX_HOME:-$HOME/.codex}"
 mkdir -p "$taskbar_codex_dir/hooks/wpftaskbar"
 cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
+cp VSCodeExtension/scripts/taskbar-message.py "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-message.py"
 printf '設定ファイル: %s\n' "$taskbar_codex_dir/hooks.json"
 printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskbar-status.sh"
 ```
@@ -232,6 +236,12 @@ printf '通知スクリプト: %s\n' "$taskbar_codex_dir/hooks/wpftaskbar/taskba
       }]
     }],
     "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.codex/hooks/wpftaskbar/taskbar-status.sh' activity",
+        "timeout": 10
+      }]
+    }, {
       "matcher": "(^|.*[.:/])(request_user_input|request_permissions)$",
       "hooks": [{
         "type": "command",
@@ -300,7 +310,7 @@ python3 VSCodeExtension/scripts/install-codex-hooks.py
 
 実行後は手動設定と同様に、Codexを起動し直して `/hooks` で確認・信頼します。
 導入用のテンプレートは [examples/codex-hooks.json](examples/codex-hooks.json) です。パスのプレースホルダーは導入スクリプトが置き換えます。
-各ターンの通知は `taskbar-status.sh` が行い、Pythonの導入スクリプトは実行しません。
+各ターンの通知は `taskbar-status.sh` が行い、`taskbar-message.py` が最新の応答文を抽出します。導入スクリプトは各ターンには実行しません。
 
 `aicontainer` を使う場合も設定先はコンテナ内のCodexです。
 設定ディレクトリが永続化されていない構成では、コンテナを作り直すと再登録が必要です。
@@ -321,6 +331,7 @@ Claude Codeでも同じ `taskbar-status.sh` を使います。
 | Claude Codeイベント | 通知する状態 |
 | --- | --- |
 | `UserPromptSubmit` | `running` |
+| `PreToolUse`（全ツール） | `activity`（状態を変えず進捗文を更新） |
 | `PreToolUse`（`AskUserQuestion` / `ExitPlanMode`） | `waiting` |
 | `PermissionRequest` | `waiting` |
 | `PostToolUse` | `resume`（実行中・待ちの間だけ `running` に戻す） |
@@ -342,6 +353,7 @@ Claude Codeでも同じ `taskbar-status.sh` を使います。
 taskbar_claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mkdir -p "$taskbar_claude_dir/hooks/wpftaskbar"
 cp VSCodeExtension/scripts/taskbar-status.sh "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
+cp VSCodeExtension/scripts/taskbar-message.py "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-message.py"
 printf '設定ファイル: %s\n' "$taskbar_claude_dir/settings.json"
 printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskbar-status.sh"
 ```
@@ -361,6 +373,12 @@ printf '通知スクリプト: %s\n' "$taskbar_claude_dir/hooks/wpftaskbar/taskb
       }]
     }],
     "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh '/home/ubuntu/.claude/hooks/wpftaskbar/taskbar-status.sh' activity",
+        "timeout": 10
+      }]
+    }, {
       "matcher": "^(AskUserQuestion|ExitPlanMode)$",
       "hooks": [{
         "type": "command",
@@ -444,7 +462,7 @@ python3 VSCodeExtension/scripts/install-claude-hooks.py
 `permissions`、`env`、`disableAllHooks` などの既存設定は変更しません。
 テンプレートは [examples/claude-hooks.json](examples/claude-hooks.json) です。
 
-実行後にClaude Codeを起動し直し、`/hooks` で確認します。通常の通知には `sh` と `curl` を使い、`PostToolUseFailure` のJSON判定にはPython 3も使います。
+実行後にClaude Codeを起動し直し、`/hooks` で確認します。通知には `sh` と `curl` を使い、進捗文の抽出と `PostToolUseFailure` のJSON判定にはPython 3も使います。
 `aicontainer` やDocker ComposeではClaude Code設定ディレクトリを永続化してください。永続化されていなければコンテナ再作成後に再登録します。
 
 #### 動作確認と中断時の扱い
@@ -472,20 +490,28 @@ sh "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/wpftaskbar/taskbar-status.sh" inte
 
 他のAIでも、依頼開始・応答完了のフックへ同じコマンドを登録できます。
 
-## ターミナルタイトルの表示
+## 最新の進捗文とターミナルタイトルの表示
 
-通知付きターミナルがあるウィンドウは、通常タスク2つ分の高さ（76px）を使います。上半分はウィンドウ名、下半分はAIターミナルのタイトルをそれぞれ最大2行で表示します。下段のツールチップにはタイトル全体を表示します。
+通知付きターミナルがあるウィンドウは、通常タスク2つ分の高さ（76px）を使います。上半分はウィンドウ名、下半分は最新のAIの応答文を最大2行で表示します。
+Codex / Claude Codeのフック入力にある `transcript_path` から、最新の公開メッセージを取り出します。途中の進捗コメントも対象です。ツール実行前後・質問待ち・応答終了などのフック発生時に更新し、ツールを使わず文章を生成している間は応答終了時に反映されます。
+Markdownの見出し・強調や改行を整え、先頭120文字以内に切り詰めます。新たに要約を生成する処理はありません。ツール結果・思考・ユーザーの依頼文は送信しません。応答完了フックの `last_assistant_message` がある場合は、その本文を優先します。
+読み取りはログ末尾512 KiBまでです。ログがない、読み取り途中、未対応の形式などで本文を取得できない場合も、状態通知は継続します。進捗文がまだない場合はターミナルタイトルを表示します。
+進捗文はターミナルタイトルとは別に保持するため、VSCode側のタイトル更新では上書きされません。次の依頼開始とセッション終了時に解除し、完了・中断時は最後の文言を残します。遅れて届いたツール通知は完了・中断後の表示を変更しません。
+タスクリストを右クリック → 「オプション」 → 「AI用の表示欄を表示する」で下段全体を非表示にできます。
+
+### 進捗文がない場合のタイトル
+
 タイトルはVSCodeの `Terminal.name` を使い、固定の `AI (WpfTaskBar)` 名で上書きしません。シェルやAIがOSCで変更したタイトル、VSCodeで手動変更したタイトルに追従します。
 安定版VSCode APIにはタイトル変更専用イベントがないため、1秒ごとに差分を確認して通知します。通信中の変更も順番に送り、失敗時は再送します。AIフックとは独立しているので、質問待ち・中断中も更新されます。
-手動でターミナルを固定名に変更した場合は、その名前が表示されます。AIがターミナルタイトルを変更しない場合、質問本文そのものは表示されません。
+手動でターミナルを固定名に変更した場合は、その名前が表示されます。
 `none` でも通知付きターミナルが残っていれば下段を維持し、最後のターミナルを閉じるか登録が失効すると通常の高さに戻ります。
 
-既存環境ではWpfTaskBarとVSCode拡張を両方更新し、使用するAIのフック導入スクリプトを再実行してください。AIを再起動して `/hooks` で確認（Codexは信頼も必要）した後、通知付きターミナルを開き直します。
+既にタイトル連携を導入している環境では、WpfTaskBarを再ビルドし、使用するAIのフック導入スクリプトを再実行してください。`taskbar-status.sh` と `taskbar-message.py` が一緒に更新され、全ツール用の `PreToolUse` フックが追加されます。VSCode拡張の更新は不要です。AIを再起動して `/hooks` で確認（Codexは信頼も必要）した後、WpfTaskBarの再起動で失効した通知付きターミナルを開き直します。
 
 ## 表示と通知の寿命
 
 - 状態は `waiting` → `running` → `interrupted` → `completed` → `none` の順に優先します。別ターミナルが実行中でも質問・承認待ちに気付けます。
-- 下段のタイトルも同じ優先順で選び、同じ状態なら最後に状態通知を受けたターミナルを表示します。生存通知・タイトル変更だけでは表示対象を切り替えません。
+- 下段の進捗文・タイトルも同じ優先順で選び、同じ状態なら最後に状態通知を受けたターミナルを表示します。生存通知・進捗文・タイトルの更新だけでは表示対象を切り替えません。
 - `none` とターミナルを閉じる操作は、そのターミナルの状態だけを解除します。
 - **1 つの通知付きターミナルにつき、同時に実行する AI は 1 つ**にしてください。複数の AI はそれぞれ別の通知付きターミナルから起動します。
 - 拡張は 30 秒ごとに生存通知を送り、2 分間届かなければ登録と状態が失効します。
@@ -517,15 +543,17 @@ HTTP 404 は通知先の失効を示します。「WpfTaskBar: 通知ログを�
 | メソッド / パス | 用途 |
 | --- | --- |
 | `POST /tasks/sessions` | `{ "handle": 123, "processId": 456 }` で VSCode ウィンドウへ登録。`sessionId` を返す |
-| `POST /tasks/sessions/{id}/status` | `{ "status": "running" }` などを送る。`onlyIfActive: true` を付けると、現在が `running` / `waiting` の場合だけ変更する |
+| `POST /tasks/sessions/{id}/status` | `{ "status": "running" }` などを送る。任意の `activityText`（最大512文字）を同時に更新可能。`onlyIfActive: true` を付けると、現在が `running` / `waiting` の場合だけ変更する |
 | `PUT /tasks/sessions/{id}/title` | `{ "terminalTitle": "続行しますか？" }` でタイトルだけを更新（最大4096文字、空文字で解除）。状態・有効期限は変えない |
+| `PUT /tasks/sessions/{id}/activity` | `{ "activityText": "設定ファイルを確認しています。" }` で進捗文だけを更新（最大512文字、空文字で解除）。現在が `running` / `waiting` の場合のみ更新し、状態・有効期限は変えない |
 | `PUT /tasks/sessions/{id}/heartbeat` | 拡張から有効期限を延長する |
 | `DELETE /tasks/sessions/{id}` | ターミナル終了時に登録を解除する（繰り返し可能） |
 
 `resume` は内部フック用コマンドで、`running` と `onlyIfActive: true` を送ります。`tool-failed` も条件付き通知のため、EscやStopより後にツール通知が届いても中断・完了を取り消しません。
 
-API は状態の集約、ウィンドウの生存確認、有効期限を担当します。状態・タイトルの通知だけでは有効期限は延長しません。
-`GET /tasks` とWebView向けのタスク一覧には `status` に加えて `hasAiTask` と `terminalTitle` を返します。
+API は状態の集約、ウィンドウの生存確認、有効期限を担当します。状態・進捗文・タイトルの通知だけでは有効期限は延長しません。
+`activityText` の省略は原則として現在の文言を保持します。通常の `running` 通知（`onlyIfActive` なし）では新しい依頼として解除し、`none` は常に解除します。
+`GET /tasks` とWebView向けのタスク一覧には `status` に加えて `hasAiTask`、`terminalTitle`、`activityText` を返します。
 登録時・更新時は HWND と PID の両方を確認します。セッションはディスクに保存しません。
 
 標準 UI 向けには `TerminalProfileProvider` で、セッションを登録済みの起動設定を返します。

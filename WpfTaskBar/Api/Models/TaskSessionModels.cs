@@ -15,6 +15,15 @@ public sealed class TaskSessionStatusRequest
 	public string Status { get; set; } = string.Empty;
 	// ツール完了・Esc通知が遅れて届いても、完了済みや中断済みの状態を戻さない。
 	public bool OnlyIfActive { get; set; }
+	[StringLength(512)]
+	public string? ActivityText { get; set; }
+}
+
+public sealed class TaskSessionActivityRequest
+{
+	[Required(AllowEmptyStrings = true)]
+	[StringLength(512)]
+	public string ActivityText { get; set; } = null!;
 }
 
 public sealed class TaskSessionTitleRequest

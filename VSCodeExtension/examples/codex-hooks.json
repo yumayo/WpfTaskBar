@@ -8,6 +8,12 @@
       }]
     }],
     "PreToolUse": [{
+      "hooks": [{
+        "type": "command",
+        "command": "sh __TASKBAR_STATUS_SCRIPT__ activity",
+        "timeout": 10
+      }]
+    }, {
       "matcher": "(^|.*[.:/])(request_user_input|request_permissions)$",
       "hooks": [{
         "type": "command",

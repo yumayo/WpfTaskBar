@@ -35,7 +35,7 @@ export function updateTaskStatus(element: HTMLElement, status: TaskStatus = 'non
 export function updateAiTask(item: HTMLElement, titleElement: HTMLElement, task: TaskBarItem): void {
   const hasAiTask = task.hasAiTask ?? (!!task.status && task.status !== 'none');
   item.classList.toggle('has-ai-task', hasAiTask);
-  const title = hasAiTask ? task.terminalTitle || '' : '';
+  const title = hasAiTask ? task.activityText || task.terminalTitle || '' : '';
   if (titleElement.textContent !== title) titleElement.textContent = title;
   if (titleElement.title !== title) titleElement.title = title;
   if (titleElement.hidden !== !hasAiTask) titleElement.hidden = !hasAiTask;

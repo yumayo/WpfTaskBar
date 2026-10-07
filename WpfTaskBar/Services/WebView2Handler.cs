@@ -614,6 +614,7 @@ using WpfApplication = System.Windows.Application;
 				status = state.Status,
 				hasAiTask = state.HasAiTask,
 				terminalTitle = state.TerminalTitle,
+				activityText = state.ActivityText,
 			};
 		}
 

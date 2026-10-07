@@ -59,7 +59,8 @@ public sealed class TaskStatusController(ITaskWindowProvider windows, TaskStatus
 			moduleFileName = window.ModuleFileName,
 			status = state.Status,
 			hasAiTask = state.HasAiTask,
-			terminalTitle = state.TerminalTitle
+			terminalTitle = state.TerminalTitle,
+			activityText = state.ActivityText
 		};
 	}
 }

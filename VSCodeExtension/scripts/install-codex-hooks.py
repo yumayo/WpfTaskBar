@@ -19,6 +19,7 @@ def install(target_dir: Path) -> None:
     source_script = source_dir / "taskbar-status.sh"
     # 書き込み前に、設定とコピー元の両方を確認する。
     source_script.read_bytes()
+    (source_dir / "taskbar-message.py").read_bytes()
     template = json.loads((source_dir.parent / "examples" / "codex-hooks.json").read_text(encoding="utf-8"))
     original = config_path.read_text(encoding="utf-8-sig") if config_path.exists() else None
     config = json.loads(original) if original is not None else {}
@@ -67,6 +68,7 @@ def install(target_dir: Path) -> None:
 
     script_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_script, script_path)
+    shutil.copyfile(source_dir / "taskbar-message.py", script_path.with_name("taskbar-message.py"))
     if added or changed:
         if original is not None:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

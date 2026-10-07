@@ -35,6 +35,7 @@ export interface TaskBarItem {
   status?: TaskStatus;
   hasAiTask?: boolean;
   terminalTitle?: string;
+  activityText?: string;
   windowId?: number;
 }
 
