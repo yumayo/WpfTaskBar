@@ -2,7 +2,7 @@
   "name": "wpftaskbar-ai-status",
   "displayName": "WpfTaskBar AI Status",
   "description": "WSL / AI コンテナの応答状態を、所属する VSCode の WpfTaskBar タスクへ通知します。",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "yumayo",
   "repository": { "type": "git", "url": "https://github.com/yumayo/WpfTaskBar.git" },
   "engines": { "vscode": "^1.90.0" },

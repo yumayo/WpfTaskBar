@@ -54,12 +54,12 @@ function extension() {
   let failCreate = false;
   let createError;
   let onCreateSession;
-  let onPick;
+  let onWindows;
   let openEventBeforeReturn = true;
   const config = { apiUrl: 'http://localhost:5000', containerApiUrl: 'http://192.0.2.1:5000' };
   class FakeClient {
     constructor(url) { this.url = url; }
-    async windows() { return windows; }
+    async windows() { await onWindows?.(); return windows; }
     async createSession(window) {
       requests.push(window);
       const sessionId = `session-${requests.length}`;
@@ -88,7 +88,6 @@ function extension() {
       createOutputChannel: () => ({ appendLine() {}, show() {} }),
       showQuickPick: async (items, _options, token) => {
         picks++;
-        await onPick?.(token);
         return token?.isCancellationRequested ? undefined : items[selection];
       },
       createTerminal: options => {
@@ -132,7 +131,7 @@ function extension() {
     set failRenew(value) { failRenew = value; },
     set createError(value) { createError = value; },
     set onCreateSession(value) { onCreateSession = value; },
-    set onPick(value) { onPick = value; },
+    set onWindows(value) { onWindows = value; },
     set openEventBeforeReturn(value) { openEventBeforeReturn = value; },
     open: () => commands.get('wpftaskbar.openTerminal')(),
     profile: (token = cancellation()) => providers.get('wpftaskbar.aiTerminal').provideTerminalProfile(token),
@@ -150,24 +149,42 @@ function extension() {
   };
 }
 
-test('複数ウィンドウでは選択した HWND に対応する独立した通知付きターミナルを作る', async () => {
+test('複数ウィンドウでも確認せず先頭候補に対応する独立した通知付きターミナルを作る', async () => {
   const ext = extension();
   await ext.open();
   await ext.open();
-  assert.equal(ext.picks, 1);
-  assert.deepEqual(ext.requests.map(window => window.handle), [20, 20]);
+  assert.equal(ext.picks, 0);
+  assert.deepEqual(ext.requests.map(window => window.handle), [10, 10]);
   assert.deepEqual(ext.created.map(terminal => terminal.options.env.WPF_TASKBAR_SESSION_ID), ['session-1', 'session-2']);
   assert.equal(ext.created[0].options.env.WPF_TASKBAR_URL, 'http://192.0.2.1:5000');
   assert.equal(ext.created[0].options.env.WSLENV, 'KEEP/p:WPF_TASKBAR_URL/u:WPF_TASKBAR_SESSION_ID/u');
   await ext.deactivate();
 });
 
-test('選択のキャンセル時にはターミナルもセッションも作成しない', async () => {
+test('手動で選び直した通知先を優先し、再選択のキャンセルでも維持する', async () => {
   const ext = extension();
-  ext.selection = -1;
   await ext.open();
+  ext.close(ext.created[0]);
+  await ext.select();
+  ext.selection = -1;
+  await ext.select();
+  await ext.open();
+  await ext.open();
+  assert.equal(ext.picks, 2);
+  assert.deepEqual(ext.requests.map(window => window.handle), [10, 20, 20]);
+  assert.equal(ext.errors.length, 0);
+  await ext.deactivate();
+});
+
+test('候補がない場合はエラーを表示し、ターミナルもセッションも作成しない', async () => {
+  const ext = extension();
+  ext.windows = [];
+  await ext.open();
+  assert.equal(ext.picks, 0);
   assert.equal(ext.requests.length, 0);
   assert.equal(ext.created.length, 0);
+  assert.match(ext.errors[0], /VSCode のタスクがありません/);
+  await ext.deactivate();
 });
 
 test('通知付きターミナルだけを更新し、閉じたターミナルだけを解除する', async () => {
@@ -215,20 +232,20 @@ test('作成済みターミナルがある場合は通知先を変更しない',
   await ext.open();
   await ext.select();
   assert.equal(ext.errors.length, 1);
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   await ext.deactivate();
 });
 
-test('保存した HWND が別プロセスになった場合は通知先を選び直す', async () => {
+test('保存した HWND が別プロセスになった場合は現在の先頭候補を自動選択する', async () => {
   const ext = extension();
   await ext.open();
   ext.windows = [
-    { handle: 20, processId: 999, title: 'new window', moduleFileName: 'Code.exe' },
     { handle: 30, processId: 999, title: 'other window', moduleFileName: 'Code.exe' },
+    { handle: 10, processId: 999, title: 'new window', moduleFileName: 'Code.exe' },
   ];
   await ext.open();
-  assert.equal(ext.picks, 2);
-  assert.deepEqual(ext.requests.map(window => window.handle), [20, 30]);
+  assert.equal(ext.picks, 0);
+  assert.deepEqual(ext.requests.map(window => window.handle), [10, 30]);
   await ext.deactivate();
 });
 
@@ -244,7 +261,7 @@ test('標準 UI から選択できるプロファイルを宣言し、その ID 
 test('プロファイルの同時起動でも別々の ID を渡し、開いた順序によらず終了・更新を紐付ける', async () => {
   const ext = extension();
   const [first, second] = await Promise.all([ext.profile(), ext.profile()]);
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   assert.deepEqual([first, second].map(profile => profile.options.env.WPF_TASKBAR_SESSION_ID), ['session-1', 'session-2']);
   assert.equal(first.options.env.WPF_TASKBAR_URL, 'http://192.0.2.1:5000');
   assert.equal(first.options.env.WSLENV, 'KEEP/p:WPF_TASKBAR_URL/u:WPF_TASKBAR_SESSION_ID/u');
@@ -260,7 +277,7 @@ test('プロファイルの同時起動でも別々の ID を渡し、開いた�
   await ext.open(); // 従来のコマンドとも共存する。
   ext.close(terminal);
   await ext.heartbeat();
-  assert.deepEqual(ext.requests.map(window => window.handle), [20, 20, 20]);
+  assert.deepEqual(ext.requests.map(window => window.handle), [10, 10, 10]);
   assert.deepEqual(ext.removed, ['session-1']);
   assert.deepEqual(ext.renewed, ['session-2', 'session-3']);
   await ext.deactivate();
@@ -293,12 +310,8 @@ test('専用コマンドの作成通知が後から届いても生存通知を�
   await ext.deactivate();
 });
 
-test('プロファイルで通知先選択をキャンセルしたときや API が失敗したときは起動設定を返さない', async () => {
+test('プロファイルで API が失敗したときは起動設定を返さず、次の起動で再試行する', async () => {
   const ext = extension();
-  ext.selection = -1;
-  assert.equal(await ext.profile(), undefined);
-  assert.equal(ext.requests.length, 0);
-  ext.selection = 0;
   ext.createError = new Error('API unavailable');
   assert.equal(await ext.profile(), undefined);
   assert.equal(ext.errors.length, 1);
@@ -318,10 +331,10 @@ test('起動前にキャンセルされたプロファイルはセッション�
   await ext.deactivate();
 });
 
-test('プロファイルのキャンセルを通知先の選択にも伝えて登録せず終了する', async () => {
+test('候補取得中にキャンセルされたプロファイルはセッションを発行しない', async () => {
   const ext = extension();
   const token = cancellation();
-  ext.onPick = received => { assert.equal(received, token); token.cancel(); };
+  ext.onWindows = () => token.cancel();
   assert.equal(await ext.profile(token), undefined);
   assert.equal(ext.requests.length, 0);
   assert.equal(ext.errors.length, 0);
@@ -358,7 +371,7 @@ test('ターミナルが開かれなかった登録は延命せず期限後に�
   await ext.profile();
   await ext.select();
   assert.equal(ext.errors.length, 1);
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   await ext.heartbeat();
   assert.deepEqual(ext.renewed, []);
   assert.deepEqual(ext.removed, []);
@@ -366,7 +379,7 @@ test('ターミナルが開かれなかった登録は延命せず期限後に�
   await ext.heartbeat();
   assert.deepEqual(ext.removed, ['session-1']);
   await ext.select();
-  assert.equal(ext.picks, 2);
+  assert.equal(ext.picks, 1);
   await ext.deactivate();
 });
 

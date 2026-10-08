@@ -41,7 +41,8 @@ async function selectWindow(client: TaskbarClient, force = false, token?: vscode
     if (current) return current;
   }
   if (windows.length === 0) throw new Error('WpfTaskBar に VSCode のタスクがありません。Windows 側で WpfTaskBar を起動してください。');
-  const selected = windows.length === 1 && !force ? windows[0] : (await vscode.window.showQuickPick(
+  // 起動時は先頭候補を使い、ユーザーが明示的に選び直すときだけ一覧を開く。
+  const selected = !force ? windows[0] : (await vscode.window.showQuickPick(
     windows.map(window => ({
       label: window.title,
       description: `HWND ${window.handle} / PID ${window.processId}`,
