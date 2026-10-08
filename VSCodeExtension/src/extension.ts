@@ -4,55 +4,40 @@ import { ApiError, TaskbarClient, normalizeUrl, terminalEnvironment, type TaskWi
 interface Binding {
   client: TaskbarClient;
   id: string;
+  window: TaskWindow;
   title?: string;
   updatingTitle?: boolean;
 }
 
-interface PendingTerminal extends Binding {
-  window: TaskWindow;
-  createdAt: number;
-  cancellation?: vscode.Disposable;
-}
-
-interface PreparedTerminal {
-  id: string;
-  options: vscode.TerminalOptions;
-}
-
-const terminals = new Map<vscode.Terminal, Binding>();
-const pendingTerminals = new Map<string, PendingTerminal>();
+let session: Binding | undefined;
 let target: { apiUrl: string; window: TaskWindow } | undefined;
+let environment: vscode.GlobalEnvironmentVariableCollection;
 let heartbeat: NodeJS.Timeout | undefined;
 let titlePolling: NodeJS.Timeout | undefined;
-let renewal: Promise<void> | undefined;
+let operation: Promise<void> = Promise.resolve();
 let output: vscode.OutputChannel;
-let opening = false;
 let stopping = false;
-let preparing = 0;
-let preparation: Promise<unknown> = Promise.resolve();
 
 function describe(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 
-async function selectWindow(client: TaskbarClient, force = false, token?: vscode.CancellationToken): Promise<TaskWindow | undefined> {
+async function selectWindow(client: TaskbarClient, force: boolean): Promise<TaskWindow | undefined> {
   const windows = await client.windows();
   if (!force && target?.apiUrl === client.url) {
     const previous = target.window;
     const current = windows.find(window => window.handle === previous.handle && window.processId === previous.processId);
-    if (current) return current;
+    if (!current) throw new Error('通知先の VSCode が見つかりません。「この VSCode の通知先を選択」で選び直してください。');
+    return current;
   }
   if (windows.length === 0) throw new Error('WpfTaskBar に VSCode のタスクがありません。Windows 側で WpfTaskBar を起動してください。');
-  // 起動時は先頭候補を使い、ユーザーが明示的に選び直すときだけ一覧を開く。
-  const selected = !force ? windows[0] : (await vscode.window.showQuickPick(
+  // 起動時は先頭候補を使い、明示的に選び直すときだけ一覧を開く。
+  return !force ? windows[0] : (await vscode.window.showQuickPick(
     windows.map(window => ({
       label: window.title,
       description: `HWND ${window.handle} / PID ${window.processId}`,
       window,
     })),
     { title: 'この VSCode ウィンドウのタスクを選択', placeHolder: 'タイトルが同じ場合は VSCode のウィンドウタイトルを区別してから選択してください。', ignoreFocusOut: true },
-    token,
   ))?.window;
-  if (selected) target = { apiUrl: client.url, window: selected };
-  return selected;
 }
 
 function configuration() {
@@ -62,8 +47,6 @@ function configuration() {
   return {
     client: new TaskbarClient(apiUrl),
     containerUrl: normalizeUrl(config.get('containerApiUrl', '') || apiUrl),
-    shellPath: config.get<string>('shellPath', '') || undefined,
-    shellArgs: config.get<string[]>('shellArgs', []),
   };
 }
 
@@ -71,138 +54,109 @@ async function removeBinding(binding: Binding): Promise<void> {
   await binding.client.remove(binding.id).catch(error => output.appendLine(`通知先の削除に失敗: ${describe(error)}`));
 }
 
-async function removePending(id: string): Promise<void> {
-  const binding = pendingTerminals.get(id);
-  if (!binding) return;
-  pendingTerminals.delete(id);
-  binding.cancellation?.dispose();
-  await removeBinding(binding);
-}
-
-async function prepareTerminalOptions(token?: vscode.CancellationToken): Promise<PreparedTerminal | undefined> {
-  if (stopping || token?.isCancellationRequested) return;
-  const { client, containerUrl, shellPath, shellArgs } = configuration();
-  const window = await selectWindow(client, false, token);
-  if (!window || stopping || token?.isCancellationRequested) return;
-  const session = await client.createSession(window);
-  const binding: PendingTerminal = { client, id: session.sessionId, window, createdAt: Date.now() };
-  if (stopping || token?.isCancellationRequested) {
-    await removeBinding(binding);
-    return;
-  }
-  pendingTerminals.set(binding.id, binding);
-  binding.cancellation = token?.onCancellationRequested(() => { void removePending(binding.id); });
-  return {
-    id: binding.id,
-    options: {
-      // 固定名を指定するとシェル / AI が設定するタイトルを VSCode が表示しない。
-      env: terminalEnvironment(containerUrl, binding.id, process.env.WSLENV),
-      shellPath,
-      shellArgs: shellPath || shellArgs.length > 0 ? shellArgs : undefined,
-    },
-  };
-}
-
-function prepareTerminal(token?: vscode.CancellationToken): Promise<PreparedTerminal | undefined> {
-  // 同時起動でも通知先の選択を重ねず、要求ごとに独立したセッションを作る。
-  preparing++;
-  const result = preparation.then(() => prepareTerminalOptions(token));
-  preparation = result.catch(() => {});
-  return result.finally(() => { preparing--; });
-}
-
-function bindTerminal(terminal: vscode.Terminal): void {
-  if (terminals.has(terminal)) return;
-  const options = terminal.creationOptions;
-  const id = 'env' in options ? options.env?.WPF_TASKBAR_SESSION_ID : undefined;
-  const binding = id ? pendingTerminals.get(id) : undefined;
-  if (!binding) return;
-  pendingTerminals.delete(binding.id);
-  binding.cancellation?.dispose();
-  terminals.set(terminal, binding);
-  updateTerminalContext();
-  void syncTitle(terminal, binding);
-  output.appendLine(`通知付きターミナルを作成: ${binding.window.title} (HWND ${binding.window.handle})`);
-}
-
 function updateTerminalContext(): void {
-  const terminal = vscode.window.activeTerminal;
-  void vscode.commands.executeCommand('setContext', 'wpftaskbar.notificationTerminalActive',
-    !!terminal && terminals.has(terminal));
+  void vscode.commands.executeCommand('setContext', 'wpftaskbar.sessionActive',
+    !!session && !!vscode.window.activeTerminal);
+}
+
+function expire(binding: Binding): void {
+  if (session !== binding || stopping) return;
+  session = undefined;
+  environment.clear();
+  updateTerminalContext();
+  void vscode.window.showWarningMessage('WpfTaskBar の通知先が失効しました。自動再登録後に通常のターミナルを開き直し、コンテナを起動し直してください。');
+}
+
+async function connect(selected?: { apiUrl: string; window: TaskWindow }): Promise<void> {
+  const { client, containerUrl } = configuration();
+  if (selected && selected.apiUrl !== client.url) throw new Error('選択中に API の接続先が変更されました。通知先を選び直してください。');
+  const window = selected?.window ?? (session?.client.url === client.url ? session.window : await selectWindow(client, false));
+  if (!window || stopping) return;
+  const previous = session;
+  if (!session || session.client.url !== client.url || session.window.handle !== window.handle || session.window.processId !== window.processId) {
+    const created = await client.createSession(window);
+    const binding = { client, id: created.sessionId, window };
+    if (stopping) { await removeBinding(binding); return; }
+    session = binding;
+    target = { apiUrl: client.url, window };
+    output.appendLine(`ウィンドウの通知先を登録: ${window.title} (HWND ${window.handle})`);
+  }
+  const env = terminalEnvironment(containerUrl, session.id, process.env.WSLENV);
+  const changed = environment.get('WPF_TASKBAR_SESSION_ID')?.value !== env.WPF_TASKBAR_SESSION_ID
+    || environment.get('WPF_TASKBAR_URL')?.value !== env.WPF_TASKBAR_URL;
+  for (const [name, value] of Object.entries(env)) environment.replace(name, value);
+  updateTerminalContext();
+  void syncTitle();
+  if (previous && changed) {
+    void vscode.window.showWarningMessage('通知用の環境変数を更新しました。通常のターミナルを開き直し、コンテナを起動し直してください。');
+  }
+  if (previous && previous !== session) await removeBinding(previous);
+}
+
+async function renewSession(): Promise<void> {
+  const binding = session;
+  if (binding) {
+    try { await binding.client.renew(binding.id); }
+    catch (error) {
+      if (!(error instanceof ApiError) || error.statusCode !== 404) throw error;
+      expire(binding);
+    }
+  }
+  if (!session && !stopping) await connect();
 }
 
 async function interruptTerminal(): Promise<void> {
-  const terminal = vscode.window.activeTerminal;
-  const binding = terminal ? terminals.get(terminal) : undefined;
+  const binding = vscode.window.activeTerminal ? session : undefined;
   // AIへ先にEscを渡し、通知先が停止していても中断操作を遅らせない。
   await vscode.commands.executeCommand('workbench.action.terminal.sendSequence', { text: '\u001b' });
-  if (binding) await binding.client.interrupt(binding.id);
+  if (binding) {
+    try { await binding.client.interrupt(binding.id); }
+    catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) expire(binding);
+      throw error;
+    }
+  }
 }
 
-async function syncTitle(terminal: vscode.Terminal, binding: Binding): Promise<void> {
-  if (binding.updatingTitle || stopping) return;
+async function syncTitle(): Promise<void> {
+  const binding = session;
+  if (!binding || binding.updatingTitle || stopping) return;
   binding.updatingTitle = true;
   try {
-    // 通信中にタイトルが変わった場合も、古い応答が新しい表示を上書きしないよう直列に送る。
-    while (!stopping && terminals.get(terminal) === binding) {
-      const title = terminal.name.slice(0, 4096);
+    // アクティブなターミナルのタイトルをウィンドウ共通のセッションへ送る。
+    while (!stopping && session === binding) {
+      const title = (vscode.window.activeTerminal?.name || '').slice(0, 4096);
       if (title === binding.title) break;
       await binding.client.setTitle(binding.id, title);
       binding.title = title;
     }
   } catch (error) {
-    if (terminals.get(terminal) !== binding) return;
+    if (session !== binding || stopping) return;
     output.appendLine(`ターミナルタイトルの通知に失敗: ${describe(error)}`);
-    if (error instanceof ApiError && error.statusCode === 404) {
-      terminals.delete(terminal);
-      updateTerminalContext();
-      void vscode.window.showWarningMessage('WpfTaskBar の通知先が失効しました。AI 通知付きターミナルを開き直してください。');
-    }
-    // 成功したタイトルだけを記録し、次の監視で再送する。
+    if (error instanceof ApiError && error.statusCode === 404) expire(binding);
   } finally { binding.updatingTitle = false; }
 }
 
-async function openTerminal(): Promise<void> {
-  if (opening) return;
-  opening = true;
-  try {
-    const prepared = await prepareTerminal();
-    if (!prepared || stopping) return;
-    let terminal: vscode.Terminal;
-    try {
-      terminal = vscode.window.createTerminal(prepared.options);
-    } catch (error) {
-      await removePending(prepared.id);
-      throw error;
-    }
-    bindTerminal(terminal);
-    terminal.show();
-  } finally { opening = false; }
-}
-
-async function renewSessions(): Promise<void> {
-  // プロファイルを返した後のシェル起動失敗は API から通知されない。
-  // 未接続の登録は延命せず、サーバーの有効期限 (2 分) に合わせて破棄する。
-  await Promise.all([...pendingTerminals.values()]
-    .filter(binding => Date.now() - binding.createdAt >= 120000)
-    .map(binding => removePending(binding.id)));
-  await Promise.all([...terminals].map(async ([terminal, binding]) => {
-    try { await binding.client.renew(binding.id); }
+function enqueue(action: () => Promise<void>, notify = false): Promise<void> {
+  // 起動・設定変更・生存通知が重なっても、ウィンドウの登録を重複させない。
+  operation = operation.then(async () => {
+    if (stopping) return;
+    try { await action(); }
     catch (error) {
-      if (terminals.get(terminal) !== binding) return;
-      output.appendLine(`通知先の更新に失敗: ${describe(error)}`);
-      if (error instanceof ApiError && error.statusCode === 404) {
-        terminals.delete(terminal);
-        updateTerminalContext();
-        void vscode.window.showWarningMessage('WpfTaskBar の通知先が失効しました。AI 通知付きターミナルを開き直してください。');
-      }
+      output.appendLine(describe(error));
+      if (notify && !stopping) void vscode.window.showErrorMessage(describe(error));
     }
-  }));
+  });
+  return operation;
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel('WpfTaskBar');
-  context.subscriptions.push(output);
+  environment = context.environmentVariableCollection;
+  // 再読み込み後に失効したIDを新しいシェルへ注入しない。
+  environment.persistent = false;
+  environment.clear();
+  environment.description = 'この VSCode ウィンドウの AI 通知先';
   const command = (name: string, action: () => unknown) => context.subscriptions.push(vscode.commands.registerCommand(name, async () => {
     try { await action(); }
     catch (error) {
@@ -210,56 +164,34 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showErrorMessage(describe(error));
     }
   }));
-  context.subscriptions.push(vscode.window.registerTerminalProfileProvider('wpftaskbar.aiTerminal', {
-    async provideTerminalProfile(token) {
-      try {
-        const prepared = await prepareTerminal(token);
-        if (!prepared || stopping || token.isCancellationRequested) return;
-        return new vscode.TerminalProfile(prepared.options);
-      } catch (error) {
-        output.appendLine(describe(error));
-        void vscode.window.showErrorMessage(describe(error));
-        return undefined;
-      }
-    },
-  }));
-  context.subscriptions.push(vscode.window.onDidOpenTerminal(bindTerminal));
-  context.subscriptions.push(vscode.window.onDidChangeActiveTerminal(updateTerminalContext));
-  updateTerminalContext();
-  command('wpftaskbar.openTerminal', openTerminal);
-  command('wpftaskbar.interruptTerminal', interruptTerminal);
   command('wpftaskbar.selectWindow', async () => {
-    // 開いているターミナルの通知先を黙って変更しない。
-    if (terminals.size > 0 || pendingTerminals.size > 0 || preparing > 0) {
-      throw new Error('通知付きターミナルの作成中・使用中は通知先を変更できません。作成完了後にすべて閉じてください。');
-    }
-    await selectWindow(configuration().client, true);
+    // 選択画面を開いている間も生存通知を続ける。
+    const { client } = configuration();
+    const window = await selectWindow(client, true);
+    if (window) await enqueue(() => connect({ apiUrl: client.url, window }), true);
   });
   command('wpftaskbar.showLog', () => output.show());
-  context.subscriptions.push(vscode.window.onDidCloseTerminal(terminal => {
-    const binding = terminals.get(terminal);
-    if (!binding) return;
-    terminals.delete(terminal);
-    updateTerminalContext();
-    void removeBinding(binding);
-  }));
-  heartbeat = setInterval(() => {
-    if (!renewal) renewal = renewSessions().finally(() => { renewal = undefined; });
-  }, 30000);
+  command('wpftaskbar.interruptTerminal', interruptTerminal);
+  context.subscriptions.push(output,
+    vscode.window.onDidChangeActiveTerminal(() => { updateTerminalContext(); void syncTitle(); }),
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('wpftaskbar')) void enqueue(() => connect(), true);
+    }),
+  );
+  updateTerminalContext();
+  heartbeat = setInterval(() => { void enqueue(renewSession); }, 30000);
   // 安定版 VSCode API にタイトル変更専用イベントがないため、差分を1秒ごとに確認する。
-  titlePolling = setInterval(() => {
-    for (const [terminal, binding] of terminals) void syncTitle(terminal, binding);
-  }, 1000);
+  titlePolling = setInterval(() => { void syncTitle(); }, 1000);
+  await enqueue(() => connect(), true);
 }
 
 export async function deactivate(): Promise<void> {
   stopping = true;
   clearInterval(heartbeat);
   clearInterval(titlePolling);
-  const bindings = [...terminals.values(), ...pendingTerminals.values()];
-  for (const binding of pendingTerminals.values()) binding.cancellation?.dispose();
-  terminals.clear();
+  environment.clear();
+  const binding = session;
+  session = undefined;
   updateTerminalContext();
-  pendingTerminals.clear();
-  await Promise.allSettled(bindings.map(binding => binding.client.remove(binding.id)));
+  await Promise.all([operation, binding ? removeBinding(binding) : Promise.resolve()]);
 }

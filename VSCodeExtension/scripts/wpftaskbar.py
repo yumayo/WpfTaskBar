@@ -143,7 +143,7 @@ def main():
         print("WpfTaskBar: timeout must be between 1 and 5 seconds", file=sys.stderr)
         return 2
 
-    # 通知付きターミナル以外では、フック入力も読まずに終了する。
+    # ウィンドウの通知先を引き継いでいなければ、フック入力も読まずに終了する。
     url = os.environ.get("WPF_TASKBAR_URL", "")
     session_id = os.environ.get("WPF_TASKBAR_SESSION_ID", "")
     if not url or not session_id:
@@ -172,7 +172,7 @@ def main():
             f"{url.rstrip('/')}/tasks/sessions/{session_id}/{endpoint}",
         ], check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
-        print("WpfTaskBar: 状態を通知できませんでした。接続先と通知付きターミナルを確認してください。", file=sys.stderr)
+        print("WpfTaskBar: 状態を通知できませんでした。接続先と通知用の環境変数を確認してください。", file=sys.stderr)
     return 0
 
 

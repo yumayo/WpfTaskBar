@@ -5,3 +5,5 @@ package-lock.json
 tsconfig.json
 *.vsix
 .vscode/**
+**/__pycache__/**
+**/*.pyc
