@@ -21,13 +21,14 @@ let operation: Promise<void> = Promise.resolve();
 let output: vscode.OutputChannel;
 let stopping = false;
 let waitingForConnection = false;
+const connectionCheckInterval = 1000;
 
 function describe(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 
 function reportError(error: unknown, notify = false): void {
   if (stopping) return;
   if (isConnectionError(error)) {
-    if (!waitingForConnection) output.appendLine('WpfTaskBar の起動・接続を待っています。30秒ごとに再試行します。');
+    if (!waitingForConnection) output.appendLine('WpfTaskBar の起動・接続を待っています。1秒間隔で再試行します。');
     waitingForConnection = true;
     return;
   }
@@ -180,6 +181,15 @@ function enqueue(action: () => Promise<void>, notify = false): Promise<void> {
   return operation;
 }
 
+function scheduleHeartbeat(): void {
+  if (stopping) return;
+  // 応答待ちや他の登録処理が長引いても、定期確認をキューへ積み上げない。
+  heartbeat = setTimeout(() => {
+    heartbeat = undefined;
+    void enqueue(renewSession).finally(scheduleHeartbeat);
+  }, connectionCheckInterval);
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel('WpfTaskBar');
   environment = context.environmentVariableCollection;
@@ -212,15 +222,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
   updateTerminalContext();
-  heartbeat = setInterval(() => { void enqueue(renewSession); }, 30000);
   // 安定版 VSCode API にタイトル変更専用イベントがないため、差分を1秒ごとに確認する。
   titlePolling = setInterval(() => { void syncTitle(); }, 1000);
   await enqueue(() => connect());
+  scheduleHeartbeat();
 }
 
 export async function deactivate(): Promise<void> {
   stopping = true;
-  clearInterval(heartbeat);
+  clearTimeout(heartbeat);
   clearInterval(titlePolling);
   environment.clear();
   const binding = session;

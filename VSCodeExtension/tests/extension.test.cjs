@@ -29,6 +29,22 @@ function extension() {
   const logs = [];
   const requests = [];
   const timers = new Map();
+  let timerId = 0;
+  const addTimer = (callback, delay, repeat) => {
+    const id = ++timerId;
+    timers.set(id, { callback, delay, repeat });
+    return id;
+  };
+  const fireTimer = async repeat => {
+    const timer = [...timers].find(([, value]) => value.repeat === repeat);
+    if (!timer) return false;
+    const [id, { callback, delay }] = timer;
+    assert.equal(delay, 1000);
+    if (!repeat) timers.delete(id);
+    callback();
+    await settle();
+    return true;
+  };
   let activeTerminal;
   let onActiveTerminal;
   let onConfiguration;
@@ -44,6 +60,7 @@ function extension() {
   let removeError;
   let ids = 0;
   let onCreateSession;
+  let onRenew;
   let onTitle;
   let onInterrupt;
   let onPick;
@@ -57,7 +74,7 @@ function extension() {
       if (createError) throw createError;
       return { sessionId, handle: window.handle, processId: window.processId };
     }
-    async renew(id) { renewed.push(id); if (renewError) throw renewError; }
+    async renew(id) { renewed.push(id); await onRenew?.(); if (renewError) throw renewError; }
     async interrupt(id) { interrupted.push(id); await onInterrupt?.(); }
     async setTitle(id, title) { titles.push({ id, title }); await onTitle?.(); }
     async remove(id) { removed.push(id); if (removeError) throw removeError; }
@@ -91,8 +108,10 @@ function extension() {
     module: extensionModule,
     exports: extensionModule.exports,
     process: { platform: 'win32', env: { WSLENV: 'KEEP/p' } },
-    setInterval: (callback, delay) => { timers.set(delay, callback); return delay; },
-    clearInterval: delay => timers.delete(delay),
+    setInterval: (callback, delay) => addTimer(callback, delay, true),
+    clearInterval: id => timers.delete(id),
+    setTimeout: (callback, delay) => addTimer(callback, delay, false),
+    clearTimeout: id => timers.delete(id),
   });
   const api = extensionModule.exports;
   const ready = api.activate({ subscriptions: [], environmentVariableCollection: collection });
@@ -107,14 +126,15 @@ function extension() {
     set windowsError(value) { windowsError = value; },
     set removeError(value) { removeError = value; },
     set onCreateSession(value) { onCreateSession = value; },
+    set onRenew(value) { onRenew = value; },
     set onTitle(value) { onTitle = value; },
     set onInterrupt(value) { onInterrupt = value; },
     set onPick(value) { onPick = value; },
     activateTerminal: async terminal => { activeTerminal = terminal; onActiveTerminal(); await settle(); },
     interrupt: () => commands.get('wpftaskbar.interruptTerminal')(),
     select: () => commands.get('wpftaskbar.selectWindow')(),
-    heartbeat: async () => { timers.get(30000)(); await settle(); },
-    pollTitles: async () => { timers.get(1000)(); await settle(); },
+    heartbeat: () => fireTimer(false),
+    pollTitles: () => fireTimer(true),
     configure: async () => { onConfiguration({ affectsConfiguration: section => section === 'wpftaskbar' }); await settle(); },
     deactivate: api.deactivate,
   };
@@ -150,7 +170,7 @@ test('通常のターミナルを切り替え、すべて閉じても同じウ�
   assert.equal(ext.timers.size, 0);
 });
 
-test('起動時の接続失敗は静かに再試行し、接続前にターミナルへ渡したIDで登録する', async () => {
+test('起動時の接続失敗から1秒後に再試行し、接続前にターミナルへ渡したIDで登録する', async () => {
   const ext = extension();
   ext.createError = new Error('API unavailable');
   await ext.ready;
@@ -272,7 +292,7 @@ test('通知先の選択画面を開いている間も生存通知を続ける',
   await ext.deactivate();
 });
 
-test('本体の停止・再起動では同じウィンドウとIDで再登録し、環境変数を変更しない', async () => {
+test('接続中も1秒間隔で本体の停止・再起動を検知し、同じウィンドウとIDで再登録する', async () => {
   const ext = extension();
   await ext.ready;
   ext.renewError = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5000'), { code: 'ECONNREFUSED' });
@@ -325,15 +345,66 @@ test('起動中の生存通知・設定変更でもセッションを重複登�
   let release;
   ext.onCreateSession = () => new Promise(resolve => { release = resolve; });
   await settle();
-  await ext.heartbeat();
+  assert.equal(await ext.heartbeat(), false);
   await ext.configure();
   assert.equal(ext.requests.length, 1);
   release();
   await ext.ready;
   await settle();
   assert.equal(ext.requests.length, 1);
+  assert.deepEqual(ext.renewed, []);
+  assert.equal(await ext.heartbeat(), true);
   assert.deepEqual(ext.renewed, ['session-1']);
   await ext.deactivate();
+});
+
+test('生存確認の応答待ち中は次の確認を予約せず、完了の1秒後に再開する', async () => {
+  const ext = extension();
+  await ext.ready;
+  let release;
+  ext.onRenew = () => new Promise(resolve => { release = resolve; });
+  assert.equal(await ext.heartbeat(), true);
+  for (let i = 0; i < 10; i++) assert.equal(await ext.heartbeat(), false);
+  assert.deepEqual(ext.renewed, ['session-1']);
+  ext.onRenew = undefined;
+  release();
+  await settle();
+  assert.deepEqual(ext.renewed, ['session-1']);
+  assert.equal(await ext.heartbeat(), true);
+  assert.deepEqual(ext.renewed, ['session-1', 'session-1']);
+  assert.equal(ext.requests.length, 1);
+  await ext.deactivate();
+});
+
+test('生存確認がタイムアウトしても1秒後に静かに再試行する', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.renewError = Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+  assert.equal(await ext.heartbeat(), true);
+  assert.equal(await ext.heartbeat(), true);
+  assert.equal(ext.errors.length, 0);
+  assert.equal(ext.logs.filter(line => line.includes('起動・接続を待っています')).length, 1);
+  ext.renewError = undefined;
+  assert.equal(await ext.heartbeat(), true);
+  assert.equal(ext.renewed.length, 3);
+  assert.equal(ext.requests.length, 1);
+  await ext.deactivate();
+});
+
+test('生存確認中に拡張を停止した場合は処理完了後もタイマーを再開しない', async () => {
+  const ext = extension();
+  await ext.ready;
+  let release;
+  ext.onRenew = () => new Promise(resolve => { release = resolve; });
+  await ext.heartbeat();
+  const stopped = ext.deactivate();
+  assert.equal(ext.timers.size, 0);
+  release();
+  await stopped;
+  await settle();
+  assert.equal(ext.timers.size, 0);
+  assert.equal(await ext.heartbeat(), false);
+  assert.equal(ext.environment.size, 0);
 });
 
 test('登録処理中に拡張が停止しても遅れて返されたセッションを残さない', async () => {
@@ -346,6 +417,7 @@ test('登録処理中に拡張が停止しても遅れて返されたセッシ�
   await Promise.all([stopped, ext.ready]);
   assert.deepEqual(ext.removed, ['session-1']);
   assert.equal(ext.environment.size, 0);
+  assert.equal(ext.timers.size, 0);
 });
 
 test('アクティブなターミナルのタイトルを共有セッションへ差分通知する', async () => {
