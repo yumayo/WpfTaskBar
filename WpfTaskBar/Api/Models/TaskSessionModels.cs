@@ -6,6 +6,8 @@ public sealed class TaskSessionRequest
 {
 	public int Handle { get; set; }
 	public int ProcessId { get; set; }
+	[RegularExpression("^[a-f0-9]{32}$")]
+	public string? SessionId { get; set; }
 }
 
 public sealed class TaskSessionStatusRequest

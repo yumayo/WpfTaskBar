@@ -4,7 +4,7 @@ VSCode の統合ターミナルで起動した AI コンテナから、依頼ご
 Windows 側の VSCode にインストールする拡張です。通常の WSL ターミナルと Remote - WSL の両方を想定しています。
 
 ```text
-VSCode 拡張 → 起動時にウィンドウ共通の通知 ID を登録
+VSCode 拡張 → 起動時にウィンドウ共通の通知 ID を用意（接続後に登録）
                   ↓ 通常の統合ターミナルへ環境変数を設定
                 WSL → aicontainer / docker compose → AI のフック
                                                         ↓ HTTP
@@ -17,7 +17,7 @@ AI の開始・終了の判定は AI 側のフックが行います。コンテ�
 
 ## インストール
 
-セッション API に対応したこのリポジトリの WpfTaskBar をビルドして起動します。
+このリポジトリの WpfTaskBar をビルドします。拡張 0.1.5 以降では同じ ID での再登録に対応した本体が必要なので、旧版から更新する場合は本体も更新してください。本体と VSCode の起動順は問いません。
 拡張をパッケージ化します（Node.js 24 LTS 推奨）。
 
 ```sh
@@ -39,8 +39,17 @@ npm run package
 
 `package.json` と `package-lock.json` が更新されます。グローバルインストールは不要です。
 
-Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.4.vsix` を選択してください。
+Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.6.vsix` を選択してください。
 Remote - WSL 使用時も拡張は Windows 側で動きます。
+
+ターミナルの環境変数変更による再起動要求を非表示にするには、コマンドパレットの「基本設定: ユーザー設定を開く (JSON)」から、VSCode の `settings.json` に次の設定を追加してください。
+
+```json
+"terminal.integrated.environmentChangesIndicator": "off"
+```
+
+これは VSCode の設定です。拡張の `package.json` の `contributes.configurationDefaults` に指定すると `Property terminal.integrated.environmentChangesIndicator is not allowed.` と警告されるため、0.1.6 でその指定を削除しました。拡張を更新するだけでは再起動要求は非表示になりません。
+この設定は他の拡張の同種の通知にも適用されます。ワークスペース側で別の値を明示している場合は、そちらも確認してください。設定ファイルを拡張から書き換えることはありません。
 
 拡張本体は `src/*.ts` で実装し、`npm run build` で `dist/*.js` へコンパイルします。
 `npm test` と `npm run package` は事前にビルドを実行します。VSIX にはコンパイル済みの JavaScript を含めます。
@@ -48,7 +57,7 @@ Remote - WSL 使用時も拡張は Windows 側で動きます。
 ## ウィンドウ共通の通知設定
 
 **1つの VSCode ウィンドウにつき、同時に使う AI は1セッションです。**
-拡張の起動時に通知 ID を登録し、VSCode の環境変数コレクションから通常の統合ターミナルへ設定します。同じウィンドウのターミナルはすべて同じ ID を使います。
+拡張の起動時に通知 ID を用意し、本体への接続前から VSCode の環境変数コレクションに設定します。同じウィンドウの新しいターミナルはすべて同じ ID を使います。本体が未起動でも、この ID をコンテナへ引き継げます。
 
 1. VSCode の設定で `wpftaskbar.apiUrl` を Windows 側から接続できる WpfTaskBar の URL に設定します。既定値は `http://127.0.0.1:5000` です。
 2. `wpftaskbar.containerApiUrl` に、**AI コンテナ内から Windows に到達できる URL** を設定します。空欄では `apiUrl` と同じです。通常の Docker コンテナ内では `127.0.0.1` はコンテナ自身です。Docker Desktop なら `http://host.docker.internal:5000`、WSL の Docker Engine なら Windows ホストの IP アドレスなど、実際のネットワークに合わせて指定してください。
@@ -67,8 +76,9 @@ Windows のターミナルから `wsl.exe` を起動する場合に備え、`WSL
 WSL から Docker コンテナへの引き継ぎはランチャー側で設定が必要です。
 シェルは VSCode 標準のプロファイル設定を使います。専用のターミナル作成コマンド、**AI (WpfTaskBar)** プロファイル、`wpftaskbar.shellPath` / `wpftaskbar.shellArgs` は削除しました。旧版で専用プロファイルを既定にしていた場合は、VSCode の「ターミナル: 既定のプロファイルの選択」で PowerShell / WSL / bash などへ変更し、旧シェル設定を削除してください。
 
-起動時に WpfTaskBar に接続できない場合は30秒ごとに再試行し、登録成功後に環境変数を設定します。「WpfTaskBar: 通知ログを表示」で登録結果を確認できます。
-登録前から動いているターミナルやコンテナの環境変数は書き換えられないため、登録後に開き直してください。
+WpfTaskBar が未起動・接続できない場合は、接続拒否やタイムアウトのエラー通知を出さず、30秒ごとに再試行します。後から本体を起動すると、先に用意した ID で自動登録し、その ID を持つコンテナからの次の通知が届くようになります。本体の再起動や登録の失効でも同じ ID を使い、ターミナルやコンテナの再起動は不要です。停止中の通知は保存・再送しません。
+「WpfTaskBar: 通知ログを表示」で接続待ちと登録結果を確認できます。停止中はタイトル送信も待機し、接続復帰後に最新タイトルを送ります。
+拡張の有効化前から動いているターミナルやコンテナには ID を追加できないため、拡張のインストール・更新後は一度開き直してください。
 
 ## aicontainer からの利用
 
@@ -101,12 +111,12 @@ AIコンテナ内で `WPF_TASKBAR_URL` と `WPF_TASKBAR_SESSION_ID` が設定さ
 
 ### ターミナルの開き直し・VSCode再起動後
 
-1. 拡張が通知先を登録した後、通常の「＋」から新しいターミナルを開きます。
+1. 拡張が有効になった後、通常の「＋」から新しいターミナルを開きます（WpfTaskBar は後から起動しても構いません）。
 2. そのターミナルのWSLシェルから `aicontainer` を起動します。
 
 この2操作でウィンドウ共通のIDが自動で渡ります。ターミナルを開き直すだけではIDは変わりません。`.aicontainer` やAIのフック設定の編集は不要です。
 VSCode再起動・再読み込み時はセッションを登録し直します。復元された古いターミナルの環境変数は更新できないため、上の操作で新しく開いてください。
-WpfTaskBarの再起動などでIDが失効した場合は、30秒ごとの定期処理で同じ通知先へ再登録します。登録後は同じ手順でターミナルとコンテナを起動し直してください。
+WpfTaskBarの再起動などでIDが失効した場合は、30秒ごとの定期処理で同じ通知先・同じIDへ再登録します。この場合はターミナルとコンテナを起動し直す必要はありません。
 
 ## docker compose からの利用
 
@@ -504,7 +514,7 @@ Markdownの見出し・強調や改行を整え、先頭120文字以内に切り
 - `none` はウィンドウのAI状態と進捗文を解除します。登録は維持します。
 - 拡張は30秒ごとに生存通知を送り、2分間届かなければ登録と状態が失効します。拡張の停止時に登録を解除します。
 - 起動時の接続失敗や登録の失効後は自動で再登録を試みます。選択済みウィンドウが消えた場合は別ウィンドウへ自動で切り替えず、手動選択が必要です。
-- VSCodeの再起動・再読み込み、通知先の変更、失効後の再登録では ID が変わります。既存のターミナルとコンテナは起動し直してください。`env=WPF_TASKBAR_SESSION_ID` の設定なら、新しい ID が自動で渡ります。
+- WpfTaskBarの再起動・失効後の再登録では ID と環境変数を維持します。VSCodeの再起動・再読み込み、通知先の変更では ID が変わるため、既存のターミナルとコンテナは起動し直してください。通知先URLを変更した場合も同様です。`env=WPF_TASKBAR_SESSION_ID` の設定なら、新しい ID が自動で渡ります。
 - 従来の `POST /tasks/status` の状態は独立して保持し、`waiting` → `running` → `interrupted` → `completed` → `none` の順で集約します。従来のAPIで設定した状態の解除には、従来のAPIから `none` を送ります。
 
 ## 疎通確認
@@ -523,13 +533,13 @@ python3 /opt/taskbar/wpftaskbar.py none
 同じ VSCode ウィンドウで2つの通常のターミナルを開き、`WPF_TASKBAR_SESSION_ID` が同じこと、片方を閉じても残ったターミナルから通知できることを確認します。別の VSCode ウィンドウでは通知先をそのウィンドウに選択し、IDと状態が分かれることも確認します。
 
 接続できない場合は、コンテナから Windows の TCP 5000 番への到達性と URL を確認してください。
-HTTP 404 は通知先の失効を示します。「WpfTaskBar: 通知ログを表示」から拡張側の接続エラーも確認できます。
+セッション操作の HTTP 404 は通知先の失効を示し、拡張が自動で再登録します。「WpfTaskBar: 通知ログを表示」から接続待ち・登録結果や設定/APIのエラーを確認できます。接続拒否のエラー文字列は表示しません。
 
 ## API と開発
 
 | メソッド / パス | 用途 |
 | --- | --- |
-| `POST /tasks/sessions` | `{ "handle": 123, "processId": 456 }` で VSCode ウィンドウへ登録。`sessionId` を返す |
+| `POST /tasks/sessions` | `{ "handle": 123, "processId": 456, "sessionId": "32文字の小文字16進数" }` で登録。同じ ID・通知先なら状態を保持して期限を延長し、別の通知先で使用中の ID は409。同じ ID が失効済みなら再登録。`sessionId` 省略時は従来どおりサーバーが発行 |
 | `POST /tasks/sessions/{id}/status` | `{ "status": "running" }` などを送る。任意の `activityText`（最大512文字）を同時に更新可能。`onlyIfActive: true` を付けると、現在が `running` / `waiting` の場合だけ変更する |
 | `PUT /tasks/sessions/{id}/title` | `{ "terminalTitle": "続行しますか？" }` でタイトルだけを更新（最大4096文字、空文字で解除）。状態・有効期限は変えない |
 | `PUT /tasks/sessions/{id}/activity` | `{ "activityText": "設定ファイルを確認しています。" }` で進捗文だけを更新（最大512文字、空文字で解除）。現在が `running` / `waiting` の場合のみ更新し、状態・有効期限は変えない |
@@ -543,7 +553,7 @@ API は状態の集約、ウィンドウの生存確認、有効期限を担当�
 `GET /tasks` とWebView向けのタスク一覧には `status` に加えて `hasAiTask`、`terminalTitle`、`activityText` を返します。
 登録時・更新時は HWND と PID の両方を確認します。セッションはディスクに保存しません。
 
-拡張はVSCode起動時に有効化し、ウィンドウ共通のセッションを登録します。
+拡張はVSCode起動時に有効化し、ランダムなウィンドウ共通の通知 ID を用意してから接続・登録を試みます。
 `ExtensionContext.environmentVariableCollection` で通常の統合ターミナルへ環境変数を注入します。古いIDを次の起動に持ち越さないよう、コレクションは永続化しません。
 起動・設定変更・生存通知を直列化し、重複登録を防ぎます。拡張の停止と登録が重なった場合も、遅れて返された登録を解除します。
 

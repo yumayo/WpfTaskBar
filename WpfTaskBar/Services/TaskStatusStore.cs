@@ -68,11 +68,22 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 	}
 
 	public TaskStatusSession CreateSession(int handle, int processId)
+		=> RegisterSession(handle, processId, Guid.NewGuid().ToString("N"))!;
+
+	// 同じ ID・ウィンドウへの再試行は既存状態を保ち、別の通知先による ID の上書きを防ぐ。
+	public TaskStatusSession? RegisterSession(int handle, int processId, string id)
 	{
 		lock (_syncRoot)
 		{
 			RemoveExpiredSessions();
-			var session = new TaskStatusSession(Guid.NewGuid().ToString("N"), handle, processId, "none", ++_revision,
+			if (_sessions.TryGetValue(id, out var existing))
+			{
+				if (existing.Handle != handle || existing.ProcessId != processId) return null;
+				var renewed = existing with { ExpiresAt = _time.GetUtcNow() + SessionLifetime, Revision = ++_revision };
+				_sessions[id] = renewed;
+				return renewed;
+			}
+			var session = new TaskStatusSession(id, handle, processId, "none", ++_revision,
 				_time.GetUtcNow() + SessionLifetime, "", _revision);
 			_sessions.Add(session.Id, session);
 			return session;

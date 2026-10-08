@@ -7,7 +7,7 @@ const { execFile } = require('node:child_process');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const test = require('node:test');
-const { ApiError, TaskbarClient, normalizeUrl, codeWindows, terminalEnvironment } = require('../dist/client');
+const { ApiError, TaskbarClient, isConnectionError, normalizeUrl, codeWindows, terminalEnvironment } = require('../dist/client');
 const skipNetwork = process.env.WPF_TASKBAR_SKIP_NETWORK_TESTS === '1';
 
 async function serverFor(t, handler) {
@@ -76,6 +76,34 @@ test('登録の応答が別ウィンドウや不正な通知 ID を指す場合�
     client.request = async () => response;
     await assert.rejects(client.createSession(target), /有効な通知先/);
   }
+});
+
+test('接続エラーだけを未起動として扱い、APIや設定のエラーと区別する', () => {
+  for (const code of ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN']) {
+    assert.equal(isConnectionError(Object.assign(new Error('offline'), { code })), true);
+  }
+  for (const error of [undefined, new Error('invalid JSON'), new ApiError(500, 'server error'), { code: 'EACCES' }]) {
+    assert.equal(isConnectionError(error), false);
+  }
+});
+
+test('登録要求で既存の通知IDを送り、旧本体が異なるIDを返したら登録を片付ける', async () => {
+  const client = new TaskbarClient('http://localhost:5000');
+  const target = { handle: 10, processId: 100 };
+  const id = '0123456789abcdef0123456789abcdef';
+  const otherId = 'abcdef0123456789abcdef0123456789';
+  const requests = [];
+  let responseId = id;
+  client.request = async (method, path, body) => {
+    requests.push({ method, path, body });
+    return { ...target, sessionId: responseId };
+  };
+  assert.equal((await client.createSession(target, id)).sessionId, id);
+  assert.deepEqual(requests[0].body, { ...target, sessionId: id });
+  responseId = otherId;
+  await assert.rejects(client.createSession(target, id), /本体も更新/);
+  assert.equal(requests.at(-1).method, 'DELETE');
+  assert.equal(requests.at(-1).path, `/tasks/sessions/${otherId}`);
 });
 
 test('HTTP エラーと壊れた応答を成功として扱わない', { skip: skipNetwork }, async t => {

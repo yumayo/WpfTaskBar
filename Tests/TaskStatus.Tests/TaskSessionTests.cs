@@ -17,6 +17,49 @@ public sealed class TaskSessionTests
 	}
 
 	[Fact]
+	public void ReconnectAfterRestartAcceptsNotificationsFromExistingContainer()
+	{
+		var id = CreateSession();
+		var restarted = new TaskStatusStore(_clock);
+		var controller = new TaskSessionsController(_windows, restarted);
+		var result = Assert.IsType<OkObjectResult>(controller.CreateSession(new() { Handle = 10, ProcessId = 100, SessionId = id }));
+		Assert.Equal(id, JsonSerializer.SerializeToElement(result.Value).GetProperty("sessionId").GetString());
+		Assert.IsType<OkObjectResult>(controller.SetStatus(id, new() { Status = "running" }));
+		Assert.Equal("running", restarted.GetStatus(10, 100));
+	}
+
+	[Fact]
+	public void ReregisteringSameIdPreservesStateAndRenewsLease()
+	{
+		var id = CreateSession();
+		SetStatus(id, "running");
+		SetTitle(id, "working");
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		Assert.IsType<OkObjectResult>(_controller.CreateSession(new() { Handle = 10, ProcessId = 100, SessionId = id }));
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+		Assert.Equal("working", _statuses.GetSession(id)!.TerminalTitle);
+		Assert.IsType<ConflictObjectResult>(_controller.CreateSession(new() { Handle = 20, ProcessId = 100, SessionId = id }));
+		Assert.Equal(10, _statuses.GetSession(id)!.Handle);
+		_clock.Advance(TimeSpan.FromSeconds(30));
+		Assert.Null(_statuses.GetSession(id));
+		Assert.IsType<OkObjectResult>(_controller.CreateSession(new() { Handle = 10, ProcessId = 100, SessionId = id }));
+		SetStatus(id, "completed");
+		Assert.Equal("completed", _statuses.GetStatus(10, 100));
+	}
+
+	[Theory]
+	[InlineData("")]
+	[InlineData("bad")]
+	[InlineData("0123456789ABCDEF0123456789ABCDEF")]
+	[InlineData("0123456789abcdef0123456789abcdef\n")]
+	public void InvalidRequestedIdsAreRejected(string id)
+	{
+		Assert.IsType<BadRequestObjectResult>(_controller.CreateSession(new() { Handle = 10, ProcessId = 100, SessionId = id }));
+		Assert.False(_statuses.GetWindowState(10, 100).HasAiTask);
+	}
+
+	[Fact]
 	public void OtherRunningTerminalKeepsWindowRunningUntilEveryResponseCompletes()
 	{
 		var first = CreateSession();

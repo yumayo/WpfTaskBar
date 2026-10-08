@@ -11,13 +11,19 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 	{
 		if (request.Handle == 0 || request.ProcessId <= 0)
 			return BadRequest(new { message = "handle と processId を指定してください。" });
+		if (request.SessionId != null && (request.SessionId.Length != 32 ||
+			request.SessionId.Any(character => !(character is >= 'a' and <= 'f' or >= '0' and <= '9'))))
+			return BadRequest(new { message = "sessionId は32文字の小文字16進数を指定してください。" });
 
 		var target = windows.GetWindows().FirstOrDefault(window =>
 			window.Handle == request.Handle && window.ProcessId == request.ProcessId);
 		if (target == null || !IsVsCode(target))
 			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
 
-		var session = statuses.CreateSession(target.Handle, target.ProcessId);
+		var session = request.SessionId == null
+			? statuses.CreateSession(target.Handle, target.ProcessId)
+			: statuses.RegisterSession(target.Handle, target.ProcessId, request.SessionId);
+		if (session == null) return Conflict(new { message = "sessionId は別の通知先に登録されています。" });
 		return Ok(new { sessionId = session.Id, handle = target.Handle, processId = target.ProcessId });
 	}
 

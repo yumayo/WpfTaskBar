@@ -20,6 +20,11 @@ export class ApiError extends Error {
   }
 }
 
+export function isConnectionError(error: unknown): boolean {
+  return isRecord(error) && typeof error.code === 'string'
+    && ['ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN'].includes(error.code);
+}
+
 export function normalizeUrl(value: string): string {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -83,7 +88,8 @@ export class TaskbarClient {
         });
       });
       // 接続前や応答が途切れない場合も含め、全体に期限を設ける。
-      const timer = setTimeout(() => request.destroy(new Error('WpfTaskBar API に接続できません（5 秒でタイムアウト）。')), 5000);
+      const timer = setTimeout(() => request.destroy(Object.assign(
+        new Error('WpfTaskBar API に接続できません（5 秒でタイムアウト）。'), { code: 'ETIMEDOUT' })), 5000);
       request.on('close', () => clearTimeout(timer));
       request.on('error', reject);
       request.end(payload);
@@ -98,11 +104,15 @@ export class TaskbarClient {
     return codeWindows(response.tasks);
   }
 
-  async createSession(target: TaskWindow): Promise<Session> {
-    const session = await this.request('POST', '/tasks/sessions', { handle: target.handle, processId: target.processId });
+  async createSession(target: TaskWindow, sessionId?: string): Promise<Session> {
+    const session = await this.request('POST', '/tasks/sessions', { handle: target.handle, processId: target.processId, sessionId });
     if (!isRecord(session) || typeof session.sessionId !== 'string' || !/^[a-f0-9]{32}$/.test(session.sessionId)
       || session.handle !== target.handle || session.processId !== target.processId) {
       throw new Error('WpfTaskBar API が有効な通知先を返しませんでした。対応するバージョンの WpfTaskBar を起動してください。');
+    }
+    if (sessionId && session.sessionId !== sessionId) {
+      await this.remove(session.sessionId).catch(() => {});
+      throw new Error('同じ通知 ID で再接続するには WpfTaskBar 本体も更新してください。');
     }
     return { sessionId: session.sessionId, handle: session.handle, processId: session.processId };
   }
