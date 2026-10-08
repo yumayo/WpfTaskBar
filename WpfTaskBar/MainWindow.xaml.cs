@@ -20,6 +20,7 @@ public partial class MainWindow : Window
 	private IHost? _host;
 	private WebView2Handler? _webView2;
 	private Forms.NotifyIcon? _trayIcon;
+	private TaskbarBackdrop? _backdrop;
 	private bool _isAppBarRegistered;
 	private bool _isMinimizedToTray;
 
@@ -29,6 +30,16 @@ public partial class MainWindow : Window
 		InitializeTrayIcon();
 
 		Logger.Info("MainWindow initialized with WebView2");
+	}
+
+	protected override void OnSourceInitialized(EventArgs e)
+	{
+		base.OnSourceInitialized(e);
+		var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+		if (source != null)
+		{
+			_backdrop = new TaskbarBackdrop(this, source);
+		}
 	}
 
 	private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -219,6 +230,8 @@ public partial class MainWindow : Window
 
 	private async void MainWindow_OnClosed(object? sender, EventArgs e)
 	{
+		_backdrop?.Dispose();
+		_backdrop = null;
 		ReleaseTaskBarRect();
 
 		if (_trayIcon != null)

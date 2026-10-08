@@ -10,7 +10,9 @@
         StateChanged="MainWindow_OnStateChanged"
         Closed="MainWindow_OnClosed"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
+        Background="#21252B"
+        ResizeMode="NoResize"
         Title="MainWindow" Height="450" Width="800">
-    <wv2:WebView2 Name="webView2" />
+    <wv2:WebView2 Name="webView2" DefaultBackgroundColor="Transparent" />
 </Window>

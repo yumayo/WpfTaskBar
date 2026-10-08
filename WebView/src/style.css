@@ -1,13 +1,18 @@
+html {
+  background-color: transparent;
+}
+
+/* ぼかしと単色のフォールバックはホストの WPF / DWM 側で描画する。 */
 body {
   margin: 0;
   padding: 0;
   font-family: system-ui;
-  background-color: #21252b;
+  background-color: transparent;
   color: #bbbbbb;
   height: 100vh;
   box-sizing: border-box;
   overflow: hidden;
-  border-right: 1px solid #333841;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .taskbar-container {
@@ -24,7 +29,7 @@ body {
   overflow-x: hidden;
   padding: 0;
   margin: 0;
-  background-color: #21252b;
+  background-color: transparent;
 }
 
 .task-item {
@@ -41,11 +46,11 @@ body {
 }
 
 .task-item:hover {
-  background-color: #2c313a;
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .task-item.foreground {
-  background-color: #3e4451;
+  background-color: rgba(255, 255, 255, 0.13);
 }
 
 .task-item.dragging {
@@ -226,7 +231,7 @@ body:not(.hide-ai-task-details) .task-item.has-ai-task:has(.task-terminal-title:
 
 /* 時刻表示エリア */
 .time-area {
-  background-color: #21252b;
+  background-color: transparent;
   padding: 10px;
   text-align: center;
 }
@@ -244,7 +249,7 @@ body:not(.hide-ai-task-details) .task-item.has-ai-task:has(.task-terminal-title:
 
 .attendance-time {
   padding: 10px;
-  background-color: #2c313a;
+  background-color: rgba(255, 255, 255, 0.06);
   border-radius: 5px;
   min-height: 30px;
   display: flex;
@@ -314,22 +319,25 @@ body:not(.hide-ai-task-details) .task-item.has-ai-task:has(.task-terminal-title:
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1d23;
+  background: transparent;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #4a5568 0%, #2d3748 100%);
   border-radius: 10px;
-  border: 2px solid #1a1d23;
+  border: 2px solid transparent;
+  background-clip: padding-box;
   transition: all 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #5a6678 0%, #3d4758 100%);
-  border: 2px solid #1a1d23;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:active {
   background: linear-gradient(180deg, #6a7688 0%, #4d5768 100%);
+  background-clip: padding-box;
 }
