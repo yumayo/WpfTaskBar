@@ -128,30 +128,58 @@ body {
   box-sizing: border-box;
 }
 
-/* 通常タスク (38px) の2つ分を確保し、下半分にAIターミナルのタイトルを表示する。 */
+/* 通常タスク (38px) の2つ分を確保し、関連する文言を縦中央にまとめる。 */
 body:not(.hide-ai-task-details) .task-item.has-ai-task {
   display: grid;
   grid-template-columns: 22px 32px minmax(0, 1fr);
-  grid-template-rows: 32px 32px;
-  row-gap: 6px;
+  grid-template-rows: auto auto;
+  min-height: 76px;
+  align-content: center;
+  row-gap: 4px;
+}
+
+body:not(.hide-ai-task-details) .task-item.has-ai-task > .task-status {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+body:not(.hide-ai-task-details) .task-item.has-ai-task > .task-icon {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  margin-block: 0;
+}
+
+body:not(.hide-ai-task-details) .task-item.has-ai-task > .task-text {
+  grid-column: 3;
+  grid-row: 1;
+  max-width: none;
+  overflow-wrap: anywhere;
+  line-height: 16px;
+}
+
+/* 本文が届くまでは、空の通知段による隙間を作らない。 */
+body:not(.hide-ai-task-details) .task-item.has-ai-task:has(.task-terminal-title:empty) {
+  grid-template-rows: auto;
+  row-gap: 0;
 }
 
 .task-terminal-title {
-  grid-column: 2 / -1;
+  grid-column: 3;
   grid-row: 2;
   min-width: 0;
-  max-height: 32px;
+  max-height: 30px;
   overflow: hidden;
   overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 16px;
-  color: #a6cbe8;
+  font-size: 11px;
+  line-height: 15px;
+  color: #c0c0c0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
 .task-terminal-title[hidden],
+.task-terminal-title:empty,
 .hide-ai-task-details .task-terminal-title { display: none; }
 
 @keyframes task-status-spin {
@@ -182,6 +210,8 @@ body:not(.hide-ai-task-details) .task-item.has-ai-task {
 .task-text {
   flex: 1;
   min-width: 0;
+  font-weight: 500;
+  color: #f0f0f0;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 280px;
