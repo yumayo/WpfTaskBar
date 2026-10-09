@@ -215,7 +215,7 @@ body:not(.hide-ai-task-details) .task-item.has-ai-task:has(.task-terminal-title:
 .task-text {
   flex: 1;
   min-width: 0;
-  font-weight: 500;
+  font-weight: normal;
   color: #f0f0f0;
   overflow: hidden;
   text-overflow: ellipsis;
