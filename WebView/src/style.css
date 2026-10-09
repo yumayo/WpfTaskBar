@@ -35,6 +35,8 @@ body {
 .task-item {
   display: flex;
   align-items: center;
+  /* AI通知欄の有無にかかわらず、従来の通常タスク (38px) の2倍に統一する。 */
+  height: 76px;
   padding: 3px 6px;
   border: none;
   background: transparent;
@@ -133,12 +135,11 @@ body {
   box-sizing: border-box;
 }
 
-/* 通常タスク (38px) の2つ分を確保し、関連する文言を縦中央にまとめる。 */
+/* AI通知欄とタイトルを縦中央にまとめる。 */
 body:not(.hide-ai-task-details) .task-item.has-ai-task {
   display: grid;
   grid-template-columns: 22px 32px minmax(0, 1fr);
   grid-template-rows: auto auto;
-  min-height: 76px;
   align-content: center;
   row-gap: 4px;
 }
