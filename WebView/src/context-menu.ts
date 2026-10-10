@@ -58,6 +58,9 @@ export function setupContextMenu(): void {
       case 'openOptions':
         openOptions();
         break;
+      case 'openTaskSessions':
+        sendMessageToHost('open_task_sessions');
+        break;
       case 'openAppDataFolder':
         openAppDataFolder();
         break;

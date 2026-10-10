@@ -10,6 +10,12 @@ public sealed class TaskSessionRequest
 	public string? SessionId { get; set; }
 }
 
+public sealed class TaskSessionTargetRequest
+{
+	public int Handle { get; set; }
+	public int ProcessId { get; set; }
+}
+
 public sealed class TaskSessionStatusRequest
 {
 	[Required]

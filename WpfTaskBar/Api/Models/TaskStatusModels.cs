@@ -12,7 +12,15 @@ public sealed class TaskStatusRequest
 	public string Status { get; set; } = string.Empty;
 }
 
-public sealed record TaskWindow(int Handle, int ProcessId, string Title, string ModuleFileName);
+public sealed record TaskWindow(int Handle, int ProcessId, string Title, string ModuleFileName)
+{
+	public bool IsVsCode()
+	{
+		var executable = ModuleFileName.Replace('\\', '/').Split('/').Last();
+		return executable.Equals("Code.exe", StringComparison.OrdinalIgnoreCase) ||
+		       executable.Equals("Code - Insiders.exe", StringComparison.OrdinalIgnoreCase);
+	}
+}
 
 public interface ITaskWindowProvider
 {

@@ -48,7 +48,7 @@ test('HTTP 経由で一覧取得・登録・生存通知・削除を実行する
     requests.push([request.method, request.url, body ? JSON.parse(body) : null]);
     response.setHeader('Content-Type', 'application/json');
     if (request.url === '/tasks') response.end(JSON.stringify({ tasks: [{ handle: 10, processId: 100, title: 'project', moduleFileName: 'Code.exe' }] }));
-    else if (request.method === 'POST') response.end(JSON.stringify({ sessionId: id, handle: 10, processId: 100 }));
+    else if (request.method === 'POST' || request.url.endsWith('/heartbeat')) response.end(JSON.stringify({ sessionId: id, handle: 10, processId: 100 }));
     else { response.statusCode = 204; response.end(); }
   });
   const client = new TaskbarClient(url);
@@ -85,6 +85,42 @@ test('接続エラーだけを未起動として扱い、APIや設定のエラ�
   for (const error of [undefined, new Error('invalid JSON'), new ApiError(500, 'server error'), { code: 'EACCES' }]) {
     assert.equal(isConnectionError(error), false);
   }
+});
+
+test('通知先の取得・変更・生存確認は同じIDを使い、本体が返す紐付けを読む', async () => {
+  const client = new TaskbarClient('http://localhost:5000');
+  const id = '0123456789abcdef0123456789abcdef';
+  const requests = [];
+  client.request = async (method, path, body) => {
+    requests.push({ method, path, body });
+    return { sessionId: id, handle: 20, processId: 100 };
+  };
+  assert.equal((await client.getSession(id)).handle, 20);
+  assert.equal((await client.changeTarget(id, { handle: 20, processId: 100 })).sessionId, id);
+  assert.equal((await client.renew(id)).handle, 20);
+  assert.deepEqual(requests.map(request => [request.method, request.path]), [
+    ['GET', `/tasks/sessions/${id}`],
+    ['PUT', `/tasks/sessions/${id}/target`],
+    ['PUT', `/tasks/sessions/${id}/heartbeat`],
+  ]);
+  assert.deepEqual(requests[1].body, { handle: 20, processId: 100 });
+  client.request = async () => { throw new ApiError(404, 'missing'); };
+  assert.equal(await client.getSession(id), undefined);
+  client.request = async () => { throw new ApiError(500, 'failure'); };
+  await assert.rejects(client.getSession(id), error => error.statusCode === 500);
+});
+
+test('紐付け取得で別ID・壊れた応答を拒否し、通知先変更の不一致も拒否する', async () => {
+  const client = new TaskbarClient('http://localhost:5000');
+  const id = '0123456789abcdef0123456789abcdef';
+  for (const value of [undefined, {}, { sessionId: 'other', handle: 10, processId: 100 },
+    { sessionId: id, handle: 0, processId: 100 }, { sessionId: id, handle: 10, processId: -1 }]) {
+    client.request = async () => value;
+    await assert.rejects(client.getSession(id), /有効な通知先/);
+    await assert.rejects(client.renew(id), /有効な通知先/);
+  }
+  client.request = async () => ({ sessionId: id, handle: 10, processId: 100 });
+  await assert.rejects(client.changeTarget(id, { handle: 20, processId: 100 }), /選択した通知先/);
 });
 
 test('登録要求で既存の通知IDを送り、旧本体が異なるIDを返したら登録を片付ける', async () => {

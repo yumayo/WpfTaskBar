@@ -52,7 +52,9 @@ function extension() {
     { handle: 10, processId: 100, title: 'project A', moduleFileName: 'Code.exe' },
     { handle: 20, processId: 100, title: 'project B', moduleFileName: 'Code.exe' },
   ];
-  let selection = 1;
+  let selection = 0;
+  const sessions = new Map();
+  const changed = [];
   let picks = 0;
   let renewError;
   let createError;
@@ -72,12 +74,34 @@ function extension() {
       requests.push({ ...window, apiUrl: this.url, sessionId });
       await onCreateSession?.();
       if (createError) throw createError;
-      return { sessionId, handle: window.handle, processId: window.processId };
+      const result = { sessionId, handle: window.handle, processId: window.processId };
+      sessions.set(this.url, result);
+      return result;
     }
-    async renew(id) { renewed.push(id); await onRenew?.(); if (renewError) throw renewError; }
+    async getSession() { return sessions.get(this.url); }
+    async changeTarget(id, window) {
+      changed.push({ id, window });
+      if (createError) throw createError;
+      const result = { sessionId: id, handle: window.handle, processId: window.processId };
+      sessions.set(this.url, result);
+      return result;
+    }
+    async renew(id) {
+      renewed.push(id);
+      await onRenew?.();
+      if (renewError) {
+        if (renewError.statusCode === 404) sessions.delete(this.url);
+        throw renewError;
+      }
+      return sessions.get(this.url);
+    }
     async interrupt(id) { interrupted.push(id); await onInterrupt?.(); }
-    async setTitle(id, title) { titles.push({ id, title }); await onTitle?.(); }
-    async remove(id) { removed.push(id); if (removeError) throw removeError; }
+    async setTitle(id, title) {
+      titles.push({ id, title });
+      try { await onTitle?.(); }
+      catch (error) { if (error.statusCode === 404) sessions.delete(this.url); throw error; }
+    }
+    async remove(id) { removed.push(id); if (removeError) throw removeError; sessions.delete(this.url); }
   }
   const vscode = {
     workspace: {
@@ -117,7 +141,7 @@ function extension() {
   const ready = api.activate({ subscriptions: [], environmentVariableCollection: collection });
   return {
     ready, commands, environment, collection, timers, removed, renewed, requests, errors, warnings, config,
-    titles, interrupted, sequences, contexts, logs, environmentChanges,
+    titles, interrupted, sequences, contexts, logs, environmentChanges, changed, sessions,
     get picks() { return picks; },
     set windows(value) { windows = value; },
     set selection(value) { selection = value; },
@@ -140,10 +164,10 @@ function extension() {
   };
 }
 
-test('拡張起動時に1セッションを登録し、ターミナル作成前に環境変数を設定する', async () => {
+test('拡張起動時に選択を必須にし、ターミナル作成前に環境変数を設定する', async () => {
   const ext = extension();
   await ext.ready;
-  assert.equal(ext.picks, 0);
+  assert.equal(ext.picks, 1);
   assert.deepEqual(ext.requests.map(window => window.handle), [10]);
   assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   assert.equal(ext.environment.get('WPF_TASKBAR_URL').value, 'http://192.0.2.1:5000');
@@ -168,6 +192,62 @@ test('通常のターミナルを切り替え、すべて閉じても同じウ�
   assert.deepEqual(ext.removed, ['session-1']);
   assert.equal(ext.environment.size, 0);
   assert.equal(ext.timers.size, 0);
+});
+
+test('初回選択をキャンセルすると未登録のまま待ち、明示的に選ぶまで通知しない', async () => {
+  const ext = extension();
+  ext.selection = -1;
+  await ext.ready;
+  await ext.heartbeat();
+  await ext.heartbeat();
+  assert.equal(ext.picks, 1);
+  assert.equal(ext.requests.length, 0);
+  assert.equal(ext.contexts.get('wpftaskbar.sessionActive'), false);
+  ext.selection = 1;
+  await ext.select();
+  assert.deepEqual(ext.requests.map(window => window.handle), [20]);
+  assert.equal(ext.environmentChanges.length, 3);
+  await ext.deactivate();
+});
+
+test('候補が1つでも通知先の選択を省略しない', async () => {
+  const ext = extension();
+  ext.windows = [{ handle: 20, processId: 100, title: 'only window', moduleFileName: 'Code.exe' }];
+  ext.selection = -1;
+  await ext.ready;
+  assert.equal(ext.picks, 1);
+  assert.equal(ext.requests.length, 0);
+  await ext.deactivate();
+});
+
+test('タスクバー側の変更を生存通知で取り込み、本体再起動後も同じIDと新しい通知先を使う', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.sessions.set(ext.config.apiUrl, { sessionId: 'session-1', handle: 20, processId: 100 });
+  await ext.heartbeat();
+  ext.renewError = new clientModule.ApiError(404, 'restarted');
+  await ext.heartbeat();
+  assert.deepEqual(ext.requests.map(window => window.handle), [10, 20]);
+  assert.deepEqual(ext.requests.map(window => window.sessionId), ['session-1', 'session-1']);
+  assert.equal(ext.picks, 1);
+  assert.equal(ext.changed.length, 0);
+  assert.equal(ext.environmentChanges.length, 3);
+  await ext.deactivate();
+});
+
+test('再接続時にも本体側の通知先を読み、古い紐付けで上書きしない', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.onTitle = () => { throw new clientModule.ApiError(404, 'expired'); };
+  await ext.activateTerminal({ name: 'Codex' });
+  ext.onTitle = undefined;
+  ext.sessions.set(ext.config.apiUrl, { sessionId: 'session-1', handle: 20, processId: 100 });
+  await ext.heartbeat();
+  assert.equal(ext.requests.length, 1);
+  assert.equal(ext.changed.length, 0);
+  assert.equal(ext.picks, 1);
+  assert.equal(ext.sessions.get(ext.config.apiUrl).handle, 20);
+  await ext.deactivate();
 });
 
 test('起動時の接続失敗から1秒後に再試行し、接続前にターミナルへ渡したIDで登録する', async () => {
@@ -248,21 +328,24 @@ test('停止中のEscと終了時の登録削除も接続エラーを表示し�
   assert.ok(ext.logs.every(line => !line.includes('ECONNREFUSED')));
 });
 
-test('手動選択でセッションを差し替え、キャンセル・同じ通知先の再選択ではIDを変えない', async () => {
+test('手動選択で同じIDの通知先を変更し、キャンセル・同じ通知先の再選択では変更しない', async () => {
   const ext = extension();
   await ext.ready;
   await ext.activateTerminal({ name: 'bash' });
+  ext.selection = 1;
   await ext.select();
-  assert.deepEqual(ext.requests.map(window => window.handle), [10, 20]);
-  assert.deepEqual(ext.removed, ['session-1']);
-  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-2');
+  assert.deepEqual(ext.changed.map(change => change.window.handle), [20]);
+  assert.deepEqual(ext.removed, []);
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   assert.equal(ext.warnings.length, 0);
   ext.selection = -1;
   await ext.select();
   ext.selection = 1;
   await ext.select();
-  assert.equal(ext.requests.length, 2);
-  assert.equal(ext.picks, 3);
+  assert.equal(ext.requests.length, 1);
+  assert.equal(ext.changed.length, 1);
+  assert.equal(ext.environmentChanges.length, 3);
+  assert.equal(ext.picks, 4);
   await ext.deactivate();
 });
 
@@ -270,6 +353,7 @@ test('通知先の変更に失敗しても現在のセッションと環境変�
   const ext = extension();
   await ext.ready;
   ext.createError = new Error('API unavailable');
+  ext.selection = 1;
   await ext.select();
   assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   assert.deepEqual(ext.removed, []);
@@ -282,13 +366,14 @@ test('通知先の選択画面を開いている間も生存通知を続ける',
   await ext.ready;
   let release;
   ext.onPick = () => new Promise(resolve => { release = resolve; });
+  ext.selection = 1;
   const selected = ext.select();
   await settle();
   await ext.heartbeat();
   assert.deepEqual(ext.renewed, ['session-1']);
   release();
   await selected;
-  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-2');
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   await ext.deactivate();
 });
 
@@ -336,7 +421,7 @@ test('コンテナURL変更ではIDを維持し、API変更では旧登録を解
   await ext.configure();
   assert.equal(ext.requests[1].apiUrl, ext.config.apiUrl);
   assert.deepEqual(ext.removed, ['session-1']);
-  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-2');
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   await ext.deactivate();
 });
 

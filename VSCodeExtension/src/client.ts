@@ -117,8 +117,34 @@ export class TaskbarClient {
     return { sessionId: session.sessionId, handle: session.handle, processId: session.processId };
   }
 
-  async renew(id: string): Promise<void> {
-    await this.request('PUT', `/tasks/sessions/${encodeURIComponent(id)}/heartbeat`);
+  private readSession(value: unknown, id: string): Session {
+    if (!isRecord(value) || value.sessionId !== id || !Number.isInteger(value.handle) || value.handle === 0
+      || !Number.isInteger(value.processId) || (value.processId as number) <= 0) {
+      throw new Error('WpfTaskBar API が有効な通知先を返しませんでした。本体も更新してください。');
+    }
+    return { sessionId: id, handle: value.handle as number, processId: value.processId as number };
+  }
+
+  async getSession(id: string): Promise<Session | undefined> {
+    try { return this.readSession(await this.request('GET', `/tasks/sessions/${encodeURIComponent(id)}`), id); }
+    catch (error) {
+      if (error instanceof ApiError && error.statusCode === 404) return undefined;
+      throw error;
+    }
+  }
+
+  async changeTarget(id: string, target: TaskWindow): Promise<Session> {
+    const session = this.readSession(await this.request('PUT', `/tasks/sessions/${encodeURIComponent(id)}/target`, {
+      handle: target.handle, processId: target.processId,
+    }), id);
+    if (session.handle !== target.handle || session.processId !== target.processId) {
+      throw new Error('WpfTaskBar API が選択した通知先を返しませんでした。');
+    }
+    return session;
+  }
+
+  async renew(id: string): Promise<Session> {
+    return this.readSession(await this.request('PUT', `/tasks/sessions/${encodeURIComponent(id)}/heartbeat`), id);
   }
 
   async setTitle(id: string, terminalTitle: string): Promise<void> {

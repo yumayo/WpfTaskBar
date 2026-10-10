@@ -12,7 +12,8 @@ interface Binding {
 }
 
 let session: Binding | undefined;
-let target: { apiUrl: string; window: TaskWindow; id: string } | undefined;
+let target: { apiUrl: string; window: TaskWindow } | undefined;
+let deferredSelectionUrl: string | undefined;
 let notificationId: string;
 let environment: vscode.GlobalEnvironmentVariableCollection;
 let heartbeat: NodeJS.Timeout | undefined;
@@ -44,6 +45,7 @@ function updateEnvironment(containerUrl: string, id: string): void {
 }
 
 async function selectWindow(client: TaskbarClient, force: boolean): Promise<TaskWindow | undefined> {
+  if (!force && deferredSelectionUrl === client.url) return undefined;
   const windows = await client.windows();
   if (!force && target?.apiUrl === client.url) {
     const previous = target.window;
@@ -52,8 +54,8 @@ async function selectWindow(client: TaskbarClient, force: boolean): Promise<Task
     return current;
   }
   if (windows.length === 0) throw new Error('WpfTaskBar に VSCode のタスクがありません。Windows 側で WpfTaskBar を起動してください。');
-  // 起動時は先頭候補を使い、明示的に選び直すときだけ一覧を開く。
-  return !force ? windows[0] : (await vscode.window.showQuickPick(
+  // 候補が1つでも、利用者が確認するまで通知先を登録しない。
+  const selected = (await vscode.window.showQuickPick(
     windows.map(window => ({
       label: window.title,
       description: `HWND ${window.handle} / PID ${window.processId}`,
@@ -61,6 +63,9 @@ async function selectWindow(client: TaskbarClient, force: boolean): Promise<Task
     })),
     { title: 'この VSCode ウィンドウのタスクを選択', placeHolder: 'タイトルが同じ場合は VSCode のウィンドウタイトルを区別してから選択してください。', ignoreFocusOut: true },
   ))?.window;
+  deferredSelectionUrl = selected ? undefined : client.url;
+  if (!selected) output.appendLine('通知先は未変更です。「この VSCode の通知先を選択」から選択できます。');
+  return selected;
 }
 
 function configuration() {
@@ -92,32 +97,45 @@ function expire(binding: Binding): void {
 async function connect(selected?: { apiUrl: string; window: TaskWindow }): Promise<void> {
   const { client, containerUrl } = configuration();
   if (selected && selected.apiUrl !== client.url) throw new Error('選択中に API の接続先が変更されました。通知先を選び直してください。');
-  const window = selected?.window ?? (session?.client.url === client.url ? session.window : await selectWindow(client, false));
+  // 本体側の紐付けを優先する。応答喪失やタスクバー側での変更後も古い HWND で上書きしない。
+  const registered = await client.getSession(notificationId);
+  const window = selected?.window ?? (registered
+    ? (await client.windows()).find(item => item.handle === registered.handle && item.processId === registered.processId)
+    : await selectWindow(client, false));
   if (!window || stopping) return;
   const previous = session;
-  if (!session || session.client.url !== client.url || session.window.handle !== window.handle || session.window.processId !== window.processId) {
-    const id = !target ? notificationId
-      : target.apiUrl === client.url && target.window.handle === window.handle && target.window.processId === window.processId
-        ? target.id : randomBytes(16).toString('hex');
-    const created = await client.createSession(window, id);
+  // 初回登録が通信に失敗しても、確認済みの選択と同じ ID で再試行する。
+  if (!session) target = { apiUrl: client.url, window };
+  const created = registered
+    ? (selected && (registered.handle !== window.handle || registered.processId !== window.processId)
+      ? await client.changeTarget(notificationId, window) : registered)
+    : await client.createSession(window, notificationId);
+  if (!registered || !session || session.client.url !== client.url || session.window.handle !== window.handle || session.window.processId !== window.processId) {
     const binding = { client, id: created.sessionId, window };
     if (stopping) { await removeBinding(binding); return; }
     session = binding;
-    target = { apiUrl: client.url, window, id };
     output.appendLine(`ウィンドウの通知先を登録: ${window.title} (HWND ${window.handle})`);
   }
+  target = { apiUrl: client.url, window };
   waitingForConnection = false;
-  updateEnvironment(containerUrl, session.id);
+  updateEnvironment(containerUrl, notificationId);
   updateTerminalContext();
   void syncTitle();
-  if (previous && previous !== session) await removeBinding(previous);
+  // 同じ API の紐付け変更では ID を削除しない。
+  if (previous && previous.client.url !== client.url) await removeBinding(previous);
 }
 
 async function renewSession(): Promise<void> {
   const binding = session;
   if (binding) {
     try {
-      await binding.client.renew(binding.id);
+      const current = await binding.client.renew(binding.id);
+      if (session !== binding || stopping) return;
+      if (binding.window.handle !== current.handle || binding.window.processId !== current.processId) {
+        binding.window = { ...binding.window, handle: current.handle, processId: current.processId };
+        target = { apiUrl: binding.client.url, window: binding.window };
+        output.appendLine(`タスクバー側で通知先を変更: HWND ${current.handle} / PID ${current.processId}（通知 ID は維持）`);
+      }
       binding.offline = false;
       waitingForConnection = false;
       void syncTitle();

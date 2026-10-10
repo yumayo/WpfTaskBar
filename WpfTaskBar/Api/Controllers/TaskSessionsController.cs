@@ -17,7 +17,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 
 		var target = windows.GetWindows().FirstOrDefault(window =>
 			window.Handle == request.Handle && window.ProcessId == request.ProcessId);
-		if (target == null || !IsVsCode(target))
+		if (target == null || !target.IsVsCode())
 			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
 
 		var session = request.SessionId == null
@@ -25,6 +25,32 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 			: statuses.RegisterSession(target.Handle, target.ProcessId, request.SessionId);
 		if (session == null) return Conflict(new { message = "sessionId は別の通知先に登録されています。" });
 		return Ok(new { sessionId = session.Id, handle = target.Handle, processId = target.ProcessId });
+	}
+
+	[HttpGet("tasks/sessions/{id}")]
+	public IActionResult GetSession(string id)
+	{
+		var session = statuses.GetSession(id);
+		if (session == null) return SessionNotFound();
+		if (!windows.GetWindows().Any(window =>
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
+		{
+			statuses.RemoveSession(id, session);
+			return SessionNotFound();
+		}
+		return SessionResponse(session);
+	}
+
+	[HttpPut("tasks/sessions/{id}/target")]
+	public IActionResult ChangeTarget(string id, [FromBody] TaskSessionTargetRequest request)
+	{
+		if (request.Handle == 0 || request.ProcessId <= 0)
+			return BadRequest(new { message = "handle と processId を指定してください。" });
+		if (!windows.GetWindows().Any(window =>
+			window.Handle == request.Handle && window.ProcessId == request.ProcessId && window.IsVsCode()))
+			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
+		var session = statuses.ReassignSession(id, request.Handle, request.ProcessId);
+		return session == null ? SessionNotFound() : SessionResponse(session);
 	}
 
 	[HttpPost("tasks/sessions/{id}/status")]
@@ -38,10 +64,10 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		var target = windows.GetWindows().FirstOrDefault(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && IsVsCode(window));
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode());
 		if (target == null)
 		{
-			statuses.RemoveSession(id);
+			statuses.RemoveSession(id, session);
 			return SessionNotFound();
 		}
 		if (!statuses.SetSessionStatus(id, request.Status, request.OnlyIfActive, request.ActivityText)) return SessionNotFound();
@@ -63,9 +89,9 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && IsVsCode(window)))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
 		{
-			statuses.RemoveSession(id);
+			statuses.RemoveSession(id, session);
 			return SessionNotFound();
 		}
 		return statuses.SetSessionTitle(id, request.TerminalTitle) ? NoContent() : SessionNotFound();
@@ -79,9 +105,9 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && IsVsCode(window)))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
 		{
-			statuses.RemoveSession(id);
+			statuses.RemoveSession(id, session);
 			return SessionNotFound();
 		}
 		return statuses.SetSessionActivity(id, request.ActivityText) ? NoContent() : SessionNotFound();
@@ -93,21 +119,21 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && IsVsCode(window)))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
 		{
-			statuses.RemoveSession(id);
+			statuses.RemoveSession(id, session);
 			return SessionNotFound();
 		}
-		return statuses.RenewSession(id) ? NoContent() : SessionNotFound();
+		if (!statuses.RenewSession(id)) return SessionNotFound();
+		// タスクバー側の変更を拡張にも返し、再接続時に古い HWND へ戻らないようにする。
+		var current = statuses.GetSession(id);
+		return current == null ? SessionNotFound() : SessionResponse(current);
 	}
+
+	private OkObjectResult SessionResponse(TaskStatusSession session) =>
+		Ok(new { sessionId = session.Id, handle = session.Handle, processId = session.ProcessId });
 
 	private NotFoundObjectResult SessionNotFound() =>
-		NotFound(new { message = "通知先のセッションがありません。VSCode 拡張からターミナルを開き直してください。" });
+		NotFound(new { message = "通知先のセッションがありません。VSCode 拡張で通知先を選び直してください。" });
 
-	private static bool IsVsCode(TaskWindow window)
-	{
-		var executable = window.ModuleFileName.Replace('\\', '/').Split('/').Last();
-		return executable.Equals("Code.exe", StringComparison.OrdinalIgnoreCase) ||
-		       executable.Equals("Code - Insiders.exe", StringComparison.OrdinalIgnoreCase);
-	}
 }

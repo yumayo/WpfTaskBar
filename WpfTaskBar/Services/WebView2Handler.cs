@@ -23,11 +23,14 @@ using WpfApplication = System.Windows.Application;
 			private Dispatcher? _dispatcher;
 			private WebView2? _webView2;
 			private OptionsWindow? _optionsWindow;
+			private TaskSessionWindow? _taskSessionWindow;
+			private readonly ITaskWindowProvider _taskWindowProvider;
 
-			public WebView2Handler(WindowIconService windowIconService, TaskStatusStore taskStatusStore)
+			public WebView2Handler(WindowIconService windowIconService, TaskStatusStore taskStatusStore, ITaskWindowProvider taskWindowProvider)
 			{
 				_windowIconService = windowIconService;
 				_taskStatusStore = taskStatusStore;
+				_taskWindowProvider = taskWindowProvider;
 				AppSettingsModel.SettingsChanged += OnAppSettingsChanged;
 			}
 
@@ -289,6 +292,9 @@ using WpfApplication = System.Windows.Application;
 
 				case "open_options":
 					HandleOpenOptions();
+					break;
+				case "open_task_sessions":
+					HandleOpenTaskSessions();
 					break;
 
 				case "open_dev_tools":
@@ -1090,6 +1096,23 @@ using WpfApplication = System.Windows.Application;
 			{
 				dispatcher.BeginInvoke((Action)Open);
 			}
+		}
+
+		private void HandleOpenTaskSessions()
+		{
+			var dispatcher = _dispatcher ?? WpfApplication.Current.Dispatcher;
+			void Open()
+			{
+				if (_taskSessionWindow is not { IsVisible: true })
+				{
+					_taskSessionWindow = new TaskSessionWindow(_taskStatusStore, _taskWindowProvider);
+					_taskSessionWindow.Closed += (_, _) => _taskSessionWindow = null;
+					_taskSessionWindow.Show();
+				}
+				_taskSessionWindow.Activate();
+			}
+			if (dispatcher.CheckAccess()) Open();
+			else dispatcher.BeginInvoke((Action)Open);
 		}
 
 		private void HandleRequestTimeRecordStatus()

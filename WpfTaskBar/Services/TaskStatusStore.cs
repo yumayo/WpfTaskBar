@@ -99,6 +99,28 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 		}
 	}
 
+	public IReadOnlyList<TaskStatusSession> GetSessions()
+	{
+		lock (_syncRoot)
+		{
+			RemoveExpiredSessions();
+			return _sessions.Values.ToArray();
+		}
+	}
+
+	// 明示的な選択でのみ通知先を移す。ID・状態・本文を保持し、旧ウィンドウの表示からは外す。
+	public TaskStatusSession? ReassignSession(string id, int handle, int processId)
+	{
+		lock (_syncRoot)
+		{
+			RemoveExpiredSessions();
+			if (!_sessions.TryGetValue(id, out var session)) return null;
+			var updated = session with { Handle = handle, ProcessId = processId, Revision = ++_revision };
+			_sessions[id] = updated;
+			return updated;
+		}
+	}
+
 	public bool SetSessionStatus(string id, string status, bool onlyIfActive = false, string? activityText = null)
 	{
 		if (!IsValidStatus(status)) throw new ArgumentException("Unknown task status.", nameof(status));
@@ -150,9 +172,15 @@ public sealed class TaskStatusStore(TimeProvider? timeProvider = null)
 		}
 	}
 
-	public void RemoveSession(string id)
+	public void RemoveSession(string id, TaskStatusSession? expected = null)
 	{
-		lock (_syncRoot) _sessions.Remove(id);
+		lock (_syncRoot)
+		{
+			// 列挙中に通知先が変更された場合、古いウィンドウの失効で新しい紐付けを削除しない。
+			if (expected != null && _sessions.TryGetValue(id, out var current) &&
+				(current.Handle != expected.Handle || current.ProcessId != expected.ProcessId)) return;
+			_sessions.Remove(id);
+		}
 	}
 
 	public void RemoveMissingWindows(IReadOnlySet<int> windowHandles, long snapshotRevision)

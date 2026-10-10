@@ -48,6 +48,99 @@ public sealed class TaskSessionTests
 		Assert.Equal("completed", _statuses.GetStatus(10, 100));
 	}
 
+	[Fact]
+	public void ChangingTargetPreservesIdStateAndTextAndRoutesExistingContainerToNewWindow()
+	{
+		var id = CreateSession();
+		SetTitle(id, "Codex");
+		Assert.IsType<OkObjectResult>(_controller.SetStatus(id, new() { Status = "running", ActivityText = "調査中" }));
+		var response = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(
+			_controller.ChangeTarget(id, new() { Handle = 20, ProcessId = 100 })).Value);
+		Assert.Equal(id, response.GetProperty("sessionId").GetString());
+		Assert.Equal(20, response.GetProperty("handle").GetInt32());
+		Assert.False(_statuses.GetWindowState(10, 100).HasAiTask);
+		var state = _statuses.GetWindowState(20, 100);
+		Assert.Equal("running", state.Status);
+		Assert.Equal("Codex", state.TerminalTitle);
+		Assert.Equal("調査中", state.ActivityText);
+		SetStatus(id, "completed");
+		Assert.Equal("completed", _statuses.GetStatus(20, 100));
+		Assert.Equal("none", _statuses.GetStatus(10, 100));
+		var heartbeat = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(_controller.Heartbeat(id)).Value);
+		Assert.Equal(20, heartbeat.GetProperty("handle").GetInt32());
+		var current = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(_controller.GetSession(id)).Value);
+		Assert.Equal(20, current.GetProperty("handle").GetInt32());
+		Assert.IsType<ConflictObjectResult>(_controller.CreateSession(new() { Handle = 10, ProcessId = 100, SessionId = id }));
+	}
+
+	[Theory]
+	[InlineData(0, 100, true)]
+	[InlineData(20, 0, true)]
+	[InlineData(20, 999, false)]
+	[InlineData(30, 300, false)]
+	[InlineData(999, 100, false)]
+	public void InvalidTargetChangesLeaveTheOriginalBindingUntouched(int handle, int processId, bool badRequest)
+	{
+		var id = CreateSession();
+		SetStatus(id, "running");
+		var result = _controller.ChangeTarget(id, new() { Handle = handle, ProcessId = processId });
+		if (badRequest) Assert.IsType<BadRequestObjectResult>(result);
+		else Assert.IsType<NotFoundObjectResult>(result);
+		Assert.Equal(10, _statuses.GetSession(id)!.Handle);
+		Assert.Equal("running", _statuses.GetStatus(10, 100));
+	}
+
+	[Fact]
+	public void ReassigningOneSessionDoesNotMoveOtherSessionsOrManualStatuses()
+	{
+		var moved = CreateSession();
+		var retained = CreateSession();
+		SetStatus(moved, "running");
+		SetStatus(retained, "waiting");
+		_statuses.SetStatus(10, 100, "completed");
+		Assert.IsType<OkObjectResult>(_controller.ChangeTarget(moved, new() { Handle = 20, ProcessId = 100 }));
+		Assert.Equal("waiting", _statuses.GetStatus(10, 100));
+		Assert.Equal("running", _statuses.GetStatus(20, 100));
+		_controller.DeleteSession(retained);
+		Assert.Equal("completed", _statuses.GetStatus(10, 100));
+		Assert.Equal(moved, Assert.Single(_statuses.GetSessions()).Id);
+	}
+
+	[Fact]
+	public void ReassignmentDoesNotReviveExpiredSessionsOrRenewTheExtensionLease()
+	{
+		var id = CreateSession();
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		Assert.IsType<OkObjectResult>(_controller.ChangeTarget(id, new() { Handle = 20, ProcessId = 100 }));
+		_clock.Advance(TimeSpan.FromSeconds(30));
+		Assert.IsType<NotFoundObjectResult>(_controller.ChangeTarget(id, new() { Handle = 10, ProcessId = 100 }));
+		Assert.IsType<NotFoundObjectResult>(_controller.GetSession(id));
+		Assert.Empty(_statuses.GetSessions());
+	}
+
+	[Fact]
+	public void StaleWindowValidationAndEnumerationCannotDeleteAReassignedSession()
+	{
+		var id = CreateSession();
+		var previous = _statuses.GetSession(id)!;
+		var revision = _statuses.GetRevision();
+		_statuses.ReassignSession(id, 20, 100);
+		_statuses.RemoveSession(id, previous);
+		_statuses.RemoveMissingWindows(new HashSet<int> { 10 }, revision);
+		Assert.Equal(20, _statuses.GetSession(id)!.Handle);
+		_windows.Items.RemoveAt(0);
+		Assert.IsType<OkObjectResult>(_controller.GetSession(id));
+	}
+
+	[Fact]
+	public void ReadingAClosedOrReusedTargetRejectsTheOldBinding()
+	{
+		var id = CreateSession();
+		_windows.Items[0] = _windows.Items[0] with { ProcessId = 999 };
+		Assert.IsType<NotFoundObjectResult>(_controller.GetSession(id));
+		Assert.Null(_statuses.GetSession(id));
+	}
+
 	[Theory]
 	[InlineData("")]
 	[InlineData("bad")]
@@ -184,7 +277,7 @@ public sealed class TaskSessionTests
 		var id = CreateSession();
 		SetStatus(id, "completed");
 		_clock.Advance(TimeSpan.FromSeconds(90));
-		Assert.IsType<NoContentResult>(_controller.Heartbeat(id));
+		Assert.IsType<OkObjectResult>(_controller.Heartbeat(id));
 		_clock.Advance(TimeSpan.FromSeconds(90));
 		Assert.Equal("completed", _statuses.GetStatus(10, 100));
 		_clock.Advance(TimeSpan.FromSeconds(30));
