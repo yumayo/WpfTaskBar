@@ -8,9 +8,9 @@ const vm = require('node:vm');
 const clientModule = require('../dist/client');
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function extension() {
+function extension({ cachedEnvironment = [], nextId = 1 } = {}) {
   const commands = new Map();
-  const environment = new Map();
+  const environment = new Map(cachedEnvironment);
   const environmentChanges = [];
   const collection = {
     persistent: true,
@@ -66,7 +66,7 @@ function extension() {
   let createError;
   let windowsError;
   let removeError;
-  let ids = 0;
+  let ids = nextId - 1;
   let onCreateSession;
   let onRenew;
   let onTitle;
@@ -193,7 +193,7 @@ test('フォーカス中の起動では前面ウィンドウへ自動登録し�
   assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   assert.equal(ext.environment.get('WPF_TASKBAR_URL').value, 'http://192.0.2.1:5000');
   assert.equal(ext.environment.get('WSLENV').value, 'KEEP/p:WPF_TASKBAR_URL/u:WPF_TASKBAR_SESSION_ID/u');
-  assert.equal(ext.collection.persistent, false);
+  assert.equal(ext.collection.persistent, true);
   await ext.deactivate();
 });
 
@@ -211,8 +211,69 @@ test('通常のターミナルを切り替え、すべて閉じても同じウ�
   assert.deepEqual(ext.titles.at(-1), { id: 'session-1', title: '' });
   await ext.deactivate();
   assert.deepEqual(ext.removed, ['session-1']);
-  assert.equal(ext.environment.size, 0);
+  assert.equal(ext.environment.size, 3);
   assert.equal(ext.timers.size, 0);
+});
+
+test('VSCode再起動・再読み込み後も復元ターミナルのIDを使い、環境変数を書き換えない', async () => {
+  let ext = extension();
+  await ext.ready;
+  const terminalEnvironment = [...ext.environment];
+  for (const nextId of [2, 3]) {
+    await ext.deactivate();
+    assert.deepEqual(ext.removed, ['session-1']);
+    const cachedEnvironment = ext.collection.persistent ? [...ext.environment] : [];
+    ext = extension({ cachedEnvironment, nextId });
+    ext.foregroundHandle = 20;
+    await ext.ready;
+    assert.deepEqual(ext.requests.map(request => [request.sessionId, request.handle]), [['session-1', 20]]);
+    assert.deepEqual([...ext.environment], terminalEnvironment);
+    assert.deepEqual(ext.environmentChanges, []);
+    await ext.heartbeat();
+    assert.deepEqual(ext.renewed, ['session-1']);
+  }
+  await ext.deactivate();
+  assert.deepEqual([...ext.environment], terminalEnvironment);
+});
+
+test('VSCode再起動後に本体が停止中でも保存済みIDを維持し、復帰後に同じIDで登録する', async () => {
+  const previous = extension();
+  await previous.ready;
+  await previous.deactivate();
+  const ext = extension({ cachedEnvironment: previous.environment, nextId: 2 });
+  ext.windowsError = Object.assign(new Error('offline'), { code: 'ECONNREFUSED' });
+  await ext.ready;
+  await ext.heartbeat();
+  assert.equal(ext.requests.length, 0);
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
+  assert.deepEqual(ext.environmentChanges, []);
+  ext.windowsError = undefined;
+  await ext.heartbeat();
+  assert.equal(ext.requests[0].sessionId, 'session-1');
+  assert.deepEqual(ext.environmentChanges, []);
+  await ext.deactivate();
+});
+
+test('別ワークスペースのウィンドウには別のIDを用意する', async () => {
+  const first = extension();
+  const second = extension({ nextId: 2 });
+  await Promise.all([first.ready, second.ready]);
+  assert.equal(first.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
+  assert.equal(second.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-2');
+  await Promise.all([first.deactivate(), second.deactivate()]);
+});
+
+test('復元後に通知先URLを変更した場合はIDを維持し、必要な環境変数だけを更新する', async () => {
+  const previous = extension();
+  await previous.ready;
+  await previous.deactivate();
+  const ext = extension({ cachedEnvironment: previous.environment, nextId: 2 });
+  await ext.ready;
+  ext.config.containerApiUrl = 'http://192.0.2.2:5000';
+  await ext.configure();
+  assert.deepEqual(ext.environmentChanges, [{ name: 'WPF_TASKBAR_URL', value: 'http://192.0.2.2:5000' }]);
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
+  await ext.deactivate();
 });
 
 test('一覧の先頭や同名・同じPIDではなく、前面のHWNDを登録する', async () => {
@@ -678,7 +739,7 @@ test('生存確認中に拡張を停止した場合は処理完了後もタイ�
   await settle();
   assert.equal(ext.timers.size, 0);
   assert.equal(await ext.heartbeat(), false);
-  assert.equal(ext.environment.size, 0);
+  assert.equal(ext.environment.size, 3);
 });
 
 test('登録処理中に拡張が停止しても遅れて返されたセッションを残さない', async () => {
@@ -690,7 +751,7 @@ test('登録処理中に拡張が停止しても遅れて返されたセッシ�
   release();
   await Promise.all([stopped, ext.ready]);
   assert.deepEqual(ext.removed, ['session-1']);
-  assert.equal(ext.environment.size, 0);
+  assert.equal(ext.environment.size, 3);
   assert.equal(ext.timers.size, 0);
 });
 

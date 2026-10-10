@@ -258,12 +258,12 @@ function scheduleHeartbeat(): void {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   output = vscode.window.createOutputChannel('WpfTaskBar');
   environment = context.environmentVariableCollection;
-  // 再読み込み後に失効したIDを新しいシェルへ注入しない。
-  environment.persistent = false;
-  environment.clear();
+  // 復元されたターミナルと同じIDを使い、再起動だけで環境変数を変更しない。
+  // VSCodeがワークスペースごとに保存し、拡張の起動前から適用する。
+  environment.persistent = true;
   environment.description = 'この VSCode ウィンドウの AI 通知先';
   // 接続前に ID を渡し、後から本体が起動しても既存のコンテナから通知できるようにする。
-  notificationId = randomBytes(16).toString('hex');
+  notificationId = environment.get('WPF_TASKBAR_SESSION_ID')?.value || randomBytes(16).toString('hex');
   try { updateEnvironment(configuration().containerUrl, notificationId); }
   catch (error) { reportError(error); }
   const command = (name: string, action: () => unknown) => context.subscriptions.push(vscode.commands.registerCommand(name, async () => {
@@ -302,7 +302,7 @@ export async function deactivate(): Promise<void> {
   stopping = true;
   clearTimeout(heartbeat);
   clearInterval(titlePolling);
-  environment.clear();
+  // 本体の登録は解除するが、次回起動と復元ターミナルのために環境変数は残す。
   const binding = session;
   session = undefined;
   updateTerminalContext();
