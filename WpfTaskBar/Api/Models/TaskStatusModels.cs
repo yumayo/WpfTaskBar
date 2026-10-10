@@ -25,4 +25,5 @@ public sealed record TaskWindow(int Handle, int ProcessId, string Title, string 
 public interface ITaskWindowProvider
 {
 	IReadOnlyList<TaskWindow> GetWindows();
+	int GetForegroundHandle();
 }

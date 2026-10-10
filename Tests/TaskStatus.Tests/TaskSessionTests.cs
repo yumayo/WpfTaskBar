@@ -479,6 +479,7 @@ public sealed class TaskSessionTests
 
 	private sealed class Windows : ITaskWindowProvider
 	{
+		public int GetForegroundHandle() => 0;
 		// Electron の同一プロセスに複数ウィンドウがある場合も HWND で分離する。
 		public List<TaskWindow> Items { get; } = new()
 		{

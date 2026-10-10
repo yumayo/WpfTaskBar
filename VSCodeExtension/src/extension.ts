@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
-import { ApiError, TaskbarClient, isConnectionError, normalizeUrl, terminalEnvironment, type TaskWindow } from './client';
+import { ApiError, TaskbarClient, isConnectionError, normalizeUrl, terminalEnvironment, type Session, type TaskWindow } from './client';
 
 interface Binding {
   client: TaskbarClient;
@@ -14,6 +14,8 @@ interface Binding {
 let session: Binding | undefined;
 let target: { apiUrl: string; window: TaskWindow } | undefined;
 let deferredSelectionUrl: string | undefined;
+let focusRevision = 0;
+let manualSelectionPending = 0;
 let notificationId: string;
 let environment: vscode.GlobalEnvironmentVariableCollection;
 let heartbeat: NodeJS.Timeout | undefined;
@@ -44,9 +46,14 @@ function updateEnvironment(containerUrl: string, id: string): void {
   }
 }
 
-async function selectWindow(client: TaskbarClient, force: boolean): Promise<TaskWindow | undefined> {
-  if (!force && deferredSelectionUrl === client.url) return undefined;
+function hasSameFocus(revision: number): boolean {
+  return !stopping && vscode.window.state.focused && focusRevision === revision;
+}
+
+async function selectWindow(client: TaskbarClient, force: boolean, expectedFocus?: number): Promise<TaskWindow | undefined> {
+  if (!force && target?.apiUrl !== client.url && deferredSelectionUrl === client.url) return undefined;
   const windows = await client.windows();
+  if (stopping || (expectedFocus !== undefined && (!hasSameFocus(expectedFocus) || manualSelectionPending))) return undefined;
   if (!force && target?.apiUrl === client.url) {
     const previous = target.window;
     const current = windows.find(window => window.handle === previous.handle && window.processId === previous.processId);
@@ -54,7 +61,7 @@ async function selectWindow(client: TaskbarClient, force: boolean): Promise<Task
     return current;
   }
   if (windows.length === 0) throw new Error('WpfTaskBar に VSCode のタスクがありません。Windows 側で WpfTaskBar を起動してください。');
-  // 候補が1つでも、利用者が確認するまで通知先を登録しない。
+  // 自動判定できない場合も一覧の先頭で代用せず、利用者の選択を待つ。
   const selected = (await vscode.window.showQuickPick(
     windows.map(window => ({
       label: window.title,
@@ -66,6 +73,33 @@ async function selectWindow(client: TaskbarClient, force: boolean): Promise<Task
   deferredSelectionUrl = selected ? undefined : client.url;
   if (!selected) output.appendLine('通知先は未変更です。「この VSCode の通知先を選択」から選択できます。');
   return selected;
+}
+
+interface WindowSelection {
+  window: TaskWindow;
+  focusRevision?: number;
+}
+
+async function resolveWindow(client: TaskbarClient): Promise<WindowSelection | undefined> {
+  if (manualSelectionPending) return undefined;
+  if (target?.apiUrl === client.url) {
+    const window = await selectWindow(client, false);
+    return window ? { window } : undefined;
+  }
+  if (deferredSelectionUrl === client.url || !vscode.window.state.focused) return undefined;
+  const revision = focusRevision;
+  let foreground: TaskWindow | undefined;
+  try { foreground = await client.foregroundWindow(); }
+  catch (error) {
+    if (isConnectionError(error)) throw error;
+    if (!hasSameFocus(revision)) return undefined;
+    reportError(error);
+    // 本体のAPI未対応や不正な応答では、自動登録せず手動選択に戻す。
+  }
+  if (!hasSameFocus(revision) || manualSelectionPending || deferredSelectionUrl === client.url) return undefined;
+  if (foreground) return { window: foreground, focusRevision: revision };
+  const window = await selectWindow(client, false, revision);
+  return window ? { window } : undefined;
 }
 
 function configuration() {
@@ -99,22 +133,35 @@ async function connect(selected?: { apiUrl: string; window: TaskWindow }): Promi
   if (selected && selected.apiUrl !== client.url) throw new Error('選択中に API の接続先が変更されました。通知先を選び直してください。');
   // 本体側の紐付けを優先する。応答喪失やタスクバー側での変更後も古い HWND で上書きしない。
   const registered = await client.getSession(notificationId);
-  const window = selected?.window ?? (registered
+  const resolved = !selected && !registered ? await resolveWindow(client) : undefined;
+  const window = selected?.window ?? resolved?.window ?? (registered
     ? (await client.windows()).find(item => item.handle === registered.handle && item.processId === registered.processId)
-    : await selectWindow(client, false));
+    : undefined);
   if (!window || stopping) return;
+  const selectionFocus = resolved?.focusRevision;
+  const autoDetected = selectionFocus !== undefined;
+  if (selectionFocus !== undefined &&
+    (!hasSameFocus(selectionFocus) || manualSelectionPending || deferredSelectionUrl === client.url ||
+      configuration().client.url !== client.url)) return;
   const previous = session;
-  // 初回登録が通信に失敗しても、確認済みの選択と同じ ID で再試行する。
-  if (!session) target = { apiUrl: client.url, window };
-  const created = registered
-    ? (selected && (registered.handle !== window.handle || registered.processId !== window.processId)
-      ? await client.changeTarget(notificationId, window) : registered)
-    : await client.createSession(window, notificationId);
+  // 手動で確認した選択は保持する。自動候補は登録に成功するまで記憶しない。
+  if (!session && !autoDetected) target = { apiUrl: client.url, window };
+  let created: Session;
+  try {
+    created = registered
+      ? (selected && (registered.handle !== window.handle || registered.processId !== window.processId)
+        ? await client.changeTarget(notificationId, window) : registered)
+      : await client.createSession(window, notificationId, autoDetected);
+  } catch (error) {
+    // 取得後に前面が変わった場合は候補を捨て、次回の確認で取り直す。
+    if (autoDetected && error instanceof ApiError && error.statusCode === 409) return;
+    throw error;
+  }
   if (!registered || !session || session.client.url !== client.url || session.window.handle !== window.handle || session.window.processId !== window.processId) {
     const binding = { client, id: created.sessionId, window };
     if (stopping) { await removeBinding(binding); return; }
     session = binding;
-    output.appendLine(`ウィンドウの通知先を登録: ${window.title} (HWND ${window.handle})`);
+    output.appendLine(`${autoDetected ? '前面ウィンドウから通知先を自動登録' : 'ウィンドウの通知先を登録'}: ${window.title} (HWND ${window.handle})`);
   }
   target = { apiUrl: client.url, window };
   waitingForConnection = false;
@@ -227,13 +274,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }));
   command('wpftaskbar.selectWindow', async () => {
     // 選択画面を開いている間も生存通知を続ける。
-    const { client } = configuration();
-    const window = await selectWindow(client, true);
-    if (window) await enqueue(() => connect({ apiUrl: client.url, window }), true);
+    manualSelectionPending++;
+    try {
+      const { client } = configuration();
+      const window = await selectWindow(client, true);
+      if (window) await enqueue(() => connect({ apiUrl: client.url, window }), true);
+    } finally { manualSelectionPending--; }
   });
   command('wpftaskbar.showLog', () => output.show());
   command('wpftaskbar.interruptTerminal', interruptTerminal);
   context.subscriptions.push(output,
+    // 一度外れて戻った場合も、取得開始時とは別のフォーカスとして扱う。
+    vscode.window.onDidChangeWindowState(() => { focusRevision++; }),
     vscode.window.onDidChangeActiveTerminal(() => { updateTerminalContext(); void syncTitle(); }),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('wpftaskbar')) void enqueue(() => connect(), true);

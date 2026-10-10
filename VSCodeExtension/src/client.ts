@@ -104,8 +104,22 @@ export class TaskbarClient {
     return codeWindows(response.tasks);
   }
 
-  async createSession(target: TaskWindow, sessionId?: string): Promise<Session> {
-    const session = await this.request('POST', '/tasks/sessions', { handle: target.handle, processId: target.processId, sessionId });
+  async foregroundWindow(): Promise<TaskWindow | undefined> {
+    const response = await this.request('GET', '/tasks/foreground');
+    if (!isRecord(response) || (response.task !== null && (!isTaskWindow(response.task)
+      || !Number.isInteger(response.task.handle) || response.task.handle === 0
+      || !Number.isInteger(response.task.processId) || response.task.processId <= 0
+      || codeWindows([response.task]).length !== 1))) {
+      throw new Error('WpfTaskBar API の前面ウィンドウが不正です。');
+    }
+    return response.task === null ? undefined : response.task as TaskWindow;
+  }
+
+  async createSession(target: TaskWindow, sessionId?: string, requireForeground = false): Promise<Session> {
+    const session = await this.request('POST', '/tasks/sessions', {
+      handle: target.handle, processId: target.processId, sessionId,
+      ...(requireForeground ? { requireForeground: true } : {}),
+    });
     if (!isRecord(session) || typeof session.sessionId !== 'string' || !/^[a-f0-9]{32}$/.test(session.sessionId)
       || session.handle !== target.handle || session.processId !== target.processId) {
       throw new Error('WpfTaskBar API が有効な通知先を返しませんでした。対応するバージョンの WpfTaskBar を起動してください。');

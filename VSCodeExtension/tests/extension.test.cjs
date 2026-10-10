@@ -48,6 +48,12 @@ function extension() {
   let activeTerminal;
   let onActiveTerminal;
   let onConfiguration;
+  let focused = true;
+  let onWindowState;
+  let foregroundHandle = 10;
+  let foregroundRequests = 0;
+  let foregroundError;
+  let onForeground;
   let windows = [
     { handle: 10, processId: 100, title: 'project A', moduleFileName: 'Code.exe' },
     { handle: 20, processId: 100, title: 'project B', moduleFileName: 'Code.exe' },
@@ -70,10 +76,18 @@ function extension() {
   class FakeClient {
     constructor(url) { this.url = url; }
     async windows() { if (windowsError) throw windowsError; return windows; }
-    async createSession(window, sessionId) {
-      requests.push({ ...window, apiUrl: this.url, sessionId });
+    async foregroundWindow() {
+      foregroundRequests++;
+      await onForeground?.();
+      if (foregroundError) throw foregroundError;
+      if (windowsError) throw windowsError;
+      return windows.find(window => window.handle === foregroundHandle);
+    }
+    async createSession(window, sessionId, requireForeground = false) {
+      requests.push({ ...window, apiUrl: this.url, sessionId, requireForeground });
       await onCreateSession?.();
       if (createError) throw createError;
+      if (requireForeground && foregroundHandle !== window.handle) throw new clientModule.ApiError(409, 'foreground changed');
       const result = { sessionId, handle: window.handle, processId: window.processId };
       sessions.set(this.url, result);
       return result;
@@ -116,6 +130,8 @@ function extension() {
       },
     },
     window: {
+      get state() { return { focused }; },
+      onDidChangeWindowState: listener => { onWindowState = listener; return {}; },
       get activeTerminal() { return activeTerminal; },
       onDidChangeActiveTerminal: listener => { onActiveTerminal = listener; return {}; },
       createOutputChannel: () => ({ appendLine: line => logs.push(line), show() {} }),
@@ -143,6 +159,11 @@ function extension() {
     ready, commands, environment, collection, timers, removed, renewed, requests, errors, warnings, config,
     titles, interrupted, sequences, contexts, logs, environmentChanges, changed, sessions,
     get picks() { return picks; },
+    get foregroundRequests() { return foregroundRequests; },
+    set focused(value) { focused = value; onWindowState?.({ focused }); },
+    set foregroundHandle(value) { foregroundHandle = value; },
+    set foregroundError(value) { foregroundError = value; },
+    set onForeground(value) { onForeground = value; },
     set windows(value) { windows = value; },
     set selection(value) { selection = value; },
     set renewError(value) { renewError = value; },
@@ -164,10 +185,10 @@ function extension() {
   };
 }
 
-test('拡張起動時に選択を必須にし、ターミナル作成前に環境変数を設定する', async () => {
+test('フォーカス中の起動では前面ウィンドウへ自動登録し、先に環境変数を設定する', async () => {
   const ext = extension();
   await ext.ready;
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   assert.deepEqual(ext.requests.map(window => window.handle), [10]);
   assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
   assert.equal(ext.environment.get('WPF_TASKBAR_URL').value, 'http://192.0.2.1:5000');
@@ -194,10 +215,163 @@ test('通常のターミナルを切り替え、すべて閉じても同じウ�
   assert.equal(ext.timers.size, 0);
 });
 
-test('初回選択をキャンセルすると未登録のまま待ち、明示的に選ぶまで通知しない', async () => {
+test('一覧の先頭や同名・同じPIDではなく、前面のHWNDを登録する', async () => {
   const ext = extension();
+  ext.windows = [10, 20].map(handle => ({ handle, processId: 100, title: 'same project', moduleFileName: 'Code.exe' }));
+  ext.foregroundHandle = 20;
+  await ext.ready;
+  assert.equal(ext.picks, 0);
+  assert.deepEqual(ext.requests.map(request => [request.handle, request.requireForeground]), [[20, true]]);
+  assert.ok(ext.logs.some(line => line.includes('自動登録')));
+  await ext.deactivate();
+});
+
+test('背景で起動した拡張は登録や選択画面を出さず、フォーカス後に自動登録する', async () => {
+  const ext = extension();
+  ext.focused = false;
+  await ext.ready;
+  await ext.heartbeat();
+  assert.equal(ext.foregroundRequests, 0);
+  assert.equal(ext.requests.length, 0);
+  assert.equal(ext.picks, 0);
+  assert.equal(ext.environment.get('WPF_TASKBAR_SESSION_ID').value, 'session-1');
+  ext.focused = true;
+  ext.foregroundHandle = 20;
+  await ext.heartbeat();
+  assert.deepEqual(ext.requests.map(request => request.handle), [20]);
+  assert.equal(ext.environmentChanges.length, 3);
+  await ext.deactivate();
+});
+
+for (const returnsFocus of [false, true]) {
+  test(`前面取得中にフォーカスが変わったら候補を捨てる（復帰=${returnsFocus}）`, async () => {
+    const ext = extension();
+    ext.onForeground = () => {
+      ext.focused = false;
+      if (returnsFocus) ext.focused = true;
+    };
+    await ext.ready;
+    assert.equal(ext.requests.length, 0);
+    assert.equal(ext.picks, 0);
+    ext.onForeground = undefined;
+    ext.focused = true;
+    ext.foregroundHandle = 20;
+    await ext.heartbeat();
+    assert.deepEqual(ext.requests.map(request => request.handle), [20]);
+    await ext.deactivate();
+  });
+}
+
+test('取得後に前面が変わり本体が登録を拒否した場合、古い候補を記憶しない', async () => {
+  const ext = extension();
+  ext.onCreateSession = () => { ext.foregroundHandle = 20; ext.focused = false; };
+  await ext.ready;
+  assert.equal(ext.sessions.size, 0);
+  assert.equal(ext.errors.length, 0);
+  assert.equal(ext.picks, 0);
+  ext.onCreateSession = undefined;
+  await ext.heartbeat();
+  assert.equal(ext.requests.length, 1);
+  ext.focused = true;
+  await ext.heartbeat();
+  assert.deepEqual(ext.requests.map(request => [request.handle, request.requireForeground]), [[10, true], [20, true]]);
+  assert.equal(ext.sessions.get(ext.config.apiUrl).handle, 20);
+  await ext.deactivate();
+});
+
+test('自動登録後のフォーカス移動や本体再起動で通知先を別ウィンドウへ変えない', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.focused = false;
+  ext.foregroundHandle = 20;
+  await ext.heartbeat();
+  ext.renewError = new clientModule.ApiError(404, 'restarted');
+  await ext.heartbeat();
+  assert.deepEqual(ext.requests.map(request => [request.handle, request.requireForeground]), [[10, true], [10, false]]);
+  assert.equal(ext.foregroundRequests, 1);
+  assert.equal(ext.picks, 0);
+  await ext.deactivate();
+});
+
+test('手動で変更した通知先は自分のウィンドウが前面でも維持する', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.selection = 1;
+  await ext.select();
+  ext.focused = false;
+  ext.focused = true;
+  await ext.heartbeat();
+  await ext.configure();
+  assert.equal(ext.sessions.get(ext.config.apiUrl).handle, 20);
+  assert.equal(ext.changed.length, 1);
+  assert.equal(ext.foregroundRequests, 1);
+  await ext.deactivate();
+});
+
+test('前面取得APIがない本体では手動選択へ戻る', async () => {
+  const ext = extension();
+  ext.foregroundError = new clientModule.ApiError(404, 'unsupported');
+  ext.selection = 1;
+  await ext.ready;
+  assert.equal(ext.picks, 1);
+  assert.deepEqual(ext.requests.map(request => [request.handle, request.requireForeground]), [[20, false]]);
+  await ext.deactivate();
+});
+
+test('前面取得中のAPI接続先変更では古い接続先へ登録しない', async () => {
+  const ext = extension();
+  ext.onForeground = () => { ext.config.apiUrl = 'http://localhost:6000'; };
+  await ext.ready;
+  assert.equal(ext.requests.length, 0);
+  ext.onForeground = undefined;
+  await ext.heartbeat();
+  assert.equal(ext.requests[0].apiUrl, ext.config.apiUrl);
+  await ext.deactivate();
+});
+
+test('未登録で手動選択中は定期確認が自動登録を割り込ませない', async () => {
+  const ext = extension();
+  ext.focused = false;
+  await ext.ready;
+  let release;
+  ext.onPick = () => new Promise(resolve => { release = resolve; });
+  ext.focused = true;
+  ext.selection = 1;
+  const selected = ext.select();
+  await settle();
+  await ext.heartbeat();
+  assert.equal(ext.requests.length, 0);
+  assert.equal(ext.foregroundRequests, 0);
+  release();
+  await selected;
+  assert.deepEqual(ext.requests.map(request => [request.handle, request.requireForeground]), [[20, false]]);
+  await ext.deactivate();
+});
+
+test('前面取得中に手動選択をキャンセルした場合も遅れた応答で自動登録しない', async () => {
+  const ext = extension();
+  let release;
+  ext.onForeground = () => new Promise(resolve => { release = resolve; });
+  await settle();
+  ext.selection = -1;
+  await ext.select();
+  release();
+  await ext.ready;
+  await ext.heartbeat();
+  assert.equal(ext.picks, 1);
+  assert.equal(ext.requests.length, 0);
+  assert.equal(ext.foregroundRequests, 1);
+  await ext.deactivate();
+});
+
+test('自動判定できず手動選択をキャンセルすると未登録で待機する', async () => {
+  const ext = extension();
+  ext.foregroundHandle = 0;
   ext.selection = -1;
   await ext.ready;
+  ext.foregroundHandle = 10;
+  ext.focused = false;
+  ext.focused = true;
   await ext.heartbeat();
   await ext.heartbeat();
   assert.equal(ext.picks, 1);
@@ -210,7 +384,22 @@ test('初回選択をキャンセルすると未登録のまま待ち、明示�
   await ext.deactivate();
 });
 
-test('候補が1つでも通知先の選択を省略しない', async () => {
+test('登録済みの通知先の選び直しをキャンセルしても背景で同じ通知先へ再接続する', async () => {
+  const ext = extension();
+  await ext.ready;
+  ext.selection = -1;
+  await ext.select();
+  ext.focused = false;
+  ext.foregroundHandle = 20;
+  ext.renewError = new clientModule.ApiError(404, 'restarted');
+  await ext.heartbeat();
+  assert.deepEqual(ext.requests.map(request => request.handle), [10, 10]);
+  assert.equal(ext.foregroundRequests, 1);
+  assert.equal(ext.environmentChanges.length, 3);
+  await ext.deactivate();
+});
+
+test('前面の確認ができない場合は候補が1つでも手動選択する', async () => {
   const ext = extension();
   ext.windows = [{ handle: 20, processId: 100, title: 'only window', moduleFileName: 'Code.exe' }];
   ext.selection = -1;
@@ -229,7 +418,7 @@ test('タスクバー側の変更を生存通知で取り込み、本体再起�
   await ext.heartbeat();
   assert.deepEqual(ext.requests.map(window => window.handle), [10, 20]);
   assert.deepEqual(ext.requests.map(window => window.sessionId), ['session-1', 'session-1']);
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   assert.equal(ext.changed.length, 0);
   assert.equal(ext.environmentChanges.length, 3);
   await ext.deactivate();
@@ -245,7 +434,7 @@ test('再接続時にも本体側の通知先を読み、古い紐付けで上�
   await ext.heartbeat();
   assert.equal(ext.requests.length, 1);
   assert.equal(ext.changed.length, 0);
-  assert.equal(ext.picks, 1);
+  assert.equal(ext.picks, 0);
   assert.equal(ext.sessions.get(ext.config.apiUrl).handle, 20);
   await ext.deactivate();
 });
@@ -345,7 +534,7 @@ test('手動選択で同じIDの通知先を変更し、キャンセル・同じ
   assert.equal(ext.requests.length, 1);
   assert.equal(ext.changed.length, 1);
   assert.equal(ext.environmentChanges.length, 3);
-  assert.equal(ext.picks, 4);
+  assert.equal(ext.picks, 3);
   await ext.deactivate();
 });
 

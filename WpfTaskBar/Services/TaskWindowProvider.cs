@@ -4,6 +4,8 @@ namespace WpfTaskBar;
 
 public sealed class TaskWindowProvider : ITaskWindowProvider
 {
+	public int GetForegroundHandle() => NativeMethods.GetForegroundWindow().ToInt32();
+
 	public IReadOnlyList<TaskWindow> GetWindows()
 	{
 		var windows = new List<TaskWindow>();

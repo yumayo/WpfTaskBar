@@ -19,6 +19,8 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 			window.Handle == request.Handle && window.ProcessId == request.ProcessId);
 		if (target == null || !target.IsVsCode())
 			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
+		if (request.RequireForeground && windows.GetForegroundHandle() != target.Handle)
+			return Conflict(new { message = "前面のウィンドウが変わりました。自動登録をやり直してください。" });
 
 		var session = request.SessionId == null
 			? statuses.CreateSession(target.Handle, target.ProcessId)

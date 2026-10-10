@@ -39,6 +39,43 @@ test('接続先の不正な URL を通知前に拒否する', () => {
   }
 });
 
+test('前面取得APIのHWNDを返し、候補なしと不正な応答を区別する', async () => {
+  const client = new TaskbarClient('http://localhost:5000');
+  const task = { handle: 20, processId: 100, title: 'project', moduleFileName: 'Code.exe' };
+  client.request = async (method, path) => {
+    assert.equal(method, 'GET');
+    assert.equal(path, '/tasks/foreground');
+    return { task };
+  };
+  assert.deepEqual(await client.foregroundWindow(), task);
+  client.request = async () => ({ task: null });
+  assert.equal(await client.foregroundWindow(), undefined);
+  for (const response of [undefined, {}, { task: {} }, { task: { ...task, handle: 0 } },
+    { task: { ...task, processId: -1 } }, { task: { ...task, moduleFileName: 'NotCode.exe' } }]) {
+    client.request = async () => response;
+    await assert.rejects(client.foregroundWindow(), /前面ウィンドウが不正/);
+  }
+});
+
+test('自動登録だけは登録直前の前面確認を要求する', async () => {
+  const client = new TaskbarClient('http://localhost:5000');
+  const id = '0123456789abcdef0123456789abcdef';
+  const task = { handle: 20, processId: 100 };
+  const bodies = [];
+  client.request = async (method, path, body) => {
+    assert.equal(method, 'POST');
+    assert.equal(path, '/tasks/sessions');
+    bodies.push(body);
+    return { ...task, sessionId: id };
+  };
+  await client.createSession(task, id, true);
+  await client.createSession(task, id);
+  assert.deepEqual(bodies, [
+    { ...task, sessionId: id, requireForeground: true },
+    { ...task, sessionId: id },
+  ]);
+});
+
 test('HTTP 経由で一覧取得・登録・生存通知・削除を実行する', { skip: skipNetwork }, async t => {
   const requests = [];
   const id = '0123456789abcdef0123456789abcdef';

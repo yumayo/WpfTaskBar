@@ -8,6 +8,8 @@ public sealed class TaskSessionRequest
 	public int ProcessId { get; set; }
 	[RegularExpression("^[a-f0-9]{32}$")]
 	public string? SessionId { get; set; }
+	// 自動判定時だけ、取得したウィンドウが登録直前も前面にあることを要求する。
+	public bool RequireForeground { get; set; }
 }
 
 public sealed class TaskSessionTargetRequest

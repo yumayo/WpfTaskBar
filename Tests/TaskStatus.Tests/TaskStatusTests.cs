@@ -120,6 +120,7 @@ public sealed class TaskStatusTests
 
 	private sealed class Windows : ITaskWindowProvider
 	{
+		public int GetForegroundHandle() => 0;
 		public IReadOnlyList<TaskWindow> GetWindows() => new[]
 		{
 			new TaskWindow(10, 100, "project-a - Terminal", "terminal.exe"),

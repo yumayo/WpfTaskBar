@@ -11,6 +11,17 @@ public sealed class TaskStatusController(ITaskWindowProvider windows, TaskStatus
 		return Ok(new { tasks = windows.GetWindows().Select(ToResponse).ToArray() });
 	}
 
+	[HttpGet("tasks/foreground")]
+	public IActionResult GetForegroundTask()
+	{
+		var handle = windows.GetForegroundHandle();
+		var target = handle == 0 ? null : windows.GetWindows().FirstOrDefault(window =>
+			window.Handle == handle && window.IsVsCode());
+		// 列挙中に前面が変わった場合や、VSCode以外が前面の場合は候補を返さない。
+		if (windows.GetForegroundHandle() != handle) target = null;
+		return Ok(new { task = target == null ? null : ToResponse(target) });
+	}
+
 	[HttpPost("tasks/status")]
 	public IActionResult SetStatus([FromBody] TaskStatusRequest request)
 	{
