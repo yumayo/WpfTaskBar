@@ -101,7 +101,7 @@ WSL から接続する場合、必要に応じて `localhost` を Windows ホス
 拡張の起動時にウィンドウ共通のセッションIDを用意し、通常の統合ターミナルへ環境変数を設定します。
 通知IDと環境変数はワークスペースごとに保存し、VSCodeの再起動・再読み込み後も引き継ぎます。同じIDと通知先URLを使う復元ターミナル・コンテナは開き直し不要です。0.1.9以前からの更新時だけは、保存済みIDがないため一度開き直してください。
 WpfTaskBarが未起動でもエラー通知は出さず、1秒間隔で接続・生存確認します（前回の処理完了から1秒後に再確認）。初回は自分のVSCodeにフォーカスがある間に前面のHWNDを取得して自動登録します。本体の再起動時には同じID・通知先で再登録するため、そのIDを引き継いだコンテナは再起動せずに通知を再開できます。
-更新版は `VSCodeExtension/wpftaskbar-ai-status-0.1.10.vsix` です。前面ウィンドウの取得・登録時の確認に対応するWpfTaskBar本体も更新してください。
+更新版は `VSCodeExtension/wpftaskbar-ai-status-0.1.11.vsix` です。前面ウィンドウの取得・登録時の確認に対応するWpfTaskBar本体も更新してください。
 通常の「＋」からターミナルを開き、通知先の環境変数を `aicontainer` / `docker compose` に渡します。
 コンテナ内の AI フックから共通の `python3 wpftaskbar.py running|waiting|interrupted|completed|none` を呼び出します。
 

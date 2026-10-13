@@ -92,6 +92,47 @@ test('Claudeの本文だけを抜粋し、ツール結果・サブエージェ�
     { status: 'interrupted', onlyIfActive: true, activityText: '不具合の原因を調査しています。' });
 });
 
+test('Claudeはサブエージェント待機中のStopでも回転表示を維持し、親の最終応答で完了する', { skip: process.platform === 'win32' }, async t => {
+  const f = await fixture(t);
+  const stop = (background_tasks, text = 'サブエージェントの結果を待っています。') =>
+    f.invoke('completed', { hook_event_name: 'Stop', background_tasks, last_assistant_message: text });
+  const agents = [
+    { id: 'agent-a', type: 'subagent', status: 'running' },
+    { id: 'agent-b', type: 'subagent', status: 'pending' },
+  ];
+  assert.deepEqual((await f.invoke('running')).payload, { status: 'running' });
+  for (const tasks of [agents, agents.slice(0, 1), agents.slice(1)]) {
+    const result = await stop(tasks);
+    // Escによる中断・終了後に遅れて届いても、処理中へ戻さない。
+    assert.deepEqual(result.payload, {
+      status: 'running', onlyIfActive: true, activityText: 'サブエージェントの結果を待っています。',
+    });
+    assert.equal(result.args[result.args.indexOf('--request') + 1], 'POST');
+    assert.match(result.args.at(-1), /\/status$/);
+  }
+  assert.deepEqual((await f.invoke('resume', { hook_event_name: 'PostToolUse' })).payload,
+    { status: 'running', onlyIfActive: true });
+  assert.deepEqual((await stop([], '調査結果をまとめました。')).payload,
+    { status: 'completed', activityText: '調査結果をまとめました。' });
+});
+
+test('Stopの完了補正は稼働中のバックグラウンド処理だけに適用する', { skip: process.platform === 'win32' }, async t => {
+  const f = await fixture(t);
+  for (const background_tasks of [undefined, null, {}, 'running', [], [null, 'running', {}],
+    [{ status: 'completed' }, { status: 'failed' }, { status: 'killed' }]]) {
+    assert.deepEqual((await f.invoke('completed', { hook_event_name: 'Stop', background_tasks })).payload,
+      { status: 'completed' });
+  }
+  const background_tasks = [null, { type: 'shell', status: 'running' }];
+  assert.deepEqual((await f.invoke('completed', { hook_event_name: 'Stop', background_tasks })).payload,
+    { status: 'running', onlyIfActive: true });
+  // 手動通知と、質問・中断・終了などの明示的な通知は補正しない。
+  assert.deepEqual((await f.invoke('completed', { background_tasks })).payload, { status: 'completed' });
+  for (const [action, event] of [['waiting', 'PermissionRequest'], ['interrupted', 'StopFailure'], ['none', 'SessionEnd']]) {
+    assert.deepEqual((await f.invoke(action, { hook_event_name: event, background_tasks })).payload, { status: action });
+  }
+});
+
 test('長いログの末尾を読み、日本語や絵文字を壊さず120文字に収める', { skip: process.platform === 'win32' }, async t => {
   const f = await fixture(t);
   await f.write([

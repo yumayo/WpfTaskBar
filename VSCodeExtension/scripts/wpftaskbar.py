@@ -122,6 +122,14 @@ def build_payload(action, data):
     payload = {} if action == "activity" else {"status": status}
     if action in ("resume", "tool-failed"):
         payload["onlyIfActive"] = True
+    # ClaudeのStopは、バックグラウンドのサブエージェントを待つ間にも発生する。
+    # Claude自身が渡す一覧で判定し、子の終了後に親が応答を終えたStopで完了にする。
+    background_tasks = data.get("background_tasks")
+    if (action == "completed" and data.get("hook_event_name") == "Stop"
+            and isinstance(background_tasks, list) and any(
+                isinstance(task, dict) and task.get("status") in ("running", "pending")
+                for task in background_tasks)):
+        payload.update(status="running", onlyIfActive=True)
     # 依頼開始と終了では、以前の発言を再送しない。
     if action not in ("running", "none"):
         text = data.get("last_assistant_message") if action == "completed" else None

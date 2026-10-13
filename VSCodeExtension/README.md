@@ -17,7 +17,7 @@ AI の開始・終了の判定は AI 側のフックが行います。コンテ�
 
 ## インストール
 
-このリポジトリの WpfTaskBar をビルドします。拡張 0.1.10 の自動登録には前面ウィンドウの取得と登録時の確認に対応した本体が必要なので、本体も更新してください。本体と VSCode の起動順は問いません。
+このリポジトリの WpfTaskBar をビルドします。拡張 0.1.11 の自動登録には前面ウィンドウの取得と登録時の確認に対応した本体が必要なので、本体も更新してください。本体と VSCode の起動順は問いません。
 拡張をパッケージ化します（Node.js 24 LTS 推奨）。
 
 ```sh
@@ -39,8 +39,10 @@ npm run package
 
 `package.json` と `package-lock.json` が更新されます。グローバルインストールは不要です。
 
-Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.10.vsix` を選択してください。
+Windows 側の VSCode の「拡張機能: VSIX からのインストール」で、生成された `wpftaskbar-ai-status-0.1.11.vsix` を選択してください。
 Remote - WSL 使用時も拡張は Windows 側で動きます。
+
+0.1.11 では、Claude がサブエージェントなどのバックグラウンド処理を待っている間も回転表示を維持します。反映には、Claude を実行するコンテナ内で `python3 VSCodeExtension/scripts/install-claude-hooks.py` を再実行して通知スクリプトを更新し、Claude を起動し直してください。VSIX の更新だけでは配置済みのフックスクリプトは更新されません。
 
 0.1.10 から通知 ID と環境変数をワークスペースごとに保存し、同じワークスペースの再起動・再読み込み後も引き継ぎます。値が変わらない限り環境変数を書き換えないため、通常の再起動でこの拡張がターミナルの再起動を要求する原因をなくしています。0.1.9 以前からの更新時は ID が保存されていないため、ターミナルとコンテナを一度開き直してください。
 
@@ -347,9 +349,13 @@ Claude Codeでも同じ `wpftaskbar.py` を使います。
 | `PostToolUse` | `resume`（実行中・待ちの間だけ `running` に戻す） |
 | `PostToolUseFailure` | `is_interrupt: true` なら `interrupted`、それ以外は `resume` |
 | `Elicitation` / `ElicitationResult`（MCPの質問・回答） | `waiting` / `resume` |
-| `Stop` | `completed` |
+| `Stop` | バックグラウンド処理が実行・待機中なら `running`、なければ `completed` |
 | `StopFailure`（APIエラーで応答が終了） | `interrupted` |
 | `SessionEnd`（終了・会話のクリアなど） | `none` |
+
+`Stop` は、親がサブエージェントの結果を待つために応答を止めた場合にも発生します。入力の `background_tasks` に `running` / `pending` の処理がある間は回転表示を維持し、すべて終了して親が最終応答を終えた `Stop` で完了にします。子が1つ終了しただけでは完了にせず、`SubagentStop` に完了通知は登録しません。人間への質問・承認待ちは従来どおり `waiting` です。遅れて届いた待機中の `Stop` で中断・終了済みの表示を戻さないよう、`onlyIfActive` を付けます。
+
+この判定には `background_tasks` を渡す Claude Code が必要です（開発環境の `2.1.291` で定義を確認）。このフィールドがない旧版は従来の完了判定になるため、Claude Code も更新してください。
 
 #### 手動で設定する場合
 
@@ -477,6 +483,7 @@ python3 VSCodeExtension/scripts/install-claude-hooks.py
 #### 動作確認と中断時の扱い
 
 開発環境のClaude Code `2.1.291` のイベント定義で確認しています。登録後は短い依頼を2回送り、毎回「実行中 → 完了」に変わることと、通常終了で表示が消えることを確認してください。
+バックグラウンドのサブエージェントを複数動かす依頼でも、親が結果を待つ間と一部の子だけが終了した時点では回転表示が続き、親が結果をまとめた後に完了になることを確認してください。
 `Stop` は応答が終わったことを表し、作業成功の判定には使いません。他の停止フックが応答を継続させる場合は、処理中でも完了表示になる場合があります。
 
 Claude Codeには `Interrupt` フックがないため、VSCode拡張がセッション登録済みのウィンドウの統合ターミナル内でEscを補足します。

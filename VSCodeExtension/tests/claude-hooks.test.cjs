@@ -74,6 +74,19 @@ test('Claude共通フックは既存の権限・環境変数・フックを保�
   }
   assert.equal(config.hooks.SubagentStop, undefined);
   assert.equal(config.hooks.Interrupt, undefined);
+
+  // 登録済みのStopコマンドでも、子の待機中は完了を送らない。
+  const stopHandler = config.hooks.Stop.at(-1).hooks[0];
+  for (const [background_tasks, expected] of [
+    [[{ id: 'child', type: 'subagent', status: 'running' }], { status: 'running', onlyIfActive: true }],
+    [[], { status: 'completed' }],
+  ]) {
+    const execution = run('sh', ['-c', stopHandler.command], { env, cwd: dir });
+    execution.child.stdin.end(JSON.stringify({ hook_event_name: 'Stop', background_tasks }));
+    assert.equal((await execution).stdout, '');
+    const args = (await fs.readFile(capture, 'utf8')).trim().split('\n');
+    assert.deepEqual(JSON.parse(args[args.indexOf('--data') + 1]), expected);
+  }
 });
 
 test('Claude設定の配置先を環境変数から選び、壊れた既存設定は上書きしない', { skip: process.platform === 'win32' }, async t => {
