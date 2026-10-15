@@ -17,6 +17,9 @@ public class NativeMethods
 	public static readonly ulong WS_EX_NOACTIVATE = 0x08000000L;
 
 	public static readonly int HWND_TOPMOST = -1;
+	public static readonly int SWP_NOSIZE = 0x0001;
+	public static readonly int SWP_NOMOVE = 0x0002;
+	public static readonly int SWP_NOACTIVATE = 0x0010;
 	public static readonly int SWP_SHOWWINDOW = 0x0040;
 
 	public static readonly int ABE_LEFT = 0;

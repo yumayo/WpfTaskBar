@@ -103,6 +103,21 @@ public partial class MainWindow : Window
 		NativeMethods.SHAppBarMessage(NativeMethods.ABM_SETPOS, ref barData);
 	}
 
+	internal void EnsureTopmost()
+	{
+		IntPtr handle = new WindowInteropHelper(this).Handle;
+		if (handle == IntPtr.Zero || _isMinimizedToTray)
+		{
+			return;
+		}
+
+		if (!NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+			NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE))
+		{
+			Logger.Warning($"タスクバーの最前面表示の再設定に失敗しました。Win32Error={Marshal.GetLastWin32Error()}");
+		}
+	}
+
 	private void ReleaseTaskBarRect()
 	{
 		if (!_isAppBarRegistered)

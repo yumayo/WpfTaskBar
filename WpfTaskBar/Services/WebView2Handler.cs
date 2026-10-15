@@ -210,6 +210,13 @@ using WpfApplication = System.Windows.Application;
 		{
 			switch (messageType)
 			{
+				case "ensure_taskbar_topmost":
+					if (WpfApplication.Current.MainWindow is MainWindow mainWindow)
+					{
+						mainWindow.EnsureTopmost();
+					}
+					break;
+
 				case "request_window_handles":
 					HandleRequestWindowHandles();
 					break;
