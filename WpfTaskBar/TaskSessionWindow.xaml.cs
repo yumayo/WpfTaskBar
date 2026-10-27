@@ -18,7 +18,7 @@ public partial class TaskSessionWindow : Window
 
 	private void RefreshChoices()
 	{
-		var windows = _windows.GetWindows().Where(window => window.IsVsCode()).ToArray();
+		var windows = _windows.GetWindows();
 		TargetComboBox.ItemsSource = windows.Select(window => new WindowChoice(window,
 			$"{window.Title} (HWND {window.Handle} / PID {window.ProcessId})")).ToArray();
 		SessionComboBox.ItemsSource = _statuses.GetSessions().Select(session =>
@@ -28,7 +28,7 @@ public partial class TaskSessionWindow : Window
 				$"{window?.Title ?? "接続先なし"} / {session.TerminalTitle} / ID {session.Id[..8]}");
 		}).ToArray();
 		StatusText.Text = SessionComboBox.Items.Count == 0
-			? "登録済みの通知がありません。VSCodeで「この VSCode の通知先を選択」を実行してください。"
+			? "登録済みの通知がありません。通知元アプリケーションで通知先のウィンドウを登録してください。"
 			: "変更する通知と、変更後の表示先を選択してください。";
 		UpdateApplyButton();
 	}
@@ -51,7 +51,7 @@ public partial class TaskSessionWindow : Window
 			TargetComboBox.SelectedItem is not WindowChoice selected) return;
 		var target = selected.Window;
 		if (!_windows.GetWindows().Any(window => window.Handle == target.Handle &&
-			window.ProcessId == target.ProcessId && window.IsVsCode()))
+			window.ProcessId == target.ProcessId))
 		{
 			StatusText.Text = "選択したウィンドウが見つかりません。一覧を更新して選び直してください。";
 			return;

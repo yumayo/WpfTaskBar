@@ -16,6 +16,46 @@ public sealed class TaskSessionTests
 		_controller = new TaskSessionsController(_windows, _statuses);
 	}
 
+	[Theory]
+	[InlineData("WindowsTerminal.exe")]
+	[InlineData(@"C:\Windows\System32\notepad.exe")]
+	[InlineData("")]
+	public void AnyApplicationCanRegisterReceiveNotificationsAndRenew(string executable)
+	{
+		_windows.Items[2] = _windows.Items[2] with { ModuleFileName = executable };
+		var response = JsonSerializer.SerializeToElement(Assert.IsType<OkObjectResult>(
+			_controller.CreateSession(new() { Handle = 30, ProcessId = 300 })).Value);
+		var id = response.GetProperty("sessionId").GetString()!;
+		Assert.IsType<OkObjectResult>(_controller.GetSession(id));
+		SetTitle(id, "AI ターミナル");
+		SetStatus(id, "running");
+		Assert.IsType<NoContentResult>(_controller.SetActivity(id, new() { ActivityText = "調査中" }));
+		Assert.Equal(new TaskWindowState("running", true, "AI ターミナル", "調査中"),
+			_statuses.GetWindowState(30, 300));
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		Assert.IsType<OkObjectResult>(_controller.Heartbeat(id));
+		_clock.Advance(TimeSpan.FromSeconds(90));
+		SetStatus(id, "completed");
+		Assert.Equal("completed", _statuses.GetStatus(30, 300));
+		Assert.IsType<NoContentResult>(_controller.DeleteSession(id));
+		Assert.False(_statuses.GetWindowState(30, 300).HasAiTask);
+	}
+
+	[Fact]
+	public void ChangingTargetToAnotherApplicationPreservesNotificationsAndChecksWindowLifetime()
+	{
+		var id = CreateSession();
+		SetStatus(id, "running");
+		Assert.IsType<OkObjectResult>(_controller.ChangeTarget(id, new() { Handle = 30, ProcessId = 300 }));
+		Assert.Equal("none", _statuses.GetStatus(10, 100));
+		Assert.Equal("running", _statuses.GetStatus(30, 300));
+		SetStatus(id, "waiting");
+		Assert.IsType<OkObjectResult>(_controller.Heartbeat(id));
+		_windows.Items[2] = _windows.Items[2] with { ProcessId = 999 };
+		Assert.IsType<NotFoundObjectResult>(_controller.SetStatus(id, new() { Status = "completed" }));
+		Assert.Null(_statuses.GetSession(id));
+	}
+
 	[Fact]
 	public void ReconnectAfterRestartAcceptsNotificationsFromExistingContainer()
 	{
@@ -77,7 +117,6 @@ public sealed class TaskSessionTests
 	[InlineData(0, 100, true)]
 	[InlineData(20, 0, true)]
 	[InlineData(20, 999, false)]
-	[InlineData(30, 300, false)]
 	[InlineData(999, 100, false)]
 	public void InvalidTargetChangesLeaveTheOriginalBindingUntouched(int handle, int processId, bool badRequest)
 	{
@@ -192,8 +231,7 @@ public sealed class TaskSessionTests
 	[InlineData(10, -1, true)]
 	[InlineData(10, 999, false)]
 	[InlineData(999, 100, false)]
-	[InlineData(30, 300, false)]
-	public void InvalidOrNonVsCodeTargetsCannotBeRegistered(int handle, int processId, bool badRequest)
+	public void InvalidOrMissingTargetsCannotBeRegistered(int handle, int processId, bool badRequest)
 	{
 		var result = _controller.CreateSession(new() { Handle = handle, ProcessId = processId });
 		if (badRequest) Assert.IsType<BadRequestObjectResult>(result);

@@ -12,7 +12,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock Text="通知IDを維持したまま、表示先のVSCodeウィンドウを変更します。ターミナルやコンテナの再起動は不要です。"
+        <TextBlock Text="通知IDを維持したまま、表示先のウィンドウを変更します。ターミナルやコンテナの再起動は不要です。"
                    TextWrapping="Wrap" Margin="0,0,0,16" />
         <StackPanel Grid.Row="1" Margin="0,0,0,12">
             <Label Content="変更する通知" Target="{Binding ElementName=SessionComboBox}" Padding="0,0,0,4" />

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace WpfTaskBar;
 
-// VSCode 拡張がウィンドウを選び、コンテナは発行されたセッション ID だけで通知する。
+// アプリケーションを問わずウィンドウを登録し、コンテナはセッション ID で通知する。
 [ApiController]
 public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStatusStore statuses) : ControllerBase
 {
@@ -17,8 +17,8 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 
 		var target = windows.GetWindows().FirstOrDefault(window =>
 			window.Handle == request.Handle && window.ProcessId == request.ProcessId);
-		if (target == null || !target.IsVsCode())
-			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
+		if (target == null)
+			return NotFound(new { message = "対象のウィンドウが見つかりません。" });
 		if (request.RequireForeground && windows.GetForegroundHandle() != target.Handle)
 			return Conflict(new { message = "前面のウィンドウが変わりました。自動登録をやり直してください。" });
 
@@ -35,7 +35,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId))
 		{
 			statuses.RemoveSession(id, session);
 			return SessionNotFound();
@@ -49,8 +49,8 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		if (request.Handle == 0 || request.ProcessId <= 0)
 			return BadRequest(new { message = "handle と processId を指定してください。" });
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == request.Handle && window.ProcessId == request.ProcessId && window.IsVsCode()))
-			return NotFound(new { message = "対象の VSCode ウィンドウが見つかりません。" });
+			window.Handle == request.Handle && window.ProcessId == request.ProcessId))
+			return NotFound(new { message = "対象のウィンドウが見つかりません。" });
 		var session = statuses.ReassignSession(id, request.Handle, request.ProcessId);
 		return session == null ? SessionNotFound() : SessionResponse(session);
 	}
@@ -66,7 +66,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		var target = windows.GetWindows().FirstOrDefault(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode());
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId);
 		if (target == null)
 		{
 			statuses.RemoveSession(id, session);
@@ -91,7 +91,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId))
 		{
 			statuses.RemoveSession(id, session);
 			return SessionNotFound();
@@ -107,7 +107,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId))
 		{
 			statuses.RemoveSession(id, session);
 			return SessionNotFound();
@@ -121,7 +121,7 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		var session = statuses.GetSession(id);
 		if (session == null) return SessionNotFound();
 		if (!windows.GetWindows().Any(window =>
-			window.Handle == session.Handle && window.ProcessId == session.ProcessId && window.IsVsCode()))
+			window.Handle == session.Handle && window.ProcessId == session.ProcessId))
 		{
 			statuses.RemoveSession(id, session);
 			return SessionNotFound();
@@ -136,6 +136,6 @@ public sealed class TaskSessionsController(ITaskWindowProvider windows, TaskStat
 		Ok(new { sessionId = session.Id, handle = session.Handle, processId = session.ProcessId });
 
 	private NotFoundObjectResult SessionNotFound() =>
-		NotFound(new { message = "通知先のセッションがありません。VSCode 拡張で通知先を選び直してください。" });
+		NotFound(new { message = "通知先のセッションがありません。対象のウィンドウを登録し直してください。" });
 
 }

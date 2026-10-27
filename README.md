@@ -94,6 +94,32 @@ WSL から接続する場合、必要に応じて `localhost` を Windows ホス
 状態はウィンドウ単位で保持し、ウィンドウを閉じたとき、または WpfTaskBar を再起動したときにリセットします。
 ターミナル内のタブや AI セッション単位ではなく、タスクバーに表示されるウィンドウ単位の状態です。
 
+## 任意のアプリケーションからの AI 通知
+
+状態表示 API はアプリケーションの種類を問いません。Windows Terminal などにも、上記の `POST /tasks/status` で `handle` または `title` を指定して通知できます。
+進捗文の表示や、コンテナから同じ通知先へ継続して送るためのセッション API も、VSCode 以外のウィンドウに対応しています。
+`GET /tasks` の `handle` と `processId` を使って登録します。
+
+```sh
+curl -X POST "http://localhost:5000/tasks/sessions" \
+  -H "Content-Type: application/json" \
+  -d '{"handle":123456,"processId":1234}'
+# {"sessionId":"32文字の小文字16進数","handle":123456,"processId":1234}
+
+curl -X POST "http://localhost:5000/tasks/sessions/<sessionId>/status" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"running","activityText":"処理しています。"}'
+```
+
+セッション利用時は `PUT /tasks/sessions/<sessionId>/heartbeat` を2分以内の間隔で呼んで登録を維持し、終了時は `DELETE /tasks/sessions/<sessionId>` で解除します。
+ウィンドウを閉じた場合や、同じHWNDが別のプロセスに再利用された場合は通知を受け付けません。
+タスクバーの「AI通知先を変更」では、任意のアプリケーションのウィンドウへ、ID・状態・本文を維持したまま通知先を変更できます。
+VSCode 用の自動登録・前面取得 API は引き続き VSCode のウィンドウを対象とします。
+
+HTTP の接続情報はIPアドレスとポートであり、送信元のPIDやHWNDは含まれません。
+特にWSL・コンテナ越しでは接続元のプロセスからWindows側の元のアプリケーションを特定できるとは限りません。
+PIDが分かっても1つのプロセスに複数のウィンドウがある場合はHWNDを一意に決められないため、通知先を区別する情報が必要です。
+
 ## VSCode の AI コンテナ連携
 
 [VSCodeExtension](VSCodeExtension/README.md) に、WSL / AI コンテナの依頼開始・応答完了を
