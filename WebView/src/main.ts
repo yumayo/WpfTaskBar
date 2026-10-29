@@ -5,6 +5,9 @@ import { setupContextMenu } from './context-menu';
 import { sendMessageToHost } from './network';
 import { startTaskbar } from './taskbar';
 import { setupTaskStatusListeners } from './task-status';
+import { setupSystemMonitor } from './system-monitor';
+
+setupSystemMonitor();
 
 // WebView2 内のクリックは WPF に伝わらないため、余白も含めてホストへ通知する。
 document.addEventListener('mousedown', () => {

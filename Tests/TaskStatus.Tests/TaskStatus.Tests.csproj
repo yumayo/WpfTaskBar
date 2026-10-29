@@ -19,5 +19,7 @@
     <Compile Include="../../WpfTaskBar/Services/TaskStatusStore.cs" Link="TaskStatusStore.cs" />
     <Compile Include="../../WpfTaskBar/Api/Controllers/TaskSessionsController.cs" Link="TaskSessionsController.cs" />
     <Compile Include="../../WpfTaskBar/Api/Models/TaskSessionModels.cs" Link="TaskSessionModels.cs" />
+    <Compile Include="../../WpfTaskBar/Services/WindowsSystemMetricsReader.cs" Link="WindowsSystemMetricsReader.cs" />
+    <Compile Include="../../WpfTaskBar/Infrastructure/Logger.cs" Link="Logger.cs" />
   </ItemGroup>
 </Project>

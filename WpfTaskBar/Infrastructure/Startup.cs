@@ -24,6 +24,7 @@ namespace WpfTaskBar
             services.AddSingleton<TaskStatusStore>();
             services.AddSingleton<ITaskWindowProvider, TaskWindowProvider>();
             services.AddSingleton<WebView2Handler>();
+            services.AddHostedService<SystemMetricsMonitor>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

@@ -13,6 +13,36 @@
             <!-- タスクアイテムがここに動的に追加されます -->
         </div>
 
+        <!-- システム使用率（タスクリストのスクロール領域の外に固定） -->
+        <section class="system-monitor" id="systemMonitor" aria-label="システム使用率">
+            <div class="system-monitor-grid">
+                <div class="system-metric cpu-metric" data-metric="cpu" title="PC全体のCPU使用率">
+                    <div class="system-metric-heading"><span>CPU</span><span class="system-metric-value">--</span></div>
+                    <svg class="system-metric-graph" viewBox="0 0 60 100" preserveAspectRatio="none" role="img" aria-label="CPU：計測待ち">
+                        <path class="system-metric-area" /><path class="system-metric-line" />
+                    </svg>
+                </div>
+                <div class="system-metric memory-metric" data-metric="memory" title="物理メモリの使用率">
+                    <div class="system-metric-heading"><span>メモリ</span><span class="system-metric-value">--</span></div>
+                    <svg class="system-metric-graph" viewBox="0 0 60 100" preserveAspectRatio="none" role="img" aria-label="メモリ：計測待ち">
+                        <path class="system-metric-area" /><path class="system-metric-line" />
+                    </svg>
+                </div>
+                <div class="system-metric disk-metric" data-metric="disk" title="全物理ディスクの平均アクティブ時間（容量の使用率ではありません）">
+                    <div class="system-metric-heading"><span>ディスク</span><span class="system-metric-value">--</span></div>
+                    <svg class="system-metric-graph" viewBox="0 0 60 100" preserveAspectRatio="none" role="img" aria-label="ディスク：計測待ち">
+                        <path class="system-metric-area" /><path class="system-metric-line" />
+                    </svg>
+                </div>
+                <div class="system-metric swap-metric" data-metric="swap" title="Windowsのページファイル使用率。ページファイル未構成・取得不能時は -- を表示します。">
+                    <div class="system-metric-heading"><span>スワップ</span><span class="system-metric-value">--</span></div>
+                    <svg class="system-metric-graph" viewBox="0 0 60 100" preserveAspectRatio="none" role="img" aria-label="スワップ：計測待ち">
+                        <path class="system-metric-area" /><path class="system-metric-line" />
+                    </svg>
+                </div>
+            </div>
+        </section>
+
         <!-- 時刻表示エリア -->
         <div class="time-area">
             <div class="attendance-section">
